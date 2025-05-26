@@ -1,0 +1,91 @@
+{
+  "name": "MatrixTwin",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@headlessui/react": "^2.2.1",
+    "@react-three/drei": "^10.0.7",
+    "@react-three/fiber": "^9.1.2",
+    "@react-three/postprocessing": "^3.0.4",
+    "@supabase/supabase-js": "^2.49.4",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.18.126",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.2",
+    "@types/three": "^0.176.0",
+    "assert": "^2.1.0",
+    "autoprefixer": "^10.4.21",
+    "axios": "^1.9.0",
+    "browserify-zlib": "^0.2.0",
+    "buffer": "^6.0.3",
+    "chart.js": "^4.4.8",
+    "cors": "^2.8.5",
+    "crypto-browserify": "^3.12.1",
+    "dayjs": "^1.11.13",
+    "express": "^5.1.0",
+    "framer-motion": "^12.6.3",
+    "http-proxy-middleware": "^3.0.5",
+    "https-browserify": "^1.0.0",
+    "i18next": "^24.2.3",
+    "i18next-browser-languagedetector": "^8.0.4",
+    "os-browserify": "^0.3.0",
+    "postcss": "^8.5.3",
+    "process": "^0.11.10",
+    "react": "^19.1.0",
+    "react-app-rewired": "^2.2.1",
+    "react-chartjs-2": "^5.3.0",
+    "react-dom": "^19.1.0",
+    "react-dropzone": "^14.3.8",
+    "react-i18next": "^15.4.1",
+    "react-icons": "^5.5.0",
+    "react-router-dom": "^6.30.0",
+    "react-scripts": "5.0.1",
+    "recharts": "^2.15.3",
+    "stream-browserify": "^3.0.0",
+    "stream-http": "^3.2.0",
+    "tailwindcss": "^3.4.1",
+    "three": "^0.176.0",
+    "typescript": "^4.9.5",
+    "url": "^0.11.4",
+    "util": "^0.12.5",
+    "uuid": "^10.0.0",
+    "web-vitals": "^2.1.4",
+    "zustand": "^5.0.3"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "proxy-server": "node server.js",
+    "dev": "concurrently \"npm run proxy-server\" \"npm start\"",
+    "start-prod": "node server.js",
+    "deploy": "npm run build && npm run start-prod"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/uuid": "^10.0.0",
+    "concurrently": "^8.2.2"
+  }
+}
