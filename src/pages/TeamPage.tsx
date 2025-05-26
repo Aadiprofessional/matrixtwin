@@ -62,6 +62,45 @@ const dropdownVariants = {
   }
 };
 
+interface WorkerApplication {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  avatar: string;
+  skills: string;
+  message: string;
+  status: 'pending' | 'approved' | 'rejected';
+  dateApplied: string;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  client: string;
+  deadline: string;
+  location: string;
+  image_url: string;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  description: string;
+}
+
+interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatar: string;
+  phone?: string;
+  address?: string;
+  skills?: string;
+  assigned_projects: Project[];
+  joinDate?: string;
+}
+
 const FilterDropdown: React.FC<FilterDropdownProps> = ({ 
   isOpen, 
   onClose, 
@@ -182,190 +221,172 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
   );
 };
 
+// Update role constants to match API
+const ROLES = {
+  PROJECT_MANAGER: 'projectManager',
+  SITE_INSPECTOR: 'siteInspector',
+  CONTRACTOR: 'contractor',
+  WORKER: 'worker'
+} as const;
+
 const TeamPage: React.FC = () => {
   const { t } = useTranslation();
   const { user, hasPermission } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [activeRoleFilter, setActiveRoleFilter] = useState('all');
-  const [viewMode, setViewMode] = useState('list'); // 'grid' or 'list' - default to list view
+  const [viewMode, setViewMode] = useState('list');
   const [showAddMember, setShowAddMember] = useState(false);
   const [showMemberDetails, setShowMemberDetails] = useState(false);
-  const [selectedMember, setSelectedMember] = useState<any>(null);
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [showEditMember, setShowEditMember] = useState(false);
   const [showApplications, setShowApplications] = useState(false);
   const [showRoleFilter, setShowRoleFilter] = useState(false);
   const roleFilterButtonRef = useRef<HTMLButtonElement>(null);
-  
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [workerApplications, setWorkerApplications] = useState<WorkerApplication[]>([]);
+
   // Form states
   const [newMemberData, setNewMemberData] = useState({
     name: '',
     email: '',
     phone: '',
-    role: 'generalContractor',
+    role: ROLES.WORKER,
     address: '',
     skills: ''
   });
-  
-  // Mock team data
-  const [teamMembers, setTeamMembers] = useState([
-    {
-      id: '1',
-      name: 'Admin User',
-      email: 'admin@matrixtwin.com',
-      phone: '+1 (555) 123-4567',
-      role: 'owner',
-      avatar: 'https://ui-avatars.com/api/?name=Admin+User&background=0062C3&color=fff',
-      address: '123 Admin St, New York, NY',
-      skills: 'Project Management, Administration, System Design',
-      projects: [
-        { id: 1, name: 'Project Alpha' },
-        { id: 2, name: 'Harbor Tower' }
-      ],
-      joinDate: '2022-06-15'
-    },
-    {
-      id: '2',
-      name: 'Project Manager',
-      email: 'pm@matrixtwin.com',
-      phone: '+1 (555) 234-5678',
-      role: 'generalContractor',
-      avatar: 'https://ui-avatars.com/api/?name=Project+Manager&background=465B7C&color=fff',
-      address: '456 Manager Ave, Chicago, IL',
-      skills: 'Team Leadership, Construction Planning, Budgeting',
-      projects: [
-        { id: 1, name: 'Project Alpha' },
-        { id: 3, name: 'Metro Station' }
-      ],
-      joinDate: '2022-07-22'
-    },
-    {
-      id: '3',
-      name: 'Inspector',
-      email: 'inspector@matrixtwin.com',
-      phone: '+1 (555) 345-6789',
-      role: 'supervisoryUnit',
-      avatar: 'https://ui-avatars.com/api/?name=Inspector&background=BB6904&color=fff',
-      address: '789 Inspector Rd, Boston, MA',
-      skills: 'Safety Protocols, Building Codes, Quality Assurance',
-      projects: [
-        { id: 1, name: 'Project Alpha' }
-      ],
-      joinDate: '2022-09-10'
-    },
-    {
-      id: '4',
-      name: 'Contractor',
-      email: 'contractor@matrixtwin.com',
-      phone: '+1 (555) 456-7890',
-      role: 'mechanicalElectrical',
-      avatar: 'https://ui-avatars.com/api/?name=Contractor&background=5D5D5D&color=fff',
-      address: '321 Contractor Blvd, Dallas, TX',
-      skills: 'Electrical Systems, HVAC, Plumbing',
-      projects: [
-        { id: 2, name: 'Harbor Tower' }
-      ],
-      joinDate: '2025-01-15'
-    },
-    {
-      id: '5',
-      name: 'Worker',
-      email: 'worker@matrixtwin.com',
-      phone: '+1 (555) 567-8901',
-      role: 'designInstitute',
-      avatar: 'https://ui-avatars.com/api/?name=Worker&background=3D3D3D&color=fff',
-      address: '654 Worker Ln, Miami, FL',
-      skills: 'Carpentry, Masonry, General Labor',
-      projects: [
-        { id: 1, name: 'Project Alpha' }
-      ],
-      joinDate: '2025-02-28'
-    },
-    {
-      id: '6',
-      name: 'Steel Structure Expert',
-      email: 'steel@matrixtwin.com',
-      phone: '+1 (555) 222-3333',
-      role: 'steelStructure',
-      avatar: 'https://ui-avatars.com/api/?name=Steel+Expert&background=4D6D9D&color=fff',
-      address: '789 Steel Ave, Pittsburgh, PA',
-      skills: 'Steel Structure Design, Welding, Structural Analysis',
-      projects: [
-        { id: 2, name: 'Harbor Tower' }
-      ],
-      joinDate: '2023-05-18'
-    },
-    {
-      id: '7',
-      name: 'Package Manager',
-      email: 'package@matrixtwin.com',
-      phone: '+1 (555) 444-5555',
-      role: 'package',
-      avatar: 'https://ui-avatars.com/api/?name=Package+Manager&background=7D4D8D&color=fff',
-      address: '456 Delivery St, Seattle, WA',
-      skills: 'Logistics, Supply Chain Management, Procurement',
-      projects: [
-        { id: 3, name: 'Metro Station' }
-      ],
-      joinDate: '2023-11-10'
-    },
-    {
-      id: '8',
-      name: 'BIM Specialist',
-      email: 'bim@matrixtwin.com',
-      phone: '+1 (555) 666-7777',
-      role: 'bimConsultant',
-      avatar: 'https://ui-avatars.com/api/?name=BIM+Specialist&background=2D8D6D&color=fff',
-      address: '123 BIM Blvd, San Francisco, CA',
-      skills: '3D Modeling, BIM Coordination, Revit, AutoCAD',
-      projects: [
-        { id: 1, name: 'Project Alpha' },
-        { id: 2, name: 'Harbor Tower' }
-      ],
-      joinDate: '2023-08-22'
-    },
-    {
-      id: '9',
-      name: 'New Applicant',
-      email: 'applicant@example.com',
-      phone: '+1 (555) 888-9999',
-      role: 'pendingApproval',
-      avatar: 'https://ui-avatars.com/api/?name=New+Applicant&background=8D8D8D&color=fff',
-      address: '789 Pending St, Houston, TX',
-      skills: 'Project Management, Civil Engineering',
-      projects: [],
-      joinDate: '2025-05-01'
+
+  // Add these state variables at the top of the TeamPage component
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeletingMember, setIsDeletingMember] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
+
+  // Fetch team members data
+  useEffect(() => {
+    const fetchTeamMembers = async () => {
+      try {
+        if (!user?.id) return;
+        
+        const response = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${user.id}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch team members');
+        }
+        
+        const data = await response.json();
+        setTeamMembers(data.map((member: any) => ({
+          ...member,
+          phone: member.phone || '+1 (555) 123-4567', // Fallback if phone not provided
+          address: member.address || 'No address provided',
+          skills: member.skills || 'No skills specified',
+          assigned_projects: member.assigned_projects || []
+        })));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTeamMembers();
+  }, [user?.id]);
+
+  // Handle project assignment
+  const handleAssignProject = async (userId: string, projectId: string, role: string) => {
+    try {
+      const response = await fetch('https://matrixbim-server.onrender.com/api/projects/assign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          creator_uid: user?.id,
+          project_id: projectId,
+          user_id: userId,
+          role: role
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to assign project');
+      }
+
+      // Refresh team members data after assignment
+      const updatedResponse = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${user?.id}`);
+      const updatedData = await updatedResponse.json();
+      setTeamMembers(updatedData);
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to assign project');
     }
-  ]);
-  
-  // Mock worker applications
-  const [workerApplications, setWorkerApplications] = useState([
-    {
-      id: 1,
-      name: 'Jane Smith',
-      email: 'jane.smith@example.com',
-      phone: '+1 (555) 987-6543',
-      role: 'worker',
-      avatar: 'https://ui-avatars.com/api/?name=Jane+Smith&background=3D3D3D&color=fff',
-      skills: 'Carpentry, Drywall Installation, Painting',
-      message: "I have 7 years of experience in construction and I'm looking for new opportunities.",
-      status: 'pending',
-      dateApplied: '2025-09-30'
-    },
-    {
-      id: 2,
-      name: 'Mike Johnson',
-      email: 'mike.johnson@example.com',
-      phone: '+1 (555) 876-5432',
-      role: 'contractor',
-      avatar: 'https://ui-avatars.com/api/?name=Mike+Johnson&background=5D5D5D&color=fff',
-      skills: 'Electrical Wiring, HVAC Systems, Building Automation',
-      message: "Certified electrical contractor with 10+ years of experience in commercial projects.",
-      status: 'pending',
-      dateApplied: '2025-10-05'
+  };
+
+  // Get role display name
+  const getRoleDisplayName = (role: string) => {
+    switch(role) {
+      case ROLES.PROJECT_MANAGER: return 'Project Manager';
+      case ROLES.SITE_INSPECTOR: return 'Site Inspector';
+      case ROLES.CONTRACTOR: return 'Contractor';
+      case ROLES.WORKER: return 'Worker';
+      default: return role;
     }
-  ]);
-  
+  };
+
+  // Role labels for the dropdown
+  const roleLabels = {
+    'all': t('team.allRoles'),
+    [ROLES.PROJECT_MANAGER]: 'Project Manager',
+    [ROLES.SITE_INSPECTOR]: 'Site Inspector',
+    [ROLES.CONTRACTOR]: 'Contractor',
+    [ROLES.WORKER]: 'Worker'
+  };
+
+  // Get filtered team members
+  const getFilteredMembers = () => {
+    return teamMembers.filter(member => {
+      // Text search
+      const matchesSearch = 
+        member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        member.role.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      // Role filter
+      const matchesRole = activeRoleFilter === 'all' || member.role === activeRoleFilter;
+      
+      return matchesSearch && matchesRole;
+    });
+  };
+
+  // Handle add new member
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      // Here you would integrate with your user creation API
+      // For now, we'll just update the local state
+      const newMember: TeamMember = {
+        id: String(Date.now()),
+        name: newMemberData.name,
+        email: newMemberData.email,
+        role: newMemberData.role,
+        avatar: `https://ui-avatars.com/api/?name=${newMemberData.name.replace(' ', '+')}&background=3D3D3D&color=fff`,
+        phone: newMemberData.phone,
+        address: newMemberData.address,
+        skills: newMemberData.skills,
+        assigned_projects: [],
+        joinDate: new Date().toISOString().split('T')[0]
+      };
+      
+      setTeamMembers([...teamMembers, newMember]);
+      setShowAddMember(false);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add member');
+    }
+  };
+
   // Handle filter change
   const handleFilterChange = (filter: string) => {
     setActiveFilter(filter);
@@ -378,196 +399,6 @@ const TeamPage: React.FC = () => {
   };
 
   // Get filtered team members
-  const getFilteredMembers = () => {
-    return teamMembers.filter(member => {
-      // Text search
-      const matchesSearch = 
-        member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        member.role.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      // Project filter
-      const matchesFilter = activeFilter === 'all' || 
-        (activeFilter === 'myProjects' && 
-          user?.role === 'projectManager' && 
-          member.projects.some(project => user.id !== member.id));
-      
-      // Role filter
-      const matchesRole = activeRoleFilter === 'all' || member.role === activeRoleFilter;
-      
-      return matchesSearch && matchesFilter && matchesRole;
-    });
-  };
-
-  // Handle view member details
-  const handleViewMember = (member: any) => {
-    setSelectedMember(member);
-    setShowMemberDetails(true);
-  };
-  
-  // Handle edit member
-  const handleEditMember = (member: any) => {
-    setSelectedMember(member);
-    setNewMemberData({
-      name: member.name,
-      email: member.email,
-      phone: member.phone,
-      role: member.role,
-      address: member.address || '',
-      skills: member.skills || ''
-    });
-    setShowEditMember(true);
-  };
-  
-  // Handle delete member
-  const handleDeleteMember = (memberId: string) => {
-    setTeamMembers(teamMembers.filter(member => member.id !== memberId));
-    setShowMemberDetails(false);
-  };
-  
-  // Handle new member form input changes
-  const handleNewMemberChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setNewMemberData({
-      ...newMemberData,
-      [name]: value
-    });
-  };
-  
-  // Handle add new member
-  const handleAddMember = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Create new member
-    const newMember = {
-      id: String(teamMembers.length + 1),
-      name: newMemberData.name,
-      email: newMemberData.email,
-      phone: newMemberData.phone,
-      role: newMemberData.role,
-      avatar: `https://ui-avatars.com/api/?name=${newMemberData.name.replace(' ', '+')}&background=3D3D3D&color=fff`,
-      address: newMemberData.address,
-      skills: newMemberData.skills,
-      projects: [],
-      joinDate: new Date().toISOString().split('T')[0]
-    };
-    
-    // Add to team members
-    setTeamMembers([...teamMembers, newMember]);
-    
-    // Reset form and close modal
-    setNewMemberData({
-      name: '',
-      email: '',
-      phone: '',
-      role: 'generalContractor',
-      address: '',
-      skills: ''
-    });
-    setShowAddMember(false);
-  };
-  
-  // Handle update member
-  const handleUpdateMember = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!selectedMember) return;
-    
-    // Update member data
-    const updatedMembers = teamMembers.map(member => 
-      member.id === selectedMember.id 
-        ? { 
-            ...member, 
-            name: newMemberData.name,
-            email: newMemberData.email,
-            phone: newMemberData.phone,
-            role: newMemberData.role,
-            address: newMemberData.address,
-            skills: newMemberData.skills
-          } 
-        : member
-    );
-    
-    setTeamMembers(updatedMembers);
-    setShowEditMember(false);
-    setSelectedMember(null);
-  };
-  
-  // Handle application approval
-  const handleApplicationAction = (applicationId: number, action: 'approve' | 'reject') => {
-    // Find the application
-    const application = workerApplications.find(app => app.id === applicationId);
-    if (!application) return;
-    
-    if (action === 'approve') {
-      // Add new member
-      const newMember = {
-        id: String(application.id),
-        name: application.name,
-        email: application.email,
-        phone: application.phone,
-        role: application.role,
-        avatar: application.avatar,
-        skills: application.skills,
-        address: '123 Main St, City',
-        projects: [],
-        joinDate: new Date().toISOString().split('T')[0],
-        status: 'active'
-      };
-      
-      setTeamMembers([...teamMembers, newMember]);
-    }
-    
-    // Update application status
-    const updatedApplications = workerApplications.map(app => 
-      app.id === applicationId 
-        ? { ...app, status: action === 'approve' ? 'approved' : 'rejected' } 
-        : app
-    );
-    setWorkerApplications(updatedApplications);
-  };
-  
-  // Get role display name
-  const getRoleDisplayName = (role: string) => {
-    switch(role) {
-      case 'owner': return 'Owner Unit';
-      case 'generalContractor': return 'General Contractor';
-      case 'mechanicalElectrical': return 'Mechanical & Electrical';
-      case 'designInstitute': return 'Design Institute';
-      case 'steelStructure': return 'Steel Structure';
-      case 'package': return 'Package';
-      case 'supervisoryUnit': return 'Supervisory Unit';
-      case 'bimConsultant': return 'BIM Consultant';
-      case 'pendingApproval': return 'Pending Approval';
-      case 'ungrouped': return 'Ungrouped';
-      default: return role;
-    }
-  };
-  
-  // Get role badge color
-  const getRoleBadgeColor = (role: string) => {
-    switch(role) {
-      case 'owner': return 'bg-ai-blue/10 text-ai-blue border-ai-blue/20';
-      case 'generalContractor': return 'bg-ai-purple/10 text-ai-purple border-ai-purple/20';
-      case 'mechanicalElectrical': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
-      case 'designInstitute': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-      case 'steelStructure': return 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20';
-      case 'package': return 'bg-rose-500/10 text-rose-500 border-rose-500/20';
-      case 'supervisoryUnit': return 'bg-warning/10 text-warning border-warning/20';
-      case 'bimConsultant': return 'bg-teal-500/10 text-teal-500 border-teal-500/20';
-      case 'pendingApproval': return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
-      case 'ungrouped': return 'bg-gray-400/10 text-gray-400 border-gray-400/20';
-      default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
-    }
-  };
-  
-  // Modal animation
-  const modalVariants = {
-    hidden: { opacity: 0, y: 50, scale: 0.95 },
-    visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.3, ease: 'easeOut' } },
-    exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2, ease: 'easeIn' } }
-  };
-
   const filteredMembers = getFilteredMembers();
   
   // Application handling functions
@@ -582,7 +413,7 @@ const TeamPage: React.FC = () => {
       avatar: application.avatar,
       skills: application.skills,
       address: '123 Main St, City',
-      projects: [],
+      assigned_projects: [],
       joinDate: new Date().toISOString().split('T')[0],
       status: 'active'
     };
@@ -613,20 +444,214 @@ const TeamPage: React.FC = () => {
     }
   };
 
-  // Role labels for the dropdown
-  const roleLabels = {
-    'all': t('team.allRoles'),
-    'owner': 'Owner Unit',
-    'generalContractor': 'General Contractor',
-    'mechanicalElectrical': 'Mechanical and Electrical',
-    'designInstitute': 'Design Institute',
-    'steelStructure': 'Steel Structure',
-    'package': 'Package',
-    'supervisoryUnit': 'Supervisory Unit',
-    'bimConsultant': 'BIM Consultant',
-    'ungrouped': 'Ungrouped',
-    'pendingApproval': 'Pending Approval'
+  // Get role badge color
+  const getRoleBadgeColor = (role: string) => {
+    switch(role) {
+      case 'owner': return 'bg-ai-blue/10 text-ai-blue border-ai-blue/20';
+      case 'generalContractor': return 'bg-ai-purple/10 text-ai-purple border-ai-purple/20';
+      case 'mechanicalElectrical': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+      case 'designInstitute': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+      case 'steelStructure': return 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20';
+      case 'package': return 'bg-rose-500/10 text-rose-500 border-rose-500/20';
+      case 'supervisoryUnit': return 'bg-warning/10 text-warning border-warning/20';
+      case 'bimConsultant': return 'bg-teal-500/10 text-teal-500 border-teal-500/20';
+      case 'pendingApproval': return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
+      case 'ungrouped': return 'bg-gray-400/10 text-gray-400 border-gray-400/20';
+      default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
+    }
   };
+  
+  // Modal animation
+  const modalVariants = {
+    hidden: { opacity: 0, y: 50, scale: 0.95 },
+    visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.3, ease: 'easeOut' } },
+    exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2, ease: 'easeIn' } }
+  };
+
+  // Handle view member details
+  const handleViewMember = (member: any) => {
+    setSelectedMember(member);
+    setShowMemberDetails(true);
+  };
+  
+  // Handle edit member
+  const handleEditMember = (member: any) => {
+    setSelectedMember(member);
+    setNewMemberData({
+      name: member.name,
+      email: member.email,
+      phone: member.phone || '',
+      role: member.role,
+      address: member.address || '',
+      skills: member.skills || ''
+    });
+    setShowEditMember(true);
+  };
+
+  // Handle delete member
+  const handleDeleteMember = async (memberId: string) => {
+    if (!user?.id) return;
+    
+    try {
+      setIsDeletingMember(true);
+      
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${memberId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete user');
+      }
+
+      // Update local state
+      setTeamMembers(teamMembers.filter(member => member.id !== memberId));
+      setShowMemberDetails(false);
+      setShowDeleteConfirm(false);
+      setMemberToDelete(null);
+      setDeleteConfirmText('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete member');
+    } finally {
+      setIsDeletingMember(false);
+    }
+  };
+
+  // Handle form input changes
+  const handleNewMemberChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setNewMemberData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  // Handle update member
+  const handleUpdateMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedMember || !user?.id) return;
+    
+    try {
+      // Call the role update API if role has changed
+      if (selectedMember.role !== newMemberData.role) {
+        const roleResponse = await fetch('https://matrixbim-server.onrender.com/api/auth/users/role', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            admin_uid: user.id,
+            user_id: selectedMember.id,
+            new_role: newMemberData.role
+          }),
+        });
+
+        if (!roleResponse.ok) {
+          throw new Error('Failed to update user role');
+        }
+      }
+
+      // Update the local state with new data
+      const updatedMembers = teamMembers.map(member => 
+        member.id === selectedMember.id 
+          ? { 
+              ...member, 
+              name: newMemberData.name,
+              email: newMemberData.email,
+              phone: newMemberData.phone,
+              role: newMemberData.role,
+              address: newMemberData.address,
+              skills: newMemberData.skills
+            } 
+          : member
+      );
+      
+      setTeamMembers(updatedMembers);
+      setShowEditMember(false);
+      setSelectedMember(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update member');
+    }
+  };
+
+  // Update the stats section
+  const getTotalProjects = () => {
+    const projectIds = new Set();
+    teamMembers.forEach(member => {
+      member.assigned_projects.forEach(project => {
+        projectIds.add(project.id);
+      });
+    });
+    return projectIds.size;
+  };
+
+  // Format date safely
+  const formatDate = (date?: string) => {
+    if (!date) return 'N/A';
+    try {
+      return new Date(date).toLocaleDateString();
+    } catch (e) {
+      return 'N/A';
+    }
+  };
+
+  // Add the delete confirmation modal
+  const DeleteConfirmationModal = () => (
+    <Dialog onClose={() => setShowDeleteConfirm(false)}>
+      <motion.div
+        variants={modalVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="bg-dark-900 rounded-xl overflow-hidden max-w-md w-full mx-auto p-6"
+      >
+        <h2 className="text-xl font-bold text-white mb-4">Delete Team Member</h2>
+        <p className="text-gray-300 mb-4">
+          Are you sure you want to delete "{memberToDelete?.name}"? This action cannot be undone.
+        </p>
+        <p className="text-gray-300 mb-4">
+          Type <span className="font-mono text-error">DELETE</span> to confirm.
+        </p>
+        
+        <input
+          type="text"
+          value={deleteConfirmText}
+          onChange={(e) => setDeleteConfirmText(e.target.value)}
+          placeholder="Type DELETE to confirm"
+          className="form-input w-full rounded-lg border-dark-700 bg-dark-800 text-white mb-4"
+        />
+
+        <div className="flex justify-end gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => setShowDeleteConfirm(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            className="bg-error hover:bg-error/80"
+            disabled={deleteConfirmText !== 'DELETE' || isDeletingMember}
+            onClick={() => memberToDelete && handleDeleteMember(memberToDelete.id)}
+          >
+            {isDeletingMember ? (
+              <>
+                <span className="opacity-0">Delete Member</span>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                </div>
+              </>
+            ) : (
+              'Delete Member'
+            )}
+          </Button>
+        </div>
+      </motion.div>
+    </Dialog>
+  );
 
   return (
     <div className="container mx-auto px-4 sm:px-6">
@@ -858,12 +883,7 @@ const TeamPage: React.FC = () => {
           </div>
           <div>
             <h3 className="text-2xl font-display font-semibold">
-              {Object.keys(teamMembers.reduce((acc, member) => {
-                member.projects.forEach(project => {
-                  if (!acc[project.id]) acc[project.id] = true;
-                });
-                return acc;
-              }, {} as Record<number, boolean>)).length}
+              {getTotalProjects()}
             </h3>
             <p className="text-sm text-secondary-600 dark:text-secondary-400">Active Projects</p>
           </div>
@@ -968,13 +988,13 @@ const TeamPage: React.FC = () => {
                       <div className="space-y-2">
                         <div className="flex items-start">
                           <RiUserLine className="text-gray-400 mt-1 mr-3 flex-shrink-0" />
-                          <span className="text-gray-300 text-sm">Member since {new Date(member.joinDate).toLocaleDateString()}</span>
+                          <span className="text-gray-300 text-sm">Member since {formatDate(member.joinDate)}</span>
                         </div>
                         <div className="flex items-start">
                           <RiBuilding4Line className="text-gray-400 mt-1 mr-3 flex-shrink-0" />
                           <span className="text-gray-300 text-sm">
-                            {member.projects.length > 0 ? (
-                              <span>{member.projects.length} Projects</span>
+                            {member.assigned_projects.length > 0 ? (
+                              <span>{member.assigned_projects.length} Projects</span>
                             ) : (
                               <span className="text-gray-500">No assigned projects</span>
                             )}
@@ -991,8 +1011,8 @@ const TeamPage: React.FC = () => {
                           View Details
                         </Button>
                         
-                        {/* Edit/Remove options only for admins */}
-                        {hasPermission(['admin']) && (
+                        {/* Edit button only visible for admin users */}
+                        {user?.role === 'admin' && (
                           <Button
                             variant="accent"
                             onClick={() => handleEditMember(member)}
@@ -1066,13 +1086,13 @@ const TeamPage: React.FC = () => {
                       <span className="text-gray-300 text-sm">{member.phone}</span>
                     </div>
                     
-                    {member.projects.length > 0 ? (
+                    {member.assigned_projects.length > 0 ? (
                       <div className="flex items-start">
                         <RiBuilding4Line className="text-gray-400 mt-1 mr-3 flex-shrink-0" />
                         <div>
                           <span className="text-gray-300 text-sm block mb-1">Projects:</span>
                           <div className="flex flex-wrap gap-1">
-                            {member.projects.map(project => (
+                            {member.assigned_projects.map((project: Project) => (
                               <span 
                                 key={project.id}
                                 className="px-2 py-0.5 text-xs rounded-full bg-ai-blue/10 text-ai-blue border border-ai-blue/20"
@@ -1100,8 +1120,8 @@ const TeamPage: React.FC = () => {
                       View Details
                     </Button>
                     
-                    {/* Edit/Remove options only for admins */}
-                    {hasPermission(['admin']) && (
+                    {/* Edit button only visible for admin users */}
+                    {user?.role === 'admin' && (
                       <Button
                         variant="accent"
                         onClick={() => handleEditMember(member)}
@@ -1152,7 +1172,7 @@ const TeamPage: React.FC = () => {
                     </div>
                     <div className="flex items-start">
                       <RiUserLine className="text-gray-400 mt-1 mr-3 flex-shrink-0" />
-                      <span className="text-gray-300 text-sm">Member since {new Date(selectedMember.joinDate).toLocaleDateString()}</span>
+                      <span className="text-gray-300 text-sm">Member since {formatDate(selectedMember.joinDate)}</span>
                     </div>
                   </div>
                 </div>
@@ -1177,11 +1197,11 @@ const TeamPage: React.FC = () => {
                   </p>
                   
                   <h3 className="text-lg font-bold text-white mb-3">Assigned Projects</h3>
-                  {selectedMember.projects.length === 0 ? (
+                  {selectedMember.assigned_projects.length === 0 ? (
                     <p className="text-gray-500 mb-6">Not assigned to any projects</p>
                   ) : (
                     <div className="flex flex-wrap gap-2 mb-6">
-                      {selectedMember.projects.map((project: any) => (
+                      {selectedMember.assigned_projects.map((project: Project) => (
                         <span 
                           key={project.id}
                           className="px-3 py-1 text-sm rounded-full bg-ai-blue/10 text-ai-blue border border-ai-blue/20"
@@ -1200,30 +1220,32 @@ const TeamPage: React.FC = () => {
                       Close
                     </Button>
                     
-                    {/* Edit button for admins */}
-                    {hasPermission(['admin']) && (
-                      <Button
-                        variant="primary"
-                        leftIcon={<RiUserSettingsLine />}
-                        onClick={() => {
-                          setShowMemberDetails(false);
-                          handleEditMember(selectedMember);
-                        }}
-                      >
-                        Edit Member
-                      </Button>
-                    )}
-                    
-                    {/* Delete button - admin only */}
-                    {hasPermission(['admin']) && (
-                      <Button
-                        variant="accent"
-                        onClick={() => handleDeleteMember(selectedMember.id)}
-                        className="mt-6"
-                      >
-                        <RiDeleteBinLine className="mr-2" />
-                        Remove Member
-                      </Button>
+                    {/* Edit and Delete buttons only visible for admin users */}
+                    {user?.role === 'admin' && (
+                      <>
+                        <Button
+                          variant="primary"
+                          leftIcon={<RiUserSettingsLine />}
+                          onClick={() => {
+                            setShowMemberDetails(false);
+                            handleEditMember(selectedMember);
+                          }}
+                        >
+                          Edit Member
+                        </Button>
+                        
+                        <Button
+                          variant="accent"
+                          onClick={() => {
+                            setMemberToDelete(selectedMember);
+                            setShowDeleteConfirm(true);
+                          }}
+                          className="bg-error hover:bg-error/80"
+                        >
+                          <RiDeleteBinLine className="mr-2" />
+                          Delete Member
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1319,27 +1341,12 @@ const TeamPage: React.FC = () => {
                         className="form-select w-full rounded-lg border-dark-700 bg-dark-800 text-white"
                       >
                         {/* Admin can assign any role */}
-                        {hasPermission(['admin']) && (
+                        {hasPermission(['admin', 'projectManager']) && (
                           <>
-                            <option value="owner">Owner Unit</option>
-                            <option value="generalContractor">General Contractor</option>
-                            <option value="mechanicalElectrical">Mechanical and Electrical</option>
-                            <option value="designInstitute">Design Institute</option>
-                            <option value="steelStructure">Steel Structure</option>
-                            <option value="package">Package</option>
-                            <option value="supervisoryUnit">Supervisory Unit</option>
-                            <option value="bimConsultant">BIM Consultant</option>
-                            <option value="ungrouped">Ungrouped</option>
-                          </>
-                        )}
-                        
-                        {/* Project Manager can only assign certain roles */}
-                        {!hasPermission(['admin']) && hasPermission(['projectManager']) && (
-                          <>
-                            <option value="mechanicalElectrical">Mechanical and Electrical</option>
-                            <option value="steelStructure">Steel Structure</option>
-                            <option value="package">Package</option>
-                            <option value="ungrouped">Ungrouped</option>
+                            <option value={ROLES.PROJECT_MANAGER}>Project Manager</option>
+                            <option value={ROLES.SITE_INSPECTOR}>Site Inspector</option>
+                            <option value={ROLES.CONTRACTOR}>Contractor</option>
+                            <option value={ROLES.WORKER}>Worker</option>
                           </>
                         )}
                       </select>
@@ -1482,15 +1489,10 @@ const TeamPage: React.FC = () => {
                         className="form-select w-full rounded-lg border-dark-700 bg-dark-800 text-white"
                         disabled={!hasPermission(['admin'])} // Only admin can change roles
                       >
-                        <option value="owner">Owner Unit</option>
-                        <option value="generalContractor">General Contractor</option>
-                        <option value="mechanicalElectrical">Mechanical and Electrical</option>
-                        <option value="designInstitute">Design Institute</option>
-                        <option value="steelStructure">Steel Structure</option>
-                        <option value="package">Package</option>
-                        <option value="supervisoryUnit">Supervisory Unit</option>
-                        <option value="bimConsultant">BIM Consultant</option>
-                        <option value="ungrouped">Ungrouped</option>
+                        <option value={ROLES.PROJECT_MANAGER}>Project Manager</option>
+                        <option value={ROLES.SITE_INSPECTOR}>Site Inspector</option>
+                        <option value={ROLES.CONTRACTOR}>Contractor</option>
+                        <option value={ROLES.WORKER}>Worker</option>
                       </select>
                     </div>
                     
@@ -1663,6 +1665,11 @@ const TeamPage: React.FC = () => {
             </motion.div>
           </Dialog>
         )}
+      </AnimatePresence>
+
+      {/* Add the delete confirmation modal */}
+      <AnimatePresence>
+        {showDeleteConfirm && memberToDelete && <DeleteConfirmationModal />}
       </AnimatePresence>
     </div>
   );

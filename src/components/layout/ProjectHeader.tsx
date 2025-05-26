@@ -107,9 +107,17 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <div className="h-9 w-9 rounded-full bg-gradient-to-br from-ai-blue via-purple-600 to-ai-purple flex items-center justify-center text-white font-medium text-sm border-2 border-dark-800">
-                {user?.name?.charAt(0) || 'U'}
-              </div>
+              {user?.avatar ? (
+                <img 
+                  src={user.avatar} 
+                  alt={user.name} 
+                  className="h-9 w-9 rounded-full object-cover border-2 border-dark-800"
+                />
+              ) : (
+                <div className="h-9 w-9 rounded-full bg-gradient-to-br from-ai-blue via-purple-600 to-ai-purple flex items-center justify-center text-white font-medium text-sm border-2 border-dark-800">
+                  {user?.name?.charAt(0) || 'U'}
+                </div>
+              )}
             </motion.button>
             
             <AnimatePresence>
@@ -125,9 +133,17 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                   >
                     <div className="p-4 border-b border-dark-800">
                       <div className="flex items-center">
-                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-ai-blue via-purple-600 to-ai-purple flex items-center justify-center text-white font-medium text-sm mr-3">
-                          {user?.name?.charAt(0) || 'U'}
-                        </div>
+                        {user?.avatar ? (
+                          <img 
+                            src={user.avatar} 
+                            alt={user.name} 
+                            className="h-10 w-10 rounded-full object-cover mr-3"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-ai-blue via-purple-600 to-ai-purple flex items-center justify-center text-white font-medium text-sm mr-3">
+                            {user?.name?.charAt(0) || 'U'}
+                          </div>
+                        )}
                         <div>
                           <div className="font-medium text-white">{user?.name || 'User'}</div>
                           <div className="text-sm text-gray-400">{user?.email || ''}</div>

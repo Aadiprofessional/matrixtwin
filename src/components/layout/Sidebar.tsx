@@ -240,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
         <div><IconWrapper icon="RiPieChartLine" className="text-xl" /></div>
       ), 
       label: 'analytics.title', 
-      requiredRoles: ['admin', 'projectManager'] 
+      requiredRoles: ['admin', 'projectManager', 'contractor'] 
     }
   ];
   
@@ -252,14 +252,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
         <div><IconWrapper icon="RiFileList3Line" className="text-xl" /></div>
       ), 
       label: 'nav.forms',
-      badgeCount: 3
+      badgeCount: 3,
+      requiredRoles: ['admin', 'projectManager', 'contractor']
     },
     { 
       to: '/diary', 
       icon: (
         <div><IconWrapper icon="RiBookmarkLine" className="text-xl" /></div>
       ), 
-      label: 'diary.title' 
+      label: 'diary.title',
+      requiredRoles: ['admin', 'projectManager', 'contractor', 'siteInspector']
     },
     { 
       to: '/safety', 
@@ -282,7 +284,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
       icon: (
         <div><IconWrapper icon="RiBrushLine" className="text-xl" /></div>
       ), 
-      label: 'cleansing.title' 
+      label: 'cleansing.title',
+      requiredRoles: ['admin', 'projectManager', 'contractor', 'siteInspector', 'worker']
     }
   ];
   
@@ -294,7 +297,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
         <div><IconWrapper icon="RiCalendarTodoLine" className="text-xl" /></div>
       ), 
       label: 'tasks.title',
-      badgeCount: 5
+      badgeCount: 5,
+      requiredRoles: ['admin', 'projectManager', 'contractor']
     },
     { 
       to: '/forms', 
@@ -302,7 +306,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
         <div><IconWrapper icon="RiFileUserLine" className="text-xl" /></div>
       ), 
       label: 'nav.customForms', 
-      requiredRoles: ['admin', 'projectManager'] 
+      requiredRoles: ['admin', 'projectManager', 'contractor'] 
     },
     { 
       to: '/team', 
@@ -310,7 +314,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
         <div><IconWrapper icon="RiTeamLine" className="text-xl" /></div>
       ), 
       label: 'team.title', 
-      requiredRoles: ['admin', 'projectManager'] 
+      requiredRoles: ['admin', 'projectManager', 'contractor'] 
     },
     { 
       to: '/reports', 
@@ -318,15 +322,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
         <div><IconWrapper icon="RiBarChartBoxLine" className="text-xl" /></div>
       ), 
       label: 'reports.title', 
-      requiredRoles: ['admin', 'projectManager', 'siteInspector'] 
+      requiredRoles: ['admin', 'projectManager', 'contractor'] 
     },
     { 
       to: '/settings', 
       icon: (
         <div><IconWrapper icon="RiSettings3Line" className="text-xl" /></div>
       ), 
-      label: 'settings.title' 
-    },
+      label: 'settings.title',
+      requiredRoles: undefined
+    }
   ];
   
   // For the beautiful glow effect based on scroll

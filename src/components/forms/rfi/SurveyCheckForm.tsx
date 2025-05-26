@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RfiFormTemplate } from '../RfiFormTemplate';
-import { RiCheckboxMultipleLine } from 'react-icons/ri';
+import { RiRulerLine } from 'react-icons/ri';
 import { IconWrapper } from '../../ui/IconWrapper';
 import { generateFormPdf } from '../../../utils/pdfUtils';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -15,7 +15,7 @@ interface FormData {
   [key: string]: any;
 }
 
-const InspectionRequest: React.FC<{ onCancel: () => void; onSubmit: (data: FormData) => void }> = ({ onCancel, onSubmit }) => {
+const SurveyCheckForm: React.FC<{ onCancel: () => void; onSubmit: (data: FormData) => void }> = ({ onCancel, onSubmit }) => {
   const { user } = useAuth();
   const { selectedProject } = useProjects();
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -60,31 +60,26 @@ const InspectionRequest: React.FC<{ onCancel: () => void; onSubmit: (data: FormD
     {
       id: 'location',
       type: 'text' as const,
-      label: 'Location on Site',
-      placeholder: 'Specify the exact location to be inspected',
+      label: 'Survey Location',
+      placeholder: 'Specify the exact location to be surveyed',
       required: true,
       value: '',
       page: 1
     },
     {
-      id: 'inspectionType',
+      id: 'surveyType',
       type: 'select' as const,
-      label: 'Type of Inspection',
+      label: 'Type of Survey',
       options: [
-        'Foundation', 
-        'Framing', 
-        'Electrical', 
-        'Plumbing', 
-        'Mechanical', 
-        'Insulation', 
-        'Drywall', 
-        'Roofing', 
-        'Final Building', 
-        'Fire Safety',
-        'Structural Steel',
-        'Concrete Pour',
-        'Waterproofing',
-        'Site Drainage',
+        'Topographic Survey',
+        'Boundary Survey',
+        'As-Built Survey',
+        'Construction Layout',
+        'Site Planning',
+        'Elevation Certificate',
+        'Foundation Survey',
+        'ALTA/NSPS Survey',
+        'Subdivision Survey',
         'Other'
       ],
       required: true,
@@ -92,17 +87,17 @@ const InspectionRequest: React.FC<{ onCancel: () => void; onSubmit: (data: FormD
       page: 1
     },
     {
-      id: 'workCompleted',
+      id: 'siteAccess',
       type: 'checkbox' as const,
-      label: 'I confirm that all work to be inspected has been completed according to specifications',
+      label: 'I confirm that the site is accessible and ready for survey',
       required: true,
       value: false,
       page: 1
     },
     {
-      id: 'siteReady',
+      id: 'safetyMeasures',
       type: 'checkbox' as const,
-      label: 'I confirm that the site is clean, accessible, and ready for inspection',
+      label: 'Required safety measures are in place',
       required: true,
       value: false,
       page: 1
@@ -110,7 +105,7 @@ const InspectionRequest: React.FC<{ onCancel: () => void; onSubmit: (data: FormD
     {
       id: 'preferredDate',
       type: 'date' as const,
-      label: 'Preferred Inspection Date',
+      label: 'Preferred Survey Date',
       required: true,
       value: '',
       page: 2
@@ -127,7 +122,7 @@ const InspectionRequest: React.FC<{ onCancel: () => void; onSubmit: (data: FormD
     {
       id: 'alternateDate',
       type: 'date' as const,
-      label: 'Alternate Inspection Date',
+      label: 'Alternate Survey Date',
       required: true,
       value: '',
       page: 2
@@ -135,8 +130,8 @@ const InspectionRequest: React.FC<{ onCancel: () => void; onSubmit: (data: FormD
     {
       id: 'specificRequirements',
       type: 'textarea' as const,
-      label: 'Specific Requirements or Notes',
-      placeholder: 'Include any special instructions or information for the inspector',
+      label: 'Survey Requirements',
+      placeholder: 'Include any specific measurements, features, or areas that need special attention',
       required: false,
       value: '',
       page: 2
@@ -145,7 +140,7 @@ const InspectionRequest: React.FC<{ onCancel: () => void; onSubmit: (data: FormD
       id: 'contactPerson',
       type: 'text' as const,
       label: 'On-site Contact Person',
-      placeholder: 'Name of person who will meet the inspector',
+      placeholder: 'Name of person who will meet the surveyor',
       required: true,
       value: '',
       page: 2
@@ -160,10 +155,10 @@ const InspectionRequest: React.FC<{ onCancel: () => void; onSubmit: (data: FormD
       page: 2
     },
     {
-      id: 'previouslyFailed',
+      id: 'existingData',
       type: 'radio' as const,
-      label: 'Is this a re-inspection of previously failed work?',
-      options: ['Yes', 'No'],
+      label: 'Are there existing survey records or data available?',
+      options: ['Yes', 'No', 'Unsure'],
       required: true,
       value: 'No',
       page: 2
@@ -192,8 +187,8 @@ const InspectionRequest: React.FC<{ onCancel: () => void; onSubmit: (data: FormD
       }
 
       const pdf = await generateFormPdf(
-        'Inspection Request',
-        'Request for inspector to review completed work',
+        'Survey Check Request',
+        'Request for survey verification',
         formFields,
         selectedProject?.name,
         user?.name
@@ -202,8 +197,8 @@ const InspectionRequest: React.FC<{ onCancel: () => void; onSubmit: (data: FormD
       // Store form data and PDF for user selection
       setFormData({
         ...data,
-        title: 'Inspection Request',
-        description: data.location || 'Request for inspection',
+        title: 'Survey Check Request',
+        description: data.location || 'Request for survey verification',
         priority: 'high'
       });
       setGeneratedPdf(pdf);
@@ -255,9 +250,9 @@ const InspectionRequest: React.FC<{ onCancel: () => void; onSubmit: (data: FormD
   return (
     <>
       <RfiFormTemplate<FormData>
-        title="Inspection Request"
-        description="Request for inspector to review completed work"
-        icon={<div><IconWrapper icon="RiCheckboxMultipleLine" /></div>}
+        title="Survey Check Request"
+        description="Request for survey verification and measurements"
+        icon={<div><IconWrapper icon="RiRulerLine" /></div>}
         fields={fields}
         onSubmit={handleSubmit}
         onCancel={onCancel}
@@ -272,11 +267,11 @@ const InspectionRequest: React.FC<{ onCancel: () => void; onSubmit: (data: FormD
         onClose={() => setShowUserSelection(false)}
         onSubmit={handleUserSelection}
         users={users}
-        title="Assign Inspection Request"
-        description="Select users to assign this inspection request to"
+        title="Assign Survey Check Request"
+        description="Select users to assign this survey request to"
       />
     </>
   );
 };
 
-export default InspectionRequest; 
+export default SurveyCheckForm; 

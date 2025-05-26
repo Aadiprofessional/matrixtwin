@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { IconContext } from 'react-icons';
+import { UserRole } from './lib/supabase';
 
 // Contexts
 import { AppProviders } from './contexts/AppProviders';
@@ -43,28 +44,27 @@ import DigitalTwinsControlPage from './pages/DigitalTwinsControlPage';
 
 
 // Protected route wrapper
-const ProtectedRoute: React.FC<{ children: React.ReactNode; requiredRoles?: string[] }> = ({
+const ProtectedRoute: React.FC<{ children: React.ReactNode; requiredRoles?: UserRole[] }> = ({
   children,
   requiredRoles,
 }) => {
   const { isAuthenticated, hasPermission, user } = useAuth();
 
-  console.log('ProtectedRoute check - isAuthenticated:', isAuthenticated, 'User:', user?.email);
-  
   if (!isAuthenticated) {
-    console.log('Not authenticated, redirecting to login');
     return <Navigate to="/login" />;
   }
 
   if (requiredRoles) {
-    console.log('Checking role permissions:', requiredRoles);
-    if (!hasPermission(requiredRoles as any)) {
-      console.log('Insufficient permissions, redirecting to home');
+    // Check if user has required role
+    if (!hasPermission(requiredRoles)) {
+      // If user is worker or site inspector, redirect to dashboard
+      if (user?.role === 'worker' || user?.role === 'siteInspector') {
+        return <Navigate to="/dashboard" />;
+      }
       return <Navigate to="/" />;
     }
   }
 
-  console.log('Access granted to protected route');
   return <>{children}</>;
 };
 
@@ -150,7 +150,7 @@ const AppRoutes: React.FC = () => {
         <Route
           path="/team"
           element={
-            <ProtectedRoute requiredRoles={['admin', 'projectManager']}>
+            <ProtectedRoute requiredRoles={['admin' as UserRole, 'projectManager' as UserRole, 'contractor' as UserRole]}>
               <Layout>
                 <TeamPage />
               </Layout>
@@ -180,7 +180,7 @@ const AppRoutes: React.FC = () => {
         <Route
           path="/safety"
           element={
-            <ProtectedRoute requiredRoles={['admin', 'projectManager', 'siteInspector']}>
+            <ProtectedRoute requiredRoles={['admin' as UserRole, 'projectManager' as UserRole, 'siteInspector' as UserRole]}>
               <Layout>
                 <SafetyPage />
               </Layout>
@@ -190,7 +190,7 @@ const AppRoutes: React.FC = () => {
         <Route
           path="/labour"
           element={
-            <ProtectedRoute requiredRoles={['admin', 'projectManager', 'contractor']}>
+            <ProtectedRoute requiredRoles={['admin' as UserRole, 'projectManager' as UserRole, 'contractor' as UserRole]}>
               <Layout>
                 <LabourPage />
               </Layout>
@@ -210,7 +210,7 @@ const AppRoutes: React.FC = () => {
         <Route
           path="/forms"
           element={
-            <ProtectedRoute requiredRoles={['admin', 'projectManager']}>
+            <ProtectedRoute requiredRoles={['admin' as UserRole, 'projectManager' as UserRole, 'contractor' as UserRole]}>
               <Layout>
                 <FormsPage />
               </Layout>
@@ -220,7 +220,7 @@ const AppRoutes: React.FC = () => {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute requiredRoles={['admin', 'projectManager', 'siteInspector']}>
+            <ProtectedRoute requiredRoles={['admin' as UserRole, 'projectManager' as UserRole, 'contractor' as UserRole]}>
               <Layout>
                 <ReportsPage />
               </Layout>
@@ -230,7 +230,7 @@ const AppRoutes: React.FC = () => {
         <Route
           path="/analytics"
           element={
-            <ProtectedRoute requiredRoles={['admin', 'projectManager']}>
+            <ProtectedRoute requiredRoles={['admin' as UserRole, 'projectManager' as UserRole, 'contractor' as UserRole]}>
               <Layout>
                 <AnalyticsPage />
               </Layout>

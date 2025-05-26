@@ -28,6 +28,15 @@ interface Project {
   status: string;
 }
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatar: string;
+  assigned_projects: Project[];
+}
+
 const Projects: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
@@ -49,6 +58,13 @@ const Projects: React.FC = () => {
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isRefetching, setIsRefetching] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [isAssigningUser, setIsAssigningUser] = useState(false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [showUserDetails, setShowUserDetails] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
 
   // New project form state
   const [newProjectData, setNewProjectData] = useState({
@@ -350,6 +366,86 @@ const Projects: React.FC = () => {
     } finally {
       setIsDeletingProject(false);
     }
+  };
+
+  // Fetch users when staff modal opens
+  const fetchUsers = async () => {
+    try {
+      setIsLoadingUsers(true);
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${user?.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  // Handle user assignment
+  const handleAssignUser = async (userId: string, projectId: string) => {
+    try {
+      setIsAssigningUser(true);
+      setAssignError(null);
+      const userInfo = getUserInfo();
+      if (!userInfo) return;
+
+      const response = await fetch('https://matrixbim-server.onrender.com/api/projects/assign', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          creator_uid: userInfo.id,
+          project_id: projectId,
+          user_id: userId
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Refresh users list
+        await fetchUsers();
+      } else {
+        setAssignError(data.message || 'Failed to assign user');
+      }
+    } catch (error) {
+      console.error('Error assigning user:', error);
+      setAssignError('An error occurred while assigning the user');
+    } finally {
+      setIsAssigningUser(false);
+    }
+  };
+
+  // Function to categorize users
+  const categorizeUsers = (projectId: string) => {
+    const assignedToThisProject = users.filter(user => 
+      user.assigned_projects.some(project => project.id === projectId)
+    );
+
+    const unassignedUsers = users.filter(user => 
+      user.assigned_projects.length === 0
+    );
+
+    const assignedToOtherProjects = users.filter(user => 
+      user.assigned_projects.length > 0 && 
+      !user.assigned_projects.some(project => project.id === projectId)
+    );
+
+    return {
+      assignedToThisProject,
+      unassignedUsers,
+      assignedToOtherProjects
+    };
   };
 
   if (loading) {
@@ -932,16 +1028,29 @@ const Projects: React.FC = () => {
                     </Button>
                     
                     {user?.role === 'admin' && (
-                    <Button
-                      variant="primary"
-                        className="bg-error hover:bg-error/80"
-                      onClick={() => {
-                          setProjectToDelete(selectedProject);
-                          setShowDeleteConfirm(true);
-                        }}
-                      >
-                        Delete Project
-                      </Button>
+                      <>
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            setShowStaffModal(true);
+                            fetchUsers();
+                          }}
+                        >
+                          <RiIcons.RiTeamLine className="mr-2" />
+                          View Staff
+                        </Button>
+                        
+                        <Button
+                          variant="primary"
+                          className="bg-error hover:bg-error/80"
+                          onClick={() => {
+                            setProjectToDelete(selectedProject);
+                            setShowDeleteConfirm(true);
+                          }}
+                        >
+                          Delete Project
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1166,6 +1275,282 @@ const Projects: React.FC = () => {
                       'Delete Project'
                     )}
                     </Button>
+                </div>
+              </motion.div>
+            </Dialog>
+          )}
+        </AnimatePresence>
+        
+        {/* Staff Management Modal */}
+        <AnimatePresence>
+          {showStaffModal && selectedProject && (
+            <Dialog onClose={() => setShowStaffModal(false)}>
+              <motion.div
+                variants={modalVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                className="bg-dark-900 rounded-xl overflow-hidden max-w-5xl w-full mx-auto"
+              >
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-2xl font-bold text-white">Staff Management</h2>
+                    <button 
+                      onClick={() => setShowStaffModal(false)}
+                      className="p-2 rounded-full hover:bg-dark-800 text-gray-400 hover:text-white"
+                    >
+                      <RiIcons.RiCloseLine />
+                    </button>
+                  </div>
+
+                  {assignError && (
+                    <div className="mb-4 p-3 rounded-lg bg-error/10 border border-error/20 text-error">
+                      {assignError}
+                    </div>
+                  )}
+
+                  {isLoadingUsers ? (
+                    <div className="flex items-center justify-center h-64">
+                      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-ai-blue"></div>
+                    </div>
+                  ) : (
+                    <div className="space-y-8">
+                      {/* Assigned to This Project */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-ai-blue mb-4">
+                          Assigned to {selectedProject.name}
+                        </h3>
+                        <div className="space-y-3">
+                          {categorizeUsers(selectedProject.id).assignedToThisProject.map(user => (
+                            <div key={user.id} className="bg-dark-800 rounded-lg p-4 flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full" />
+                                <div>
+                                  <h4 className="text-white font-medium">{user.name}</h4>
+                                  <p className="text-gray-400 text-sm">{user.role}</p>
+                                </div>
+                              </div>
+                              <Button 
+                                variant="secondary" 
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedUser(user);
+                                  setShowUserDetails(true);
+                                }}
+                              >
+                                View Details
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Unassigned Users */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-emerald-400 mb-4">
+                          Available Staff
+                        </h3>
+                        <div className="space-y-3">
+                          {categorizeUsers(selectedProject.id).unassignedUsers.map(user => (
+                            <div key={user.id} className="bg-dark-800 rounded-lg p-4 flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full" />
+                                <div>
+                                  <h4 className="text-white font-medium">{user.name}</h4>
+                                  <p className="text-gray-400 text-sm">{user.role}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Button 
+                                  variant="secondary" 
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedUser(user);
+                                    setShowUserDetails(true);
+                                  }}
+                                >
+                                  View Details
+                                </Button>
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => handleAssignUser(user.id, selectedProject.id)}
+                                  disabled={isAssigningUser}
+                                >
+                                  {isAssigningUser ? 'Assigning...' : 'Assign'}
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Assigned to Other Projects */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-warning mb-4">
+                          Assigned to Other Projects
+                        </h3>
+                        <div className="space-y-3">
+                          {categorizeUsers(selectedProject.id).assignedToOtherProjects.map(user => (
+                            <div key={user.id} className="bg-dark-800 rounded-lg p-4 flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full" />
+                                <div>
+                                  <h4 className="text-white font-medium">{user.name}</h4>
+                                  <p className="text-gray-400 text-sm">
+                                    {user.role} - Assigned to {user.assigned_projects[0]?.name}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Button 
+                                  variant="secondary" 
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedUser(user);
+                                    setShowUserDetails(true);
+                                  }}
+                                >
+                                  View Details
+                                </Button>
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => handleAssignUser(user.id, selectedProject.id)}
+                                  disabled={isAssigningUser}
+                                >
+                                  {isAssigningUser ? 'Assigning...' : 'Assign'}
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </Dialog>
+          )}
+        </AnimatePresence>
+        
+        {/* User Details Modal */}
+        <AnimatePresence>
+          {showUserDetails && selectedUser && (
+            <Dialog onClose={() => setShowUserDetails(false)}>
+              <motion.div
+                variants={modalVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                className="bg-dark-900 rounded-xl overflow-hidden max-w-2xl w-full mx-auto"
+              >
+                <div className="relative">
+                  {/* Header with gradient background */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-ai-blue/20 to-purple-600/20"></div>
+                  
+                  {/* Close button */}
+                  <button 
+                    onClick={() => setShowUserDetails(false)}
+                    className="absolute top-4 right-4 p-2 rounded-full bg-dark-800/50 hover:bg-dark-800 text-gray-400 hover:text-white transition-colors"
+                  >
+                    <RiIcons.RiCloseLine />
+                  </button>
+
+                  {/* User header info */}
+                  <div className="relative p-6 flex items-center space-x-6">
+                    <div className="relative">
+                      <img 
+                        src={selectedUser.avatar} 
+                        alt={selectedUser.name} 
+                        className="w-24 h-24 rounded-full border-4 border-dark-800"
+                      />
+                      <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-success flex items-center justify-center border-2 border-dark-900">
+                        <RiIcons.RiCheckLine className="text-white text-sm" />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h2 className="text-2xl font-bold text-white mb-1">{selectedUser.name}</h2>
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-ai-blue/20 text-ai-blue">
+                          {selectedUser.role.charAt(0).toUpperCase() + selectedUser.role.slice(1)}
+                        </span>
+                        <span className="text-gray-400">{selectedUser.email}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* User details content */}
+                <div className="p-6 space-y-6">
+                  {/* Project Assignments Section */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                      <RiIcons.RiProjectorLine className="mr-2" />
+                      Project Assignments
+                    </h3>
+                    
+                    {selectedUser.assigned_projects.length > 0 ? (
+                      <div className="space-y-3">
+                        {selectedUser.assigned_projects.map(project => (
+                          <div key={project.id} className="bg-dark-800 rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="text-white font-medium">{project.name}</h4>
+                                <p className="text-gray-400 text-sm">{project.location}</p>
+                              </div>
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                                statusColors[project.status as keyof typeof statusColors] || ''
+                              }`}>
+                                {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+                              </span>
+                            </div>
+                            
+                            <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <span className="text-gray-400">Client:</span>
+                                <span className="ml-2 text-white">{project.client}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Deadline:</span>
+                                <span className="ml-2 text-white">
+                                  {new Date(project.deadline).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 bg-dark-800 rounded-lg">
+                        <RiIcons.RiInboxLine className="mx-auto text-4xl text-gray-500 mb-2" />
+                        <p className="text-gray-400">No project assignments</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Activity Stats */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-dark-800 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white mb-1">
+                        {selectedUser.assigned_projects.length}
+                      </div>
+                      <div className="text-sm text-gray-400">Total Projects</div>
+                    </div>
+                    <div className="bg-dark-800 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white mb-1">
+                        {selectedUser.assigned_projects.filter(p => p.status === 'active').length}
+                      </div>
+                      <div className="text-sm text-gray-400">Active Projects</div>
+                    </div>
+                    <div className="bg-dark-800 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white mb-1">
+                        {selectedUser.assigned_projects.filter(p => p.status === 'completed').length}
+                      </div>
+                      <div className="text-sm text-gray-400">Completed</div>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             </Dialog>

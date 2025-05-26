@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -6,14 +6,16 @@ import * as RiIcons from 'react-icons/ri';
 import { IconContext } from 'react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
+import { createForm, getForms, respondToForm, updateFormStatus, FormResponse } from '../api/forms';
+import { UserSelectionModal } from '../components/modals/UserSelectionModal';
+import { generateFormPdf } from '../utils/pdfUtils';
 
 // Import only the template components we need
 import { InspectionCheckFormTemplate } from '../components/forms/InspectionCheckFormTemplate';
 import { SurveyCheckFormTemplate } from '../components/forms/SurveyCheckFormTemplate';
 
 // Types
-interface RfiItem {
-  id: number;
+interface RfiItem extends FormResponse {
   title: string;
   description: string;
   submittedBy: string;
@@ -23,6 +25,14 @@ interface RfiItem {
   responseDate?: string;
   response?: string;
   assignedTo?: string;
+}
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role?: string;
+  avatar_url?: string;
 }
 
 // RFI Page component
@@ -41,55 +51,67 @@ const RfiPage: React.FC = () => {
   const [inspectionTemplateVisible, setInspectionTemplateVisible] = useState(false);
   const [surveyTemplateVisible, setSurveyTemplateVisible] = useState(false);
 
+  const [showUserSelection, setShowUserSelection] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [generatedPdf, setGeneratedPdf] = useState<File | null>(null);
+  const [formData, setFormData] = useState<any>(null);
+
   // Mock RFI data
-  const [rfiItems, setRfiItems] = useState<RfiItem[]>([
-    {
-      id: 1,
-      title: 'Clarification on foundation depth in Zone B',
-      description: 'The drawing specifications show 1.2m depth, but soil conditions might require deeper foundation. Please clarify the minimum acceptable depth.',
-      submittedBy: 'David Chen',
-      submittedDate: '2025-08-15',
-      status: 'pending',
-      priority: 'high',
-      assignedTo: 'Sarah Johnson'
-    },
-    {
-      id: 2,
-      title: 'Material specification for external wall finish',
-      description: 'Please provide detailed specifications for the external wall finish materials as mentioned in drawing A-301.',
-      submittedBy: 'Michael Wong',
-      submittedDate: '2025-08-10',
-      status: 'answered',
-      priority: 'medium',
-      responseDate: '2025-08-12',
-      response: 'The external wall finish should use Type-B waterproof coating as specified in the materials schedule. Refer to specification document M-103 for detailed application instructions.',
-      assignedTo: 'Robert Taylor'
-    },
-    {
-      id: 3,
-      title: 'Conflict between MEP and structural drawings',
-      description: 'There appears to be a conflict between the HVAC duct routing (drawing MEP-05) and the beam locations (drawing S-12) in the east wing corridor.',
-      submittedBy: 'Emily Davis',
-      submittedDate: '2025-08-05',
-      status: 'closed',
-      priority: 'high',
-      responseDate: '2025-08-07',
-      response: 'Confirmed conflict. HVAC routing has been adjusted in revision MEP-05-R2. Please refer to the updated drawing issued on Aug 7.',
-      assignedTo: 'James Wilson'
-    },
-    {
-      id: 4,
-      title: 'Specification for fire-rated doors',
-      description: 'Please clarify the fire rating requirements for doors in the utility rooms as they are not clearly specified in the door schedule.',
-      submittedBy: 'Alex Johnson',
-      submittedDate: '2025-07-28',
-      status: 'answered',
-      priority: 'medium',
-      responseDate: '2025-08-02',
-      response: 'All utility room doors should have a minimum 1-hour fire rating (FR-60) as per building code requirements. The updated door schedule will be issued in the next drawing revision.',
-      assignedTo: 'Sarah Johnson'
+  const [rfiItems, setRfiItems] = useState<RfiItem[]>([]);
+  
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+
+  useEffect(() => {
+    if (selectedProject) {
+      loadRfis();
+      fetchUsers();
     }
-  ]);
+  }, [selectedProject]);
+
+  const fetchUsers = async () => {
+    try {
+      setIsLoadingUsers(true);
+      if (!user?.id) return;
+
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${user.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  const loadRfis = async () => {
+    try {
+      if (user && selectedProject) {
+        const forms = await getForms(user.id, selectedProject.id, 'rfi');
+        // Transform API response to RfiItem format
+        const transformedForms = forms.map(form => ({
+          ...form,
+          title: form.name,
+          description: form.description,
+          submittedBy: form.created_by.name,
+          submittedDate: form.created_at,
+          status: form.status as 'pending' | 'answered' | 'closed',
+          priority: form.priority as 'low' | 'medium' | 'high',
+          assignedTo: form.form_assignments?.[0]?.users.name
+        }));
+        setRfiItems(transformedForms);
+      }
+    } catch (error) {
+      console.error('Error loading RFIs:', error);
+    }
+  };
   
   // Filter RFIs based on search and status
   const filteredRfis = rfiItems.filter((rfi) => {
@@ -110,55 +132,99 @@ const RfiPage: React.FC = () => {
   });
   
   // Handle RFI response submission
-  const handleResponseSubmit = () => {
-    if (selectedRfi && responseText) {
+  const handleResponseSubmit = async () => {
+    try {
+      if (selectedRfi && responseText && user && selectedProject) {
+        // Generate PDF from response
+        const responseFields = [
+          {
+            label: 'Response',
+            value: responseText
+          },
+          {
+            label: 'Responded By',
+            value: user.name
+          },
+          {
+            label: 'Response Date',
+            value: new Date().toLocaleDateString()
+          }
+        ];
+
+        const responsePdf = await generateFormPdf(
+          `Response to ${selectedRfi.title}`,
+          'RFI Response',
+          responseFields,
+          selectedProject.name,
+          user.name
+        );
+
+        await respondToForm(
+          selectedRfi.id,
+          responsePdf,
+          user.id,
+          selectedProject.id
+        );
+
+        // Update local state
+        const updatedRfiItems = rfiItems.map(rfi => {
+          if (rfi.id === selectedRfi.id) {
+            return {
+              ...rfi,
+              status: 'answered' as const,
+              response: responseText,
+              responseDate: new Date().toISOString()
+            };
+          }
+          return rfi;
+        });
+        
+        setRfiItems(updatedRfiItems);
+        setShowResponseForm(false);
+        setResponseText('');
+        
+        // Update the selected RFI
+        const updatedSelectedRfi = {
+          ...selectedRfi,
+          status: 'answered' as const,
+          response: responseText,
+          responseDate: new Date().toISOString()
+        };
+        setSelectedRfi(updatedSelectedRfi);
+      }
+    } catch (error) {
+      console.error('Error submitting response:', error);
+    }
+  };
+  
+  // Close an RFI
+  const closeRfi = async (id: string) => {
+    try {
+      if (!user) return;
+
+      await updateFormStatus(id, user.id, 'closed');
+
       const updatedRfiItems = rfiItems.map(rfi => {
-        if (rfi.id === selectedRfi.id) {
+        if (rfi.id === id) {
           return {
             ...rfi,
-            status: 'answered' as const,
-            response: responseText,
-            responseDate: new Date().toISOString().split('T')[0]
+            status: 'closed' as const
           };
         }
         return rfi;
       });
       
       setRfiItems(updatedRfiItems);
-      setShowResponseForm(false);
-      setResponseText('');
       
-      // Update the selected RFI with the response
-      const updatedSelectedRfi = {
-        ...selectedRfi,
-        status: 'answered' as const,
-        response: responseText,
-        responseDate: new Date().toISOString().split('T')[0]
-      };
-      setSelectedRfi(updatedSelectedRfi);
-    }
-  };
-  
-  // Close an RFI
-  const closeRfi = (id: number) => {
-    const updatedRfiItems = rfiItems.map(rfi => {
-      if (rfi.id === id) {
-        return {
-          ...rfi,
-          status: 'closed' as const
-        };
+      // Update selectedRfi if it's the one being closed
+      if (selectedRfi && selectedRfi.id === id) {
+        setSelectedRfi({
+          ...selectedRfi,
+          status: 'closed'
+        });
       }
-      return rfi;
-    });
-    
-    setRfiItems(updatedRfiItems);
-    
-    // Update selectedRfi if it's the one being closed
-    if (selectedRfi && selectedRfi.id === id) {
-      setSelectedRfi({
-        ...selectedRfi,
-        status: 'closed'
-      });
+    } catch (error) {
+      console.error('Error closing RFI:', error);
     }
   };
   
@@ -189,26 +255,35 @@ const RfiPage: React.FC = () => {
   };
 
   // Handle form submission from templates
-  const handleFormSubmit = (formData: any) => {
-    // Create a new RFI item from the form data
-    const newRfiItem: RfiItem = {
-      id: rfiItems.length > 0 ? Math.max(...rfiItems.map(item => item.id)) + 1 : 1,
-      title: formData.title || (formData.works || formData.survey || 'New Request'),
-      description: formData.description || (formData.location || ''),
-      submittedBy: user?.name || 'Anonymous',
-      submittedDate: new Date().toISOString().split('T')[0],
-      status: 'pending',
-      priority: 'medium',
-      assignedTo: formData.attention || formData.supervisor || '',
-    };
-    
-    // Add the new RFI to the list
-    setRfiItems([newRfiItem, ...rfiItems]);
-    
-    // Close all form modals
-    setShowFormSelector(false);
-    setInspectionTemplateVisible(false);
-    setSurveyTemplateVisible(false);
+  const handleFormSubmit = async (data: any) => {
+    try {
+      if (!user || !selectedProject) return;
+
+      // Generate PDF from form data
+      const formFields = Object.entries(data)
+        .filter(([key]) => key !== 'attachments' && key !== 'pdf')
+        .map(([key, value]) => ({
+          label: key,
+          value: value as string | string[] | boolean
+        }));
+
+      const pdf = await generateFormPdf(
+        data.title || 'New RFI',
+        data.description || '',
+        formFields,
+        selectedProject.name,
+        user.name
+      );
+
+      setGeneratedPdf(pdf);
+      setFormData(data);
+      setShowUserSelection(true);
+      setShowFormSelector(false);
+      setInspectionTemplateVisible(false);
+      setSurveyTemplateVisible(false);
+    } catch (error) {
+      console.error('Error submitting form:', error);
+    }
   };
   
   // Define available templates
@@ -226,7 +301,35 @@ const RfiPage: React.FC = () => {
       icon: <RiIcons.RiRulerLine className="text-purple-500 mr-2 text-xl" />
     }
   ];
-  
+
+  const handleUserSelection = async (selectedUserIds: string[]) => {
+    try {
+      if (!generatedPdf || !formData || !user || !selectedProject) return;
+
+      await createForm(
+        generatedPdf,
+        user.id,
+        formData.title || 'New RFI',
+        formData.description || '',
+        selectedUserIds,
+        selectedProject.id,
+        formData.priority || 'medium',
+        'rfi'
+      );
+
+      // Reset state
+      setGeneratedPdf(null);
+      setFormData(null);
+      setSelectedUsers([]);
+      setShowUserSelection(false);
+
+      // Reload RFIs
+      await loadRfis();
+    } catch (error) {
+      console.error('Error creating form:', error);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto pb-12">
       {/* Enhanced Header with gradient and pattern */}
@@ -779,6 +882,16 @@ const RfiPage: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Add UserSelectionModal */}
+      <UserSelectionModal
+        isOpen={showUserSelection}
+        onClose={() => setShowUserSelection(false)}
+        onSubmit={handleUserSelection}
+        users={users}
+        title="Assign RFI"
+        description="Select users to assign this RFI to"
+      />
     </div>
   );
 };

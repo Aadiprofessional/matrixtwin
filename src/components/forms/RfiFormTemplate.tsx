@@ -3,8 +3,9 @@ import { motion } from 'framer-motion';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import * as RiIcons from 'react-icons/ri';
 import { IconContext } from 'react-icons';
-import { Icons } from '../../utils/iconUtils';
+import { Icons as IconUtils } from '../../utils/iconUtils';
 
 interface FormField {
   id: string;
@@ -17,25 +18,31 @@ interface FormField {
   page?: number;
 }
 
-interface RfiFormTemplateProps {
+interface RfiFormTemplateProps<T = Record<string, any>> {
   title: string;
   description: string;
   icon?: React.ReactNode;
   fields: FormField[];
-  onSubmit: (formData: Record<string, any>) => void;
+  onSubmit: (formData: T) => void;
   onCancel: () => void;
   pages?: number;
+  onFileChange?: (files: File[]) => void;
+  onFileRemove?: (index: number) => void;
+  attachments?: File[];
 }
 
-export const RfiFormTemplate: React.FC<RfiFormTemplateProps> = ({
+export const RfiFormTemplate = <T extends Record<string, any> = Record<string, any>>({
   title,
   description,
-  icon = <Icons.RiFileList3Line />,
+  icon = <RiIcons.RiFileList3Line />,
   fields,
   onSubmit,
   onCancel,
-  pages = 1
-}) => {
+  pages = 1,
+  onFileChange,
+  onFileRemove,
+  attachments = []
+}: RfiFormTemplateProps<T>) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [formData, setFormData] = useState<Record<string, any>>(
     fields.reduce((acc, field) => {
@@ -43,8 +50,6 @@ export const RfiFormTemplate: React.FC<RfiFormTemplateProps> = ({
       return acc;
     }, {} as Record<string, any>)
   );
-  
-  const [attachments, setAttachments] = useState<File[]>([]);
   
   const handleChange = (id: string, value: string | string[] | boolean) => {
     setFormData({
@@ -54,24 +59,15 @@ export const RfiFormTemplate: React.FC<RfiFormTemplateProps> = ({
   };
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
+    if (e.target.files && onFileChange) {
       const newFiles = Array.from(e.target.files);
-      setAttachments([...attachments, ...newFiles]);
+      onFileChange(newFiles);
     }
-  };
-  
-  const removeAttachment = (index: number) => {
-    const newAttachments = [...attachments];
-    newAttachments.splice(index, 1);
-    setAttachments(newAttachments);
   };
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
-      ...formData,
-      attachments
-    });
+    onSubmit(formData as T);
   };
   
   const changePage = (pageNumber: number) => {
@@ -87,34 +83,36 @@ export const RfiFormTemplate: React.FC<RfiFormTemplateProps> = ({
   const pageNumbers = Array.from({ length: pages }, (_, i) => i + 1);
   
   return (
-    <Card variant="ai-dark" className="p-6 border border-ai-blue/20 shadow-ai-glow">
-      <div className="mb-6 flex justify-between items-center">
-        <div className="flex items-center">
-          <div className="h-12 w-12 rounded-full bg-ai-blue/10 text-ai-blue flex items-center justify-center mr-4">
-            <IconContext.Provider value={{ className: "text-2xl" }}>
-              {icon}
-            </IconContext.Provider>
-          </div>
-          <div>
-            <h2 className="text-xl font-display font-semibold">{title}</h2>
-            <p className="text-secondary-400 text-sm">{description}</p>
-          </div>
+    <Card variant="ai" className="p-6">
+      <div className="flex items-center mb-4">
+        {icon && <div className="text-2xl text-ai-blue mr-3">{icon}</div>}
+        <div>
+          <h2 className="text-xl font-semibold">{title}</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {description}
+          </p>
         </div>
-        {pages > 1 && (
-          <div className="flex gap-2">
-            {pageNumbers.map(page => (
+      </div>
+      
+      {pages > 1 && (
+        <div className="flex justify-center mb-6">
+          <div className="flex space-x-2">
+            {pageNumbers.map(number => (
               <button
-                key={`page-${page}`}
-                className={`w-8 h-8 rounded-full flex items-center justify-center
-                  ${currentPage === page ? 'bg-blue-600 text-white' : 'bg-[#334155] text-gray-200 hover:bg-[#475569]'}`}
-                onClick={() => changePage(page)}
+                key={number}
+                className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  currentPage === number
+                    ? 'bg-ai-blue text-white'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-500'
+                }`}
+                onClick={() => changePage(number)}
               >
-                {page}
+                {number}
               </button>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
       
       <form onSubmit={handleSubmit}>
         <div className="space-y-4">
@@ -147,7 +145,7 @@ export const RfiFormTemplate: React.FC<RfiFormTemplateProps> = ({
                 </div>
               )}
               
-              {field.type === 'select' && (
+              {field.type === 'select' && field.options && (
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1">
                     {field.label} {field.required && <span className="text-error">*</span>}
@@ -159,7 +157,7 @@ export const RfiFormTemplate: React.FC<RfiFormTemplateProps> = ({
                     className="input-ai bg-dark-800/50 border-ai-blue/30 text-white w-full"
                   >
                     <option value="">Select an option</option>
-                    {field.options?.map((option) => (
+                    {field.options.map((option) => (
                       <option key={option} value={option}>
                         {option}
                       </option>
@@ -190,9 +188,10 @@ export const RfiFormTemplate: React.FC<RfiFormTemplateProps> = ({
                     id={field.id}
                     checked={formData[field.id] as boolean}
                     onChange={(e) => handleChange(field.id, e.target.checked)}
-                    className="form-checkbox h-4 w-4 text-ai-blue rounded border-ai-blue/50 focus:ring-ai-blue/30 bg-dark-800"
+                    required={field.required}
+                    className="form-checkbox h-4 w-4 text-ai-blue border-gray-300 rounded"
                   />
-                  <label htmlFor={field.id} className="text-sm text-gray-400 ml-2">
+                  <label htmlFor={field.id} className="ml-2 block text-sm text-gray-400">
                     {field.label}
                   </label>
                 </div>
@@ -212,10 +211,14 @@ export const RfiFormTemplate: React.FC<RfiFormTemplateProps> = ({
                           name={field.id}
                           value={option}
                           checked={formData[field.id] === option}
-                          onChange={() => handleChange(field.id, option)}
-                          className="form-radio h-4 w-4 text-ai-blue border-ai-blue/50 focus:ring-ai-blue/30 bg-dark-800"
+                          onChange={(e) => handleChange(field.id, e.target.value)}
+                          required={field.required}
+                          className="form-radio h-4 w-4 text-ai-blue border-gray-300"
                         />
-                        <label htmlFor={`${field.id}-${option}`} className="text-sm text-gray-400 ml-2">
+                        <label
+                          htmlFor={`${field.id}-${option}`}
+                          className="ml-2 block text-sm text-gray-400"
+                        >
                           {option}
                         </label>
                       </div>
@@ -225,7 +228,7 @@ export const RfiFormTemplate: React.FC<RfiFormTemplateProps> = ({
               )}
             </div>
           ))}
-          
+
           {currentPage === pages && (
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-1">
@@ -235,7 +238,7 @@ export const RfiFormTemplate: React.FC<RfiFormTemplateProps> = ({
                 <div className="flex items-center justify-center w-full">
                   <label className="w-full flex flex-col items-center justify-center h-32 border-2 border-dashed border-ai-blue/20 rounded-lg cursor-pointer hover:border-ai-blue/40 transition-colors">
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <Icons.RiUpload2Line className="text-2xl text-ai-blue/70 mb-2" />
+                      <RiIcons.RiUpload2Line className="text-2xl text-ai-blue/70 mb-2" />
                       <p className="mb-2 text-sm text-secondary-400">
                         <span className="font-semibold">Click to upload</span> or drag and drop
                       </p>
@@ -248,30 +251,33 @@ export const RfiFormTemplate: React.FC<RfiFormTemplateProps> = ({
                       className="hidden"
                       onChange={handleFileChange}
                       multiple
+                      accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg"
                     />
                   </label>
                 </div>
-                
+
                 {attachments.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="text-sm font-medium text-secondary-400 mb-2">Attached Files:</h4>
-                    <ul className="space-y-2">
-                      {attachments.map((file, index) => (
-                        <li key={index} className="flex items-center justify-between p-2 bg-dark-900/50 rounded">
-                          <div className="flex items-center">
-                            <Icons.RiFileList3Line className="text-ai-blue/70 mr-2" />
-                            <span className="text-sm text-secondary-300">{file.name}</span>
-                          </div>
+                  <div className="mt-4 space-y-2">
+                    {attachments.map((file, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-2 bg-dark-700/50 rounded"
+                      >
+                        <div className="flex items-center">
+                          <RiIcons.RiFileTextLine className="text-ai-blue mr-2" />
+                          <span className="text-sm">{file.name}</span>
+                        </div>
+                        {onFileRemove && (
                           <button
                             type="button"
-                            onClick={() => removeAttachment(index)}
-                            className="text-secondary-500 hover:text-error"
+                            onClick={() => onFileRemove(index)}
+                            className="text-gray-400 hover:text-error"
                           >
-                            <Icons.RiCloseLine />
+                            <RiIcons.RiCloseLine />
                           </button>
-                        </li>
-                      ))}
-                    </ul>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
