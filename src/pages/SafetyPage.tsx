@@ -3,16 +3,19 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { RiAddLine, RiShieldCheckLine, RiAlarmWarningLine, RiFileWarningLine, RiPercentLine, RiLineChartLine, RiArrowUpLine, RiArrowDownLine, RiFilter3Line, RiBellLine, RiErrorWarningLine, RiArrowLeftLine, RiArrowRightLine, RiCheckLine, RiFlowChart, RiSettings4Line, RiNotificationLine, RiUserLine, RiSearchLine, RiCloseLine, RiTeamLine, RiListCheck, RiLayoutGridLine } from 'react-icons/ri';
+import { RiAddLine, RiShieldCheckLine, RiAlarmWarningLine, RiFileWarningLine, RiPercentLine, RiLineChartLine, RiArrowUpLine, RiArrowDownLine, RiFilter3Line, RiBellLine, RiErrorWarningLine, RiArrowLeftLine, RiArrowRightLine, RiCheckLine, RiFlowChart, RiSettings4Line, RiNotificationLine, RiUserLine, RiSearchLine, RiCloseLine, RiTeamLine, RiListCheck, RiLayoutGridLine, RiLoader4Line } from 'react-icons/ri';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { SafetyInspectionChecklistTemplate } from '../components/forms/SafetyInspectionChecklistTemplate';
 import { Input } from '../components/ui/Input';
+import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
+import { emailService } from '../services/emailService';
 
 // Define UserSelection interface
 interface User {
   id: string;
   name: string;
+  email: string;
   role: string;
   avatar?: string;
 }
@@ -26,32 +29,46 @@ interface ProcessNode {
   settings: Record<string, any>;
 }
 
+interface SafetyEntry {
+  id: string;
+  date: string;
+  project: string;
+  project_id?: string;
+  inspector: string;
+  inspection_type: string;
+  safety_score: number;
+  findings_count: number;
+  incidents_reported: string;
+  corrective_actions: string;
+  notes: string;
+  form_data?: any;
+  status: string;
+  current_node_index: number;
+  safety_workflow_nodes?: any[];
+  safety_assignments?: any[];
+  safety_comments?: any[];
+  created_by: string;
+  created_at: string;
+  updated_at?: string;
+}
+
 // People selector modal component
 const PeopleSelectorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   onSelect: (user: User) => void;
   title: string;
-}> = ({ isOpen, onClose, onSelect, title }) => {
+  users: User[];
+  loading: boolean;
+}> = ({ isOpen, onClose, onSelect, title, users, loading }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Mock users data
-  const users: User[] = [
-    { id: '1', name: 'John Smith', role: 'Project Manager', avatar: 'JS' },
-    { id: '2', name: 'Maria Garcia', role: 'Safety Officer', avatar: 'MG' },
-    { id: '3', name: 'Alex Johnson', role: 'Site Manager', avatar: 'AJ' },
-    { id: '4', name: 'Sarah Williams', role: 'Construction Manager', avatar: 'SW' },
-    { id: '5', name: 'Robert Lee', role: 'Engineer', avatar: 'RL' },
-    { id: '6', name: 'Emma Wilson', role: 'Architect', avatar: 'EW' },
-    { id: '7', name: 'Michael Brown', role: 'Safety Inspector', avatar: 'MB' },
-    { id: '8', name: 'David Taylor', role: 'Contractor', avatar: 'DT' }
-  ];
   
   // Filter users based on search
   const filteredUsers = searchQuery 
     ? users.filter(user => 
         user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        user.role.toLowerCase().includes(searchQuery.toLowerCase())
+        user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : users;
   
@@ -88,7 +105,7 @@ const PeopleSelectorModal: React.FC<{
             <RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by name or role..."
+              placeholder="Search by name, role, or email..."
               className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -97,7 +114,12 @@ const PeopleSelectorModal: React.FC<{
         </div>
         
         <div className="overflow-y-auto max-h-[400px] p-2">
-          {filteredUsers.length > 0 ? (
+          {loading ? (
+            <div className="p-4 text-center text-gray-600 dark:text-gray-400">
+              <RiLoader4Line className="animate-spin text-2xl mx-auto mb-2" />
+              Loading users...
+            </div>
+          ) : filteredUsers.length > 0 ? (
             <div className="grid grid-cols-1 gap-2">
               {filteredUsers.map(user => (
                 <div 
@@ -109,17 +131,20 @@ const PeopleSelectorModal: React.FC<{
                   }}
                 >
                   {user.avatar ? (
-                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 flex items-center justify-center font-medium mr-3">
-                      {user.avatar}
-                    </div>
+                    <img 
+                      src={user.avatar} 
+                      alt={user.name}
+                      className="w-10 h-10 rounded-full mr-3"
+                    />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-3">
-                      <RiUserLine className="text-gray-500 dark:text-gray-400" />
+                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 flex items-center justify-center font-medium mr-3">
+                      {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                     </div>
                   )}
-                  <div>
-                    <div className="font-medium">{user.name}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{user.role}</div>
+                  <div className="flex-grow">
+                    <div className="font-medium text-gray-900 dark:text-white">{user.name}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">{user.role}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-500">{user.email}</div>
                   </div>
                 </div>
               ))}
@@ -135,70 +160,11 @@ const PeopleSelectorModal: React.FC<{
   );
 };
 
-// ProcessFlowBuilder component
-const ProcessFlowBuilder: React.FC<{
-  nodes: ProcessNode[];
-  selectedNodeId: string | null;
-  onSelectNode: (node: ProcessNode) => void;
-}> = ({ nodes, selectedNodeId, onSelectNode }) => {
-  const getNodeColor = (type: string) => {
-    switch (type) {
-      case 'start':
-        return 'bg-green-100 border-green-600 text-green-600 dark:bg-green-900/30 dark:text-green-400';
-      case 'end':
-        return 'bg-red-100 border-red-600 text-red-600 dark:bg-red-900/30 dark:text-red-400';
-      default:
-        return 'bg-blue-100 border-blue-600 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
-    }
-  };
-  
-  return (
-    <div className="py-2">
-      <div className="flex flex-col items-center">
-        {nodes.map((node, index) => (
-          <React.Fragment key={node.id}>
-            <motion.div
-              whileHover={{ scale: 1.03 }}
-              className={`w-full max-w-sm rounded-lg p-3 border-2 cursor-pointer transition-colors ${
-                selectedNodeId === node.id ? 'ring-2 ring-offset-2 ring-blue-600' : ''
-              } ${getNodeColor(node.type)}`}
-              onClick={() => onSelectNode(node)}
-            >
-              <div className="flex items-center justify-between">
-                <div className="font-medium">{node.name}</div>
-                <div className="text-xs px-2 py-1 rounded-full bg-white/20 dark:bg-gray-800/50">
-                  {node.type === 'start' ? 'Start' : node.type === 'end' ? 'End' : 'Process'}
-                </div>
-              </div>
-              
-              {node.type === 'node' && (
-                <div className="mt-1 text-sm opacity-80">
-                  {node.executor ? `Executor: ${node.executor}` : 'No executor assigned'}
-                </div>
-              )}
-            </motion.div>
-            
-            {/* Connector line between nodes */}
-            {index < nodes.length - 1 && (
-              <div className="w-px h-10 bg-gray-300 dark:bg-gray-600 flex justify-center items-center my-1">
-                <div className="bg-white dark:bg-gray-800 rounded-full p-1">
-                  <RiArrowDownLine className="text-gray-500 dark:text-gray-400" />
-                </div>
-              </div>
-            )}
-          </React.Fragment>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 interface SafetyInspection {
   id: number;
   date: string;
   type: string;
   score: number;
-  status: 'complete' | 'pending' | 'failed';
   inspector: string;
   project: string;
   findings: number;
@@ -219,112 +185,44 @@ const SafetyPage: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
+  const [searchQuery, setSearchQuery] = useState('');
   const [showNewInspection, setShowNewInspection] = useState(false);
-  const [showIncidents, setShowIncidents] = useState(false);
-  const [inspectionDate, setInspectionDate] = useState(new Date().toISOString().split('T')[0]);
-  const [inspectionType, setInspectionType] = useState('');
-  const [filter, setFilter] = useState('all');
-  const [chartTimeframe, setChartTimeframe] = useState<'week' | 'month' | 'quarter'>('week');
+  const [selectedSafetyEntry, setSelectedSafetyEntry] = useState<SafetyEntry | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [showFormView, setShowFormView] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   
-  // Add state for multi-step form
-  const [formStep, setFormStep] = useState<number>(1);
-  const [formData, setFormData] = useState<Record<string, any>>({});
-  const [assignees, setAssignees] = useState<string[]>([]);
-  
-  // People selector modal state
-  const [showPeopleSelector, setShowPeopleSelector] = useState(false);
-  const [peopleModalType, setPeopleModalType] = useState<'executor' | 'cc'>('executor');
-  const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
-  
-  // Process flow state
+  // Process flow states
+  const [showProcessFlow, setShowProcessFlow] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<any>(null);
   const [processNodes, setProcessNodes] = useState<ProcessNode[]>([
-    { id: 'start', type: 'start', name: 'Start', settings: { allowCreator: true, allowStakeholder: false } },
-    { id: 'node1', type: 'node', name: 'New node1', executor: '', settings: { allowCreator: false, allowStakeholder: false } },
-    { id: 'node2', type: 'node', name: 'New node2', executor: '', settings: { allowCreator: false, allowStakeholder: false } },
-    { id: 'end', type: 'end', name: 'End', settings: {} }
+    { id: 'start', type: 'start', name: 'Start', settings: {} },
+    { id: 'review', type: 'node', name: 'Safety Review & Approval', settings: {} },
+    { id: 'end', type: 'end', name: 'Complete', settings: {} }
   ]);
-  const [selectedNode, setSelectedNode] = useState<ProcessNode>(processNodes[0]);
+  const [selectedNode, setSelectedNode] = useState<ProcessNode | null>(null);
+  const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
+  const [showPeopleSelector, setShowPeopleSelector] = useState(false);
+  const [peopleSelectorType, setPeopleSelectorType] = useState<'executor' | 'cc'>('executor');
   
-  // Mock safety data
-  const [safetyInspections, setSafetyInspections] = useState<SafetyInspection[]>([
-    {
-      id: 1,
-      date: '2025-10-25',
-      type: 'Daily Site Safety Check',
-      score: 92,
-      status: 'complete',
-      inspector: 'John Smith',
-      project: 'Project Alpha',
-      findings: 2
-    },
-    {
-      id: 2,
-      date: '2025-10-24',
-      type: 'Fire Safety Inspection',
-      score: 88,
-      status: 'complete',
-      inspector: 'Jane Doe',
-      project: 'Project Alpha',
-      findings: 3
-    },
-    {
-      id: 3,
-      date: '2025-10-26',
-      type: 'Equipment Safety Check',
-      score: 0,
-      status: 'pending',
-      inspector: 'Alex Wilson',
-      project: 'Project Alpha',
-      findings: 0
-    },
-    {
-      id: 4,
-      date: '2025-10-22',
-      type: 'Daily Site Safety Check',
-      score: 75,
-      status: 'failed',
-      inspector: 'Mike Brown',
-      project: 'Harbor Tower',
-      findings: 8
-    }
-  ]);
+  // Safety entries from API
+  const [safetyEntries, setSafetyEntries] = useState<SafetyEntry[]>([]);
 
-  // Mock safety incidents
-  const [safetyIncidents, setSafetyIncidents] = useState<SafetyIncident[]>([
-    {
-      id: 1,
-      date: '2025-10-20',
-      type: 'Near Miss',
-      severity: 'medium',
-      description: 'Worker nearly struck by falling material',
-      status: 'investigating',
-      location: 'Floor 3, Section B',
-      project: 'Project Alpha'
-    },
-    {
-      id: 2,
-      date: '2025-10-15',
-      type: 'Minor Injury',
-      severity: 'low',
-      description: 'Cut on hand while handling materials',
-      status: 'resolved',
-      location: 'Material Storage Area',
-      project: 'Project Alpha'
-    },
-    {
-      id: 3,
-      date: '2025-09-28',
-      type: 'Equipment Failure',
-      severity: 'high',
-      description: 'Crane malfunction during operation',
-      status: 'closed',
-      location: 'Main Construction Site',
-      project: 'Harbor Tower'
-    }
-  ]);
-  
-  // Mock safety alerts
-  const [safetyAlerts, setSafetyAlerts] = useState([
+  // View and filter states
+  const [showGridView, setShowGridView] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showIncidents, setShowIncidents] = useState(false);
+  const [chartTimeframe, setChartTimeframe] = useState('week');
+  const [activeFilterTab, setActiveFilterTab] = useState('status');
+  const [filter, setFilter] = useState('all');
+  const [filterType, setFilterType] = useState('all');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+
+  // Mock safety alerts for now
+  const [safetyAlerts] = useState([
     {
       id: 1,
       message: 'High wind alert: Take precautions with scaffolding',
@@ -339,53 +237,6 @@ const SafetyPage: React.FC = () => {
     }
   ]);
 
-  // Safety trend data (for charts)
-  const getTrendData = () => {
-    switch(chartTimeframe) {
-      case 'week':
-        return {
-          labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-          scores: [88, 92, 85, 90, 94, 89, 91],
-          incidents: [1, 0, 1, 0, 0, 0, 0]
-        };
-      case 'month':
-        return {
-          labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-          scores: [87, 90, 93, 91],
-          incidents: [2, 1, 1, 0]
-        };
-      case 'quarter':
-        return {
-          labels: ['Jan', 'Feb', 'Mar'],
-          scores: [82, 88, 91],
-          incidents: [5, 3, 1]
-        };
-      default:
-        return {
-          labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-          scores: [88, 92, 85, 90, 94, 89, 91],
-          incidents: [1, 0, 1, 0, 0, 0, 0]
-        };
-    }
-  };
-
-  const trendData = getTrendData();
-  
-  // Calculate trend direction and percentage
-  const getTrend = () => {
-    const data = trendData.scores;
-    const currentAvg = data.slice(-3).reduce((sum, score) => sum + score, 0) / 3;
-    const prevAvg = data.slice(0, 3).reduce((sum, score) => sum + score, 0) / 3;
-    const change = ((currentAvg - prevAvg) / prevAvg) * 100;
-    
-    return {
-      direction: change >= 0 ? 'up' : 'down',
-      percentage: Math.abs(change).toFixed(1)
-    };
-  };
-
-  const trend = getTrend();
-  
   // Inspection types
   const inspectionTypes = [
     'Daily Site Safety Check',
@@ -397,136 +248,6 @@ const SafetyPage: React.FC = () => {
     'Fall Protection Audit',
     'Emergency Preparedness Review'
   ];
-  
-  // Function to handle the ISO19650 safety inspection form submission
-  const handleSubmitInspection = (data: any) => {
-    // Generate a new inspection ID
-    const newId = safetyInspections.length > 0 ? Math.max(...safetyInspections.map(i => i.id)) + 1 : 1;
-    
-    // Create the new inspection with default values and form data
-    const newInspection: SafetyInspection = {
-      id: newId,
-      date: data.date || new Date().toISOString().split('T')[0],
-      type: data.type || 'General',
-      score: data.score || Math.floor(Math.random() * 30) + 70, // random score between 70-100 if not provided
-      status: 'complete',
-      inspector: user?.name || 'Anonymous',
-      project: selectedProject?.name || 'Unknown Project',
-      findings: data.findings || Math.floor(Math.random() * 5)
-    };
-    
-    // Add the new inspection to the list
-    setSafetyInspections([newInspection, ...safetyInspections]);
-    
-    // Reset form and close modal
-    setShowNewInspection(false);
-  };
-
-  // Function to navigate between form steps
-  const handleFormStepChange = (step: number) => {
-    setFormStep(step);
-  };
-
-  // Function to handle form data updates
-  const updateFormData = (data: Record<string, any>) => {
-    setFormData({ ...formData, ...data });
-  };
-
-  // Function to handle form submission from any step
-  const handleFormStepSubmit = (data: Record<string, any>) => {
-    updateFormData(data);
-    
-    if (formStep < 3) {
-      // Move to next step
-      setFormStep(formStep + 1);
-    } else {
-      // Final submission
-      handleSubmitInspection({ ...formData, ...data, assignees });
-    }
-  };
-  
-  // Function to get inspections based on user role and project
-  const getFilteredInspections = () => {
-    let filtered = safetyInspections;
-    
-    // Filter by role and project
-    if (user?.role !== 'admin' && user?.role !== 'projectManager') {
-      filtered = filtered.filter(inspection => 
-        inspection.project === selectedProject?.name || inspection.project === 'Project Alpha'
-      );
-    }
-    
-    // Filter by status
-    if (filter !== 'all') {
-      filtered = filtered.filter(inspection => inspection.status === filter);
-    }
-    
-    // Filter by type
-    if (filterType !== 'all') {
-      filtered = filtered.filter(inspection => inspection.type === filterType);
-    }
-    
-    // Filter by date range
-    if (filterDateFrom) {
-      filtered = filtered.filter(inspection => 
-        new Date(inspection.date) >= new Date(filterDateFrom)
-      );
-    }
-    
-    if (filterDateTo) {
-      filtered = filtered.filter(inspection => 
-        new Date(inspection.date) <= new Date(filterDateTo)
-      );
-    }
-    
-    return filtered;
-  };
-
-  // Function to get filtered incidents
-  const getFilteredIncidents = () => {
-    let filtered = safetyIncidents;
-    
-    // Filter by role and project
-    if (user?.role !== 'admin' && user?.role !== 'projectManager') {
-      filtered = filtered.filter(incident => 
-        incident.project === selectedProject?.name || incident.project === 'Project Alpha'
-      );
-    }
-    
-    return filtered;
-  };
-  
-  // Calculate average safety score
-  const getAverageSafetyScore = () => {
-    const completedInspections = getFilteredInspections().filter(i => i.status === 'complete');
-    if (completedInspections.length === 0) return 0;
-    
-    const totalScore = completedInspections.reduce((sum, inspection) => sum + inspection.score, 0);
-    return Math.round(totalScore / completedInspections.length);
-  };
-  
-  // Get score color class
-  const getScoreColorClass = (score: number) => {
-    if (score >= 90) return 'text-green-600';
-    if (score >= 75) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  // Get severity color
-  const getSeverityColor = (severity: string) => {
-    switch(severity) {
-      case 'low':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
-      case 'high':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400';
-      case 'critical':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
-    }
-  };
 
   // Format timestamp to relative time
   const formatRelativeTime = (timestamp: number) => {
@@ -541,98 +262,417 @@ const SafetyPage: React.FC = () => {
     }
   };
 
-  // Function to add a new node
+  // Fetch safety entries on component mount and when project changes
+  useEffect(() => {
+    if (user?.id) {
+      fetchSafetyEntries();
+      fetchUsers();
+    }
+  }, [user?.id, selectedProject?.id]);
+
+  // Fetch safety entries from API with project filtering
+  const fetchSafetyEntries = async () => {
+    try {
+      setLoading(true);
+      const projectParam = selectedProject?.id ? `?projectId=${selectedProject.id}` : '';
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/safety/list/${user?.id}${projectParam}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSafetyEntries(data);
+      } else {
+        console.error('Failed to fetch safety entries');
+      }
+    } catch (error) {
+      console.error('Error fetching safety entries:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch users from API (similar to Projects.tsx)
+  const fetchUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${user?.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      } else {
+        console.error('Failed to fetch users');
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  // Filtered entries based on search
+  const filteredEntries = safetyEntries.filter(entry => 
+    entry.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    entry.inspector.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    entry.inspection_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    entry.date.includes(searchQuery)
+  );
+
   const addNewNode = () => {
-    // Create a new node ID
-    const newNodeId = `node${processNodes.length}`;
-    
-    // Create the new node
-    const newNode = {
-      id: newNodeId,
-      type: 'node' as const,
-      name: `New node${processNodes.length}`,
-      executor: '',
-      settings: { allowCreator: false, allowStakeholder: false }
+    const newNode: ProcessNode = {
+      id: `node_${Date.now()}`,
+      type: 'node',
+      name: `Process Step ${processNodes.length - 1}`,
+      settings: {}
     };
     
-    // Insert the new node before the end node
-    const endNodeIndex = processNodes.findIndex(node => node.type === 'end');
-    if (endNodeIndex !== -1) {
-      const updatedNodes = [...processNodes];
-      updatedNodes.splice(endNodeIndex, 0, newNode);
-      setProcessNodes(updatedNodes);
-      setSelectedNode(newNode);
-    }
+    // Insert before the end node
+    const newNodes = [...processNodes];
+    newNodes.splice(-1, 0, newNode);
+    setProcessNodes(newNodes);
   };
-  
-  // Function to open people selector
+
   const openPeopleSelector = (type: 'executor' | 'cc') => {
-    setPeopleModalType(type);
+    setPeopleSelectorType(type);
     setShowPeopleSelector(true);
   };
-  
-  // Function to handle user selection from the modal
+
   const handleUserSelection = (selectedUser: User) => {
-    if (peopleModalType === 'executor') {
-      if (selectedNode) {
-        const updatedNode = { ...selectedNode, executor: selectedUser.name };
-        const updatedNodes = processNodes.map(node => 
-          node.id === selectedNode.id ? updatedNode : node
-        );
-        setProcessNodes(updatedNodes);
-        setSelectedNode(updatedNode);
-      }
-    } else if (peopleModalType === 'cc') {
-      setSelectedCcs([...selectedCcs, selectedUser]);
-      
-      if (selectedNode) {
-        const updatedNode = { 
-          ...selectedNode, 
-          settings: { 
-            ...selectedNode.settings,
-            cc: [...(selectedNode.settings.cc || []), selectedUser]
-          } 
-        };
-        const updatedNodes = processNodes.map(node => 
-          node.id === selectedNode.id ? updatedNode : node
-        );
-        setProcessNodes(updatedNodes);
-        setSelectedNode(updatedNode);
-      }
-    }
-  };
-  
-  // Function to remove a CC
-  const removeUserFromCc = (userId: string) => {
-    const updatedCcs = selectedCcs.filter(cc => cc.id !== userId);
-    setSelectedCcs(updatedCcs);
-    
-    if (selectedNode) {
-      const updatedSettings = { 
-        ...selectedNode.settings,
-        cc: selectedNode.settings.cc ? selectedNode.settings.cc.filter((cc: User) => cc.id !== userId) : []
-      };
-      
-      const updatedNode = { 
-        ...selectedNode, 
-        settings: updatedSettings
-      };
-      
+    if (peopleSelectorType === 'executor' && selectedNode) {
       const updatedNodes = processNodes.map(node => 
-        node.id === selectedNode.id ? updatedNode : node
+        node.id === selectedNode.id 
+          ? { ...node, executor: selectedUser.name }
+          : node
       );
       setProcessNodes(updatedNodes);
-      setSelectedNode(updatedNode);
+      setSelectedNode({ ...selectedNode, executor: selectedUser.name });
+    } else if (peopleSelectorType === 'cc') {
+      if (!selectedCcs.find(cc => cc.id === selectedUser.id)) {
+        setSelectedCcs([...selectedCcs, selectedUser]);
+      }
     }
   };
-  
-  // New state for grid view - default to false (horizontal/table view)
-  const [showGridView, setShowGridView] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [filterType, setFilterType] = useState('all');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
-  const [activeFilterTab, setActiveFilterTab] = useState('status');
+
+  const removeUserFromCc = (userId: string) => {
+    setSelectedCcs(selectedCcs.filter(cc => cc.id !== userId));
+  };
+
+  const handleCreateInspection = (formData: any) => {
+    setPendingFormData(formData);
+    setShowNewInspection(false);
+    setShowProcessFlow(true);
+    setSelectedNode(processNodes.find(node => node.type === 'node') || null);
+  };
+
+  const handleFinalSave = async () => {
+    if (!pendingFormData || !user?.id) return;
+    
+    try {
+      const response = await fetch('https://matrixbim-server.onrender.com/api/safety/create', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          formData: pendingFormData,
+          processNodes: processNodes,
+          selectedCcs: selectedCcs,
+          createdBy: user.id,
+          projectId: selectedProject?.id
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Send email notifications
+        try {
+          const ccEmails = selectedCcs.map(cc => cc.email);
+          await emailService.sendSafetyNotification({
+            entryId: result.id || 'new',
+            projectName: selectedProject?.name || 'Unknown Project',
+            action: 'created',
+            ccRecipients: ccEmails,
+            formData: pendingFormData,
+            currentNodeName: processNodes.find(node => node.type === 'node')?.name
+          });
+        } catch (emailError) {
+          console.error('Failed to send email notifications:', emailError);
+        }
+        
+        // Refresh safety entries
+        await fetchSafetyEntries();
+        
+        // Reset states
+        setShowProcessFlow(false);
+        setPendingFormData(null);
+        setSelectedCcs([]);
+        setSelectedNode(null);
+        
+        // Show success message
+        alert('Safety entry created successfully! Notifications have been sent to assigned users.');
+      } else {
+        const error = await response.json();
+        alert(`Failed to create safety entry: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error creating safety entry:', error);
+      alert('Failed to create safety entry. Please try again.');
+    }
+  };
+
+  const handleCancelProcessFlow = () => {
+    setPendingFormData(null);
+    setShowProcessFlow(false);
+    setSelectedCcs([]);
+    setSelectedNode(null);
+  };
+
+  const handleViewDetails = async (entry: SafetyEntry) => {
+    try {
+      // Fetch full entry details including workflow and comments
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/safety/${entry.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const fullEntry = await response.json();
+        setSelectedSafetyEntry(fullEntry);
+        setShowDetails(true);
+      } else {
+        setSelectedSafetyEntry(entry);
+        setShowDetails(true);
+      }
+    } catch (error) {
+      console.error('Error fetching entry details:', error);
+      setSelectedSafetyEntry(entry);
+      setShowDetails(true);
+    }
+  };
+
+  const handleViewForm = async (entry: SafetyEntry) => {
+    try {
+      // Fetch full entry details including form data
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/safety/${entry.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const fullEntry = await response.json();
+        setSelectedSafetyEntry(fullEntry);
+        setShowFormView(true);
+      } else {
+        setSelectedSafetyEntry(entry);
+        setShowFormView(true);
+      }
+    } catch (error) {
+      console.error('Error fetching entry details:', error);
+      setSelectedSafetyEntry(entry);
+      setShowFormView(true);
+    }
+  };
+
+  const handleFormUpdate = async (formData: any) => {
+    if (!selectedSafetyEntry || !user?.id) return;
+    
+    try {
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/safety/${selectedSafetyEntry.id}/update`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          formData: formData,
+          updatedBy: user.id
+        })
+      });
+
+      if (response.ok) {
+        // Refresh safety entries
+        await fetchSafetyEntries();
+        setShowFormView(false);
+        setSelectedSafetyEntry(null);
+        alert('Safety entry updated successfully!');
+      } else {
+        const error = await response.json();
+        alert(`Failed to update safety entry: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error updating safety entry:', error);
+      alert('Failed to update safety entry. Please try again.');
+    }
+  };
+
+  const handleWorkflowAction = async (action: 'approve' | 'reject') => {
+    if (!selectedSafetyEntry || !user?.id) return;
+    
+    try {
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/safety/${selectedSafetyEntry.id}/workflow`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: action,
+          userId: user.id,
+          comment: '' // You can add a comment input if needed
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Send email notifications
+        try {
+          const ccEmails = selectedSafetyEntry.safety_assignments?.map(assignment => assignment.user_email).filter(Boolean) || [];
+          await emailService.sendSafetyNotification({
+            entryId: selectedSafetyEntry.id,
+            projectName: selectedSafetyEntry.project,
+            action: action === 'approve' ? 'approved' : 'rejected',
+            ccRecipients: ccEmails,
+            formData: selectedSafetyEntry.form_data,
+            currentNodeName: selectedSafetyEntry.safety_workflow_nodes?.find(node => 
+              node.node_order === selectedSafetyEntry.current_node_index
+            )?.node_name,
+            comments: '' // Add comment if available
+          });
+        } catch (emailError) {
+          console.error('Failed to send email notifications:', emailError);
+        }
+        
+        // Refresh safety entries
+        await fetchSafetyEntries();
+        setShowDetails(false);
+        setSelectedSafetyEntry(null);
+        alert(`Safety entry ${action}d successfully!`);
+      } else {
+        const error = await response.json();
+        alert(`Failed to ${action} safety entry: ${error.error}`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing safety entry:`, error);
+      alert(`Failed to ${action} safety entry. Please try again.`);
+    }
+  };
+
+  const canUserEditEntry = (entry: SafetyEntry) => {
+    if (!user) return false;
+    
+    // Admin can edit any entry
+    if (user.role === 'admin') return true;
+    
+    // Creator can edit their own entries
+    if (entry.created_by === user.id) return true;
+    
+    // Check if user is assigned to this entry
+    return entry.safety_assignments?.some(assignment => 
+      assignment.user_id === user.id && assignment.role === 'executor'
+    ) || false;
+  };
+
+  const canUserApproveEntry = (entry: SafetyEntry) => {
+    if (!user) return false;
+    
+    // Only allow approval if entry is pending and user has permission
+    if (entry.status !== 'pending') return false;
+    
+    // Admin can approve any entry
+    if (user.role === 'admin') return true;
+    
+    // Check if user is the current workflow executor
+    const currentNode = entry.safety_workflow_nodes?.find(node => 
+      node.node_order === entry.current_node_index && node.status === 'pending'
+    );
+    
+    return currentNode?.executor_name === user.name;
+  };
+
+  const getWeatherIcon = (weather: string) => {
+    switch (weather?.toLowerCase()) {
+      case 'sunny':
+        return '☀️';
+      case 'cloudy':
+        return '☁️';
+      case 'rainy':
+        return '🌧️';
+      case 'stormy':
+        return '⛈️';
+      default:
+        return '🌤️';
+    }
+  };
+
+  const getStats = () => {
+    const totalInspections = safetyEntries.length;
+    const averageScore = totalInspections > 0 
+      ? Math.round(safetyEntries.reduce((sum, entry) => sum + (entry.safety_score || 0), 0) / totalInspections)
+      : 0;
+    const pendingInspections = safetyEntries.filter(entry => entry.status === 'pending').length;
+    const completedInspections = safetyEntries.filter(entry => entry.status === 'completed').length;
+    
+    return {
+      totalInspections,
+      averageScore,
+      pendingInspections,
+      completedInspections
+    };
+  };
+
+  const getTrendData = () => {
+    // Mock trend data for now - in a real app this would come from API
+    return {
+      labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      scores: [88, 92, 85, 90, 94, 89, 91],
+      incidents: [1, 0, 1, 0, 0, 0, 0]
+    };
+  };
+
+  const getTrend = () => {
+    const data = getTrendData().scores;
+    const currentAvg = data.slice(-3).reduce((sum, score) => sum + score, 0) / 3;
+    const prevAvg = data.slice(0, 3).reduce((sum, score) => sum + score, 0) / 3;
+    const change = ((currentAvg - prevAvg) / prevAvg) * 100;
+    
+    return {
+      direction: change >= 0 ? 'up' : 'down',
+      percentage: Math.abs(change).toFixed(1)
+    };
+  };
+
+  const getScoreColorClass = (score: number) => {
+    if (score >= 90) return 'text-green-600';
+    if (score >= 75) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getWorkflowStatusBadge = (entry: SafetyEntry) => {
+    const statusColors = {
+      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+      in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+      completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+    };
+    
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[entry.status as keyof typeof statusColors] || statusColors.pending}`}>
+        {entry.status?.charAt(0).toUpperCase() + entry.status?.slice(1) || 'Pending'}
+      </span>
+    );
+  };
 
   return (
     <div>
@@ -730,7 +770,7 @@ const SafetyPage: React.FC = () => {
                   strokeLinecap="round"
                   strokeDasharray="283"
                   initial={{ strokeDashoffset: 283 }}
-                  animate={{ strokeDashoffset: 283 - (283 * getAverageSafetyScore() / 100) }}
+                  animate={{ strokeDashoffset: 283 - (283 * getStats().averageScore / 100) }}
                   transition={{ duration: 1.5, delay: 0.3 }}
                 />
                 <defs>
@@ -748,7 +788,7 @@ const SafetyPage: React.FC = () => {
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 1, type: 'spring' }}
                 >
-                  {getAverageSafetyScore()}%
+                  {getStats().averageScore}%
                 </motion.div>
                 <div className="text-sm text-white/70">Safety Score</div>
               </div>
@@ -757,13 +797,13 @@ const SafetyPage: React.FC = () => {
             <div className="flex-1">
               <div className="flex items-center mb-3">
                 <h3 className="text-xl font-semibold text-white">Safety Trend</h3>
-                <div className={`ml-3 flex items-center text-sm ${trend.direction === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                  {trend.direction === 'up' ? (
+                <div className={`ml-3 flex items-center text-sm ${getTrend().direction === 'up' ? 'text-green-400' : 'text-red-400'}`}>
+                  {getTrend().direction === 'up' ? (
                     <RiArrowUpLine className="mr-1" />
                   ) : (
                     <RiArrowDownLine className="mr-1" />
                   )}
-                  {trend.percentage}%
+                  {getTrend().percentage}%
                 </div>
                 <div className="ml-auto flex space-x-2">
                   <button 
@@ -788,22 +828,22 @@ const SafetyPage: React.FC = () => {
               </div>
               
               <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 h-32 flex items-end justify-between">
-                {trendData.labels.map((label, index) => (
+                {getTrendData().labels.map((label, index) => (
                   <div key={label} className="flex flex-col items-center">
                     <div 
                       className="w-8 bg-gradient-to-t from-red-500 to-green-500 rounded-t-sm"
                       style={{ 
-                        height: `${trendData.scores[index] / 100 * 100}px`,
+                        height: `${getTrendData().scores[index] / 100 * 100}px`,
                         background: `linear-gradient(to top, 
-                          ${trendData.scores[index] < 75 ? '#ef4444' : trendData.scores[index] < 90 ? '#eab308' : '#22c55e'}, 
-                          ${trendData.scores[index] < 75 ? '#f87171' : trendData.scores[index] < 90 ? '#fcd34d' : '#4ade80'}
+                          ${getTrendData().scores[index] < 75 ? '#ef4444' : getTrendData().scores[index] < 90 ? '#eab308' : '#22c55e'}, 
+                          ${getTrendData().scores[index] < 75 ? '#f87171' : getTrendData().scores[index] < 90 ? '#fcd34d' : '#4ade80'}
                         )` 
                       }}
                     />
                     <div className="text-xs text-white/70 mt-1">{label}</div>
-                    {trendData.incidents[index] > 0 && (
+                    {getTrendData().incidents[index] > 0 && (
                       <div className="mt-1 px-1.5 py-0.5 bg-red-500 rounded-full text-[10px] text-white">
-                        {trendData.incidents[index]}
+                        {getTrendData().incidents[index]}
                       </div>
                     )}
                   </div>
@@ -854,7 +894,7 @@ const SafetyPage: React.FC = () => {
             >
               <SafetyInspectionChecklistTemplate
                 onClose={() => setShowNewInspection(false)}
-                onSave={handleSubmitInspection}
+                onSave={handleCreateInspection}
               />
             </motion.div>
           </div>
@@ -874,7 +914,7 @@ const SafetyPage: React.FC = () => {
           <div>
             <div className="flex items-center">
               <h3 className="text-2xl font-display font-semibold">
-                {getFilteredInspections().filter(i => i.status === 'complete').length}
+                {getStats().completedInspections}
               </h3>
               <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 text-xs rounded-full">
                 Complete
@@ -891,7 +931,7 @@ const SafetyPage: React.FC = () => {
           <div>
             <div className="flex items-center">
               <h3 className="text-2xl font-display font-semibold">
-                {getFilteredInspections().filter(i => i.status === 'pending').length}
+                {getStats().pendingInspections}
               </h3>
               <span className="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400 text-xs rounded-full">
                 In Progress
@@ -907,7 +947,7 @@ const SafetyPage: React.FC = () => {
           </div>
           <div>
             <h3 className="text-2xl font-display font-semibold">
-              {getFilteredInspections().reduce((total, inspection) => total + inspection.findings, 0)}
+              {safetyEntries.reduce((total, entry) => total + entry.findings_count, 0)}
             </h3>
             <p className="text-sm text-secondary-600 dark:text-secondary-400">{t('safety.totalFindings')}</p>
           </div>
@@ -918,8 +958,8 @@ const SafetyPage: React.FC = () => {
             <RiPercentLine className="text-2xl" />
           </div>
           <div>
-            <h3 className={`text-2xl font-display font-semibold ${getScoreColorClass(getAverageSafetyScore())}`}>
-              {getAverageSafetyScore()}%
+            <h3 className={`text-2xl font-display font-semibold ${getScoreColorClass(getStats().averageScore)}`}>
+              {getStats().averageScore}%
             </h3>
             <p className="text-sm text-secondary-600 dark:text-secondary-400">{t('safety.averageSafetyScore')}</p>
           </div>
@@ -1223,48 +1263,65 @@ const SafetyPage: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
               >
-                {getFilteredInspections().map((inspection) => {
-                  const statusColor = inspection.status === 'complete' 
+                {filteredEntries.map((entry) => {
+                  const statusColor = entry.status === 'completed' 
                     ? 'from-green-500 to-green-600' 
-                    : inspection.status === 'pending' 
+                    : entry.status === 'pending' 
                       ? 'from-yellow-500 to-yellow-600' 
                       : 'from-red-500 to-red-600';
                   
                   return (
                     <Card 
-                      key={inspection.id} 
+                      key={entry.id} 
                       className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
                       hover
                     >
                       <div className={`h-2 w-full bg-gradient-to-r ${statusColor}`}></div>
                       <div className="p-4">
                         <div className="flex justify-between items-start">
-                          <h3 className="text-lg font-medium">{inspection.type}</h3>
-                          <div className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                            inspection.status === 'complete' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                            inspection.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                            'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                          }`}>
-                            {inspection.status.charAt(0).toUpperCase() + inspection.status.slice(1)}
-                          </div>
+                          <h3 className="text-lg font-medium">{entry.inspection_type}</h3>
+                          {getWorkflowStatusBadge(entry)}
                         </div>
                         
                         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                           <div>
                             <p className="text-secondary-500 dark:text-secondary-400">Date</p>
-                            <p className="font-medium">{inspection.date}</p>
+                            <p className="font-medium">{entry.date}</p>
                           </div>
                           <div>
                             <p className="text-secondary-500 dark:text-secondary-400">Score</p>
-                            <p className={`font-medium ${getScoreColorClass(inspection.score)}`}>{inspection.score}%</p>
+                            <p className={`font-medium ${getScoreColorClass(entry.safety_score)}`}>{entry.safety_score}%</p>
                           </div>
                           <div>
                             <p className="text-secondary-500 dark:text-secondary-400">Inspector</p>
-                            <p className="font-medium">{inspection.inspector}</p>
+                            <p className="font-medium">{entry.inspector}</p>
                           </div>
                           <div>
                             <p className="text-secondary-500 dark:text-secondary-400">Findings</p>
-                            <p className="font-medium">{inspection.findings}</p>
+                            <p className="font-medium">{entry.findings_count}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex justify-end mt-4">
+                          <div className="flex space-x-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleViewForm(entry)}
+                              leftIcon={<RiFileWarningLine />}
+                              className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                            >
+                              View Form
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleViewDetails(entry)}
+                              rightIcon={<RiArrowRightLine />}
+                              className="hover:bg-red-50 dark:hover:bg-red-900/20"
+                            >
+                              View Details
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -1293,7 +1350,7 @@ const SafetyPage: React.FC = () => {
                         Score
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                        Findings
+                        Status
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
                         Actions
@@ -1301,45 +1358,54 @@ const SafetyPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-secondary-200 dark:divide-secondary-700">
-                    {getFilteredInspections().map((inspection) => (
-                      <tr key={inspection.id} className="hover:bg-secondary-50 dark:hover:bg-secondary-800/50">
+                    {filteredEntries.map((entry) => (
+                      <tr key={entry.id} className="hover:bg-secondary-50 dark:hover:bg-secondary-800/50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                          {inspection.date}
+                          {entry.date}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                          {inspection.type}
+                          {entry.inspection_type}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                          {inspection.project}
+                          {entry.project}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                          {inspection.inspector}
+                          {entry.inspector}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {inspection.status === 'pending' ? (
+                          {entry.status === 'pending' ? (
                             <span className="text-yellow-600 dark:text-yellow-400 inline-flex items-center">
                               <span className="w-2 h-2 rounded-full bg-yellow-600 dark:bg-yellow-400 mr-1.5 animate-pulse"></span>
-                              {t('status.pending')}
+                              Pending
                             </span>
                           ) : (
-                            <span className={getScoreColorClass(inspection.score)}>
-                              {inspection.score}%
+                            <span className={getScoreColorClass(entry.safety_score)}>
+                              {entry.safety_score}%
                             </span>
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span className={inspection.findings > 0 ? "text-red-600 dark:text-red-400 font-medium" : "text-secondary-900 dark:text-white"}>
-                            {inspection.findings}
-                          </span>
+                          {getWorkflowStatusBadge(entry)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            className="hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                          >
-                            {inspection.status === 'pending' ? t('actions.continue') : t('actions.view')}
-                          </Button>
+                          <div className="flex justify-end space-x-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleViewForm(entry)}
+                              className="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                            >
+                              Form
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleViewDetails(entry)}
+                              className="hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                            >
+                              Details
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1351,6 +1417,202 @@ const SafetyPage: React.FC = () => {
         </motion.div>
       )}
 
+      {/* Process Flow Modal */}
+      {showProcessFlow && (
+        <AnimatePresence>
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <motion.div
+              className="w-full max-w-7xl max-h-[90vh] overflow-auto bg-white dark:bg-secondary-800 rounded-lg shadow-xl"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-secondary-900 dark:text-white">Configure Process Flow</h2>
+                    <p className="text-secondary-600 dark:text-secondary-400 mt-1">
+                      Set up the approval workflow for this safety inspection
+                    </p>
+                  </div>
+                  <Button 
+                    variant="outline"
+                    leftIcon={<RiAddLine />}
+                    onClick={addNewNode}
+                  >
+                    Add Node
+                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Left panel - Process flow */}
+                  <div className="lg:col-span-5">
+                    <Card className="p-4 h-full">
+                      <h3 className="font-semibold text-secondary-900 dark:text-white mb-4">Process Flow</h3>
+                      <ProcessFlowBuilder
+                        nodes={processNodes}
+                        onSelectNode={setSelectedNode}
+                        selectedNodeId={selectedNode?.id || null}
+                      />
+                    </Card>
+                  </div>
+                  
+                  {/* Right panel - Node settings */}
+                  <div className="lg:col-span-7">
+                    <Card className="p-4 h-full">
+                      <h3 className="font-semibold text-secondary-900 dark:text-white mb-4">Process Settings</h3>
+                      
+                      {selectedNode ? (
+                        <div className="space-y-4">
+                          <Input
+                            label="Node name"
+                            value={selectedNode.name || ''}
+                            onChange={(e) => {
+                              const updatedNode = { ...selectedNode, name: e.target.value };
+                              const updatedNodes = processNodes.map(node => 
+                                node.id === selectedNode.id ? updatedNode : node
+                              );
+                              setProcessNodes(updatedNodes);
+                              setSelectedNode(updatedNode);
+                            }}
+                            className="bg-white dark:bg-secondary-800"
+                          />
+                          
+                          {selectedNode.type === 'node' && (
+                            <>
+                              <div>
+                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                  Executor
+                                </label>
+                                <div className="flex items-center space-x-2">
+                                  <div className="flex-grow bg-secondary-50 dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-3 text-secondary-600 dark:text-secondary-400">
+                                    {selectedNode.executor || 'Select executor'}
+                                  </div>
+                                  <Button variant="outline" size="sm" onClick={() => openPeopleSelector('executor')}>
+                                    Select
+                                  </Button>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                  CC Recipients
+                                </label>
+                                <div className="flex flex-col space-y-2">
+                                  <div className="flex items-center space-x-2">
+                                    <div className="flex-grow bg-secondary-50 dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-3 min-h-[50px]">
+                                      {selectedCcs.length > 0 ? (
+                                        <div className="flex flex-wrap gap-2">
+                                          {selectedCcs.map(cc => (
+                                            <div 
+                                              key={cc.id} 
+                                              className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-3 py-1 rounded-full flex items-center text-sm"
+                                            >
+                                              <span className="mr-2">{cc.name}</span>
+                                              <button
+                                                type="button"
+                                                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200"
+                                                onClick={() => removeUserFromCc(cc.id)}
+                                              >
+                                                <RiCloseLine />
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <span className="text-secondary-500 dark:text-secondary-400">No CCs selected</span>
+                                      )}
+                                    </div>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      onClick={() => openPeopleSelector('cc')}
+                                    >
+                                      Add CC
+                                    </Button>
+                                  </div>
+                                  
+                                  {selectedCcs.length > 0 && (
+                                    <div className="text-xs text-secondary-500 dark:text-secondary-400 flex items-center">
+                                      <RiTeamLine className="mr-1" />
+                                      {selectedCcs.length} {selectedCcs.length === 1 ? 'person' : 'people'} will be notified
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                  Execution Type
+                                </label>
+                                <select className="w-full bg-white dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-2 text-secondary-900 dark:text-white">
+                                  <option value="standard">Standard</option>
+                                  <option value="parallel">Parallel</option>
+                                  <option value="sequential">Sequential</option>
+                                </select>
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                  Approval Condition
+                                </label>
+                                <select className="w-full bg-white dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-2 text-secondary-900 dark:text-white">
+                                  <option value="none">None</option>
+                                  <option value="approval">Approval required</option>
+                                  <option value="review">Review required</option>
+                                </select>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-secondary-500 dark:text-secondary-400">
+                          <RiFlowChart className="text-4xl mx-auto mb-2 opacity-50" />
+                          <p>Select a node to configure its settings</p>
+                        </div>
+                      )}
+                    </Card>
+                  </div>
+                </div>
+                
+                {/* Footer Actions */}
+                <div className="flex justify-between items-center mt-6 pt-6 border-t border-secondary-200 dark:border-secondary-700">
+                  <Button 
+                    variant="outline"
+                    leftIcon={<RiArrowLeftLine />}
+                    onClick={handleCancelProcessFlow}
+                  >
+                    Back to Form
+                  </Button>
+                  
+                  <div className="flex space-x-3">
+                    <Button 
+                      variant="outline"
+                      onClick={handleCancelProcessFlow}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      variant="primary"
+                      leftIcon={<RiCheckLine />}
+                      onClick={handleFinalSave}
+                      className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
+                    >
+                      Save Safety Inspection
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </AnimatePresence>
+      )}
+
       {/* People Selector Modal */}
       <AnimatePresence>
         {showPeopleSelector && (
@@ -1358,10 +1620,261 @@ const SafetyPage: React.FC = () => {
             isOpen={showPeopleSelector}
             onClose={() => setShowPeopleSelector(false)}
             onSelect={handleUserSelection}
-            title={peopleModalType === 'executor' ? 'Select Executor' : 'Add People to CC'}
+            title={peopleSelectorType === 'executor' ? 'Select Executor' : 'Add People to CC'}
+            users={users}
+            loading={loadingUsers}
           />
         )}
       </AnimatePresence>
+
+      {/* Entry Details Dialog */}
+      <AnimatePresence>
+        {showDetails && selectedSafetyEntry && (
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => setShowDetails(false)}
+          >
+            <motion.div
+              className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 space-y-6">
+                <div className="flex justify-between items-center bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+                  <div className="text-lg font-bold text-red-900 dark:text-red-300 flex items-center">
+                    <RiShieldCheckLine className="mr-2 text-red-600 dark:text-red-400" />
+                    Safety Inspection - {selectedSafetyEntry.date}
+                  </div>
+                  <div className="px-3 py-1 bg-white dark:bg-gray-700 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
+                    {selectedSafetyEntry.project}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                      <RiUserLine className="mr-2 text-red-600 dark:text-red-400" />
+                      <span className="text-sm font-medium uppercase tracking-wide">Inspector</span>
+                    </div>
+                    <div className="font-medium">{selectedSafetyEntry.inspector}</div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                      <RiShieldCheckLine className="mr-2 text-red-600 dark:text-red-400" />
+                      <span className="text-sm font-medium uppercase tracking-wide">Inspection Type</span>
+                    </div>
+                    <div className="font-medium">{selectedSafetyEntry.inspection_type}</div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                      <RiPercentLine className="mr-2 text-red-600 dark:text-red-400" />
+                      <span className="text-sm font-medium uppercase tracking-wide">Safety Score</span>
+                    </div>
+                    <div className={`font-medium text-lg ${getScoreColorClass(selectedSafetyEntry.safety_score)}`}>
+                      {selectedSafetyEntry.safety_score}%
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                      <RiAlarmWarningLine className="mr-2 text-red-600 dark:text-red-400" />
+                      <span className="text-sm font-medium uppercase tracking-wide">Findings Count</span>
+                    </div>
+                    <div className="font-medium">{selectedSafetyEntry.findings_count}</div>
+                  </div>
+                </div>
+                
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                    <RiErrorWarningLine className="mr-2 text-red-600 dark:text-red-400" />
+                    <span className="text-sm font-medium uppercase tracking-wide">Incidents Reported</span>
+                  </div>
+                  <div className="whitespace-pre-line">{selectedSafetyEntry.incidents_reported || 'None'}</div>
+                </div>
+                
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                    <RiSettings4Line className="mr-2 text-red-600 dark:text-red-400" />
+                    <span className="text-sm font-medium uppercase tracking-wide">Corrective Actions</span>
+                  </div>
+                  <div className="whitespace-pre-line">{selectedSafetyEntry.corrective_actions || 'None'}</div>
+                </div>
+                
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                    <RiFileWarningLine className="mr-2 text-red-600 dark:text-red-400" />
+                    <span className="text-sm font-medium uppercase tracking-wide">Notes</span>
+                  </div>
+                  <div className="whitespace-pre-line">{selectedSafetyEntry.notes || 'None'}</div>
+                </div>
+                
+                {/* Workflow Status Section */}
+                {selectedSafetyEntry.safety_workflow_nodes && selectedSafetyEntry.safety_workflow_nodes.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-4">
+                      <RiFlowChart className="mr-2 text-red-600 dark:text-red-400" />
+                      <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {selectedSafetyEntry.safety_workflow_nodes
+                        .sort((a: any, b: any) => a.node_order - b.node_order)
+                        .map((node: any) => (
+                          <div key={node.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div className="flex items-center">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                                node.status === 'completed' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
+                                node.status === 'pending' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                node.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' :
+                                'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400'
+                              }`}>
+                                {node.status === 'completed' ? <RiCheckLine /> :
+                                 node.status === 'pending' ? <RiNotificationLine /> :
+                                 node.status === 'rejected' ? <RiCloseLine /> :
+                                 <RiSettings4Line />}
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">{node.node_name}</div>
+                                {node.executor_name && (
+                                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                                    Assigned to: {node.executor_name}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                              node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                              node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                              'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+                            }`}>
+                              {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Comments Section */}
+                {selectedSafetyEntry.safety_comments && selectedSafetyEntry.safety_comments.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-4">
+                      <RiNotificationLine className="mr-2 text-red-600 dark:text-red-400" />
+                      <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {selectedSafetyEntry.safety_comments
+                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                        .map((comment: any) => (
+                          <div key={comment.id} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-medium text-gray-900 dark:text-white">{comment.user_name}</div>
+                              <div className="flex items-center space-x-2">
+                                {comment.action && (
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                    comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                                  }`}>
+                                    {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
+                                  </span>
+                                )}
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {new Date(comment.created_at).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-gray-700 dark:text-gray-300">{comment.comment}</div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  {/* Workflow Action Buttons */}
+                  {selectedSafetyEntry.status === 'pending' && (
+                    <>
+                      {canUserEditEntry(selectedSafetyEntry) && (
+                        <Button 
+                          variant="outline"
+                          leftIcon={<RiFileWarningLine />}
+                          onClick={() => {
+                            setShowDetails(false);
+                            handleViewForm(selectedSafetyEntry);
+                          }}
+                        >
+                          Edit Form
+                        </Button>
+                      )}
+                      
+                      {canUserApproveEntry(selectedSafetyEntry) && (
+                        <>
+                          <Button 
+                            variant="outline"
+                            leftIcon={<RiCloseLine />}
+                            onClick={() => handleWorkflowAction('reject')}
+                            className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            Reject
+                          </Button>
+                          <Button 
+                            variant="primary"
+                            leftIcon={<RiCheckLine />}
+                            onClick={() => handleWorkflowAction('approve')}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            Approve
+                          </Button>
+                        </>
+                      )}
+                    </>
+                  )}
+                  
+                  <Button 
+                    variant="primary"
+                    onClick={() => setShowDetails(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Form View Modal */}
+      {showFormView && selectedSafetyEntry && (
+        <AnimatePresence>
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => setShowFormView(false)}
+          >
+            <motion.div
+              className="w-full max-w-6xl max-h-[90vh] overflow-auto"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <SafetyInspectionChecklistTemplate
+                onClose={() => setShowFormView(false)}
+                onSave={handleFormUpdate}
+                initialData={selectedSafetyEntry?.form_data}
+              />
+            </motion.div>
+          </div>
+        </AnimatePresence>
+      )}
     </div>
   );
 };

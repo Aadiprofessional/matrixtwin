@@ -15,6 +15,7 @@ import {
   RiCompassDiscoverLine,
   RiMapPinLine
 } from 'react-icons/ri';
+import { getFreshViewToken } from '../utils/bimfaceTokenApi';
 
 // Don't declare global types here - they're conflicting with existing ones
 // We'll use type assertions instead
@@ -129,46 +130,21 @@ const ModelViewerPage: React.FC = () => {
     }
   };
 
-  // Function to get a fresh view token using the exact same API call that works in curl
+  // Function to get a fresh view token using the MatrixBIM server API
   const fetchViewToken = async (fileId: number): Promise<string> => {
     try {
-      const bearerToken = 'cn-a25be677-409f-4e62-9eb2-c58d154bf082'; // Exact same token as in curl
-      
       console.log(`Getting fresh viewer token for fileId: ${fileId}`);
       
-      // Use proxy server to avoid CORS issues
-      const response = await fetch(
-        `/api/bimface/view/token?fileId=${fileId}`,
-        {
-          method: 'GET',
-          headers: { 
-            'Authorization': `Bearer ${bearerToken}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          // Add timeout to avoid long-hanging requests
-          signal: AbortSignal.timeout(30000) // 30-second timeout (increased from 10s)
-        }
-      );
+      const tokenResponse = await getFreshViewToken(fileId);
       
-      if (!response.ok) {
-        const responseText = await response.text();
-        console.error(`Server error response: Status ${response.status}, Body:`, responseText);
-        throw new Error(`Server responded with status: ${response.status}, Body: ${responseText}`);
-      }
-      
-      const data = await response.json();
-      console.log('Fresh viewer token response:', data);
-      
-      if (data && data.code === 'success' && data.data) {
-        console.log('Successfully received view token:', data.data);
-        return data.data;
+      if (tokenResponse.success && tokenResponse.viewToken) {
+        console.log('Successfully received fresh view token:', tokenResponse.viewToken);
+        return tokenResponse.viewToken;
       } else {
-        console.error('Invalid response format:', data);
-        throw new Error('Failed to get viewer token: Invalid response format');
+        throw new Error('Failed to get fresh view token: Invalid response');
       }
     } catch (error) {
-      console.error('Error getting viewer token:', error);
+      console.error('Error getting fresh viewer token:', error);
       throw error;
     }
   };

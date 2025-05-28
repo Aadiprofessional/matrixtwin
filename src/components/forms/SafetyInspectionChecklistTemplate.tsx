@@ -22,6 +22,7 @@ import {
 interface SafetyInspectionChecklistTemplateProps {
   onClose: () => void;
   onSave: (formData: any) => void;
+  initialData?: any;
 }
 
 interface ChecklistItemProps {
@@ -32,18 +33,19 @@ interface ChecklistItemProps {
 
 export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionChecklistTemplateProps> = ({
   onClose,
-  onSave
+  onSave,
+  initialData
 }) => {
   const [currentPage, setCurrentPage] = useState<1 | 2 | 3 | 4>(1);
   const [formData, setFormData] = useState({
     // Common header data
-    contractNo: '',
-    contractTitle: '',
-    date: '',
-    time: '',
+    contractNo: initialData?.contractNo || '',
+    contractTitle: initialData?.contractTitle || '',
+    date: initialData?.date || '',
+    time: initialData?.time || '',
     
     // Environmental Photo Record data
-    photoRecords: [
+    photoRecords: initialData?.photoRecords || [
       {
         id: '1',
         location: '',
@@ -79,8 +81,8 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
     ],
     
     // Photo record footer
-    recordName: '',
-    recordDate: '',
+    recordName: initialData?.recordName || '',
+    recordDate: initialData?.recordDate || '',
   });
   
   // Photo record table items - adding for pages 3-4
@@ -90,7 +92,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
     agreedDate: string;
     dateCompleted: string;
     rectificationStatus: string;
-  }>>([
+  }>>(initialData?.photoTableItems || [
     {
       id: '1',
       description: '',
@@ -101,10 +103,10 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
   ]);
   
   // Photo record table responses
-  const [photoResponses, setPhotoResponses] = useState<Record<string, string>>({});
+  const [photoResponses, setPhotoResponses] = useState<Record<string, string>>(initialData?.photoResponses || {});
   
   // Initial checklist data - structured to match the 4 pages from the images
-  const [checklistItems, setChecklistItems] = useState<ChecklistItemProps[]>([
+  const [checklistItems, setChecklistItems] = useState<ChecklistItemProps[]>(initialData?.checklistItems || [
     // Page 1 - Main categories (items 1-12)
     { 
       id: '1', 
@@ -236,14 +238,14 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
   ]);
   
   // State for checklist responses
-  const [responses, setResponses] = useState<Record<string, Record<string, string>>>({});
+  const [responses, setResponses] = useState<Record<string, Record<string, string>>>(initialData?.responses || {});
   
   // State for checklist dates and status
   const [checklistDates, setChecklistDates] = useState<Record<string, Record<string, {
     agreedDate: string;
     dateCompleted: string;
     rectificationStatus: string;
-  }>>>({});
+  }>>>(initialData?.checklistDates || {});
   
   const handleInputChange = (field: string, value: string) => {
     setFormData({
@@ -365,7 +367,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
   const handleRemovePhotoRecord = (index: number) => {
     if (formData.photoRecords.length <= 1) return;
     
-    const updatedRecords = formData.photoRecords.filter((_, i) => i !== index);
+    const updatedRecords = formData.photoRecords.filter((_: any, i: number) => i !== index);
     setFormData({
       ...formData,
       photoRecords: updatedRecords
@@ -748,7 +750,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
     page3.appendChild(createTable(checklistHeaders, photoTableRows));
     
     // Add photo records for page 3
-    formData.photoRecords.slice(0, 2).forEach((record, index) => {
+    formData.photoRecords.slice(0, 2).forEach((record: any, index: number) => {
       page3.appendChild(createPhotoRecord(record, index));
     });
     
@@ -760,7 +762,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
     page4.appendChild(createHeader('Safety Environmental Photo Record'));
     
     // Add photo records for page 4
-    formData.photoRecords.slice(2, 4).forEach((record, index) => {
+    formData.photoRecords.slice(2, 4).forEach((record: any, index: number) => {
       page4.appendChild(createPhotoRecord(record, index + 2));
     });
     
@@ -1179,7 +1181,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
               </table>
               
               {/* Photo Records */}
-              {formData.photoRecords.slice(...getPhotoRecordsRange()).map((record, index) => {
+              {formData.photoRecords.slice(...getPhotoRecordsRange()).map((record: any, index: number) => {
                 // Calculate the actual record index based on the current page
                 const actualIndex = index + (currentPage === 3 ? 0 : 2);
                 return (

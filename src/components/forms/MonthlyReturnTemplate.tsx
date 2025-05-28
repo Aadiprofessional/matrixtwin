@@ -4,6 +4,7 @@ import { RiCalendarLine, RiUserLine, RiFileTextLine, RiDownload2Line, RiAddLine,
 interface MonthlyReturnTemplateProps {
   onClose: () => void;
   onSave: (formData: any) => void;
+  initialData?: any;
 }
 
 // Worker entry interface
@@ -255,7 +256,8 @@ const initialWorkerData: WorkerEntry[] = [
 
 export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
   onClose,
-  onSave
+  onSave,
+  initialData
 }) => {
   // Add pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -267,16 +269,16 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
   
   // Remove pagination state since we only need one page
   const [formData, setFormData] = useState<FormData>({
-    dept: '',
-    day: '',
-    month: '',
-    year: '',
-    contractNo: '',
-    contractTitle: '',
-    contractor: '',
-    isNominatedSubcontractor: false,
-    worksCode: '',
-    workers: initialWorkerData
+    dept: initialData?.dept || '',
+    day: initialData?.day || '',
+    month: initialData?.month || '',
+    year: initialData?.year || '',
+    contractNo: initialData?.contractNo || '',
+    contractTitle: initialData?.contractTitle || '',
+    contractor: initialData?.contractor || '',
+    isNominatedSubcontractor: initialData?.isNominatedSubcontractor || false,
+    worksCode: initialData?.worksCode || '',
+    workers: initialData?.workers || initialWorkerData
   });
   
   // Get current page workers

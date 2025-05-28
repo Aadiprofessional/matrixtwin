@@ -18,6 +18,7 @@ import {
 import { Link } from 'react-router-dom';
 import { getTranslationStatus, updateModelStatus, getThumbnailUrl, updateModelInfo } from '../utils/bimfaceApi';
 import { getUserModels, getAllModels, deleteModelRecord, updateModelRecord, ModelRecord } from '../utils/supabaseModelsApi';
+import { getFreshViewToken } from '../utils/bimfaceTokenApi';
 import { useAuth } from '../contexts/AuthContext';
 
 // Types for model data with BIMFACE integration
@@ -190,16 +191,15 @@ const DigitalTwinsPage: React.FC = () => {
                 if (statusData.result.token) {
                   updateData.viewtoken = statusData.result.token;
                 } else {
-                  // Try to fetch the view token using getviewid API
+                  // Try to fetch the fresh view token using the new API
                   try {
-                    const tokenResponse = await fetch(`https://matrixbim-server.onrender.com/api/bimface/getviewid?fileId=${model.file_id}&token=cn-937d5634-69e4-4543-9ea6-d2f2545ff3bc`);
-                    const tokenData = await tokenResponse.json();
+                    const tokenResponse = await getFreshViewToken(model.file_id!);
                     
-                    if (tokenData.success && tokenData.viewToken) {
-                      updateData.viewtoken = tokenData.viewToken;
+                    if (tokenResponse.success && tokenResponse.viewToken) {
+                      updateData.viewtoken = tokenResponse.viewToken;
                     }
                   } catch (tokenError) {
-                    console.error(`Error fetching view token for model ${model.id}:`, tokenError);
+                    console.error(`Error fetching fresh view token for model ${model.id}:`, tokenError);
                   }
                 }
                 
@@ -491,27 +491,26 @@ const DigitalTwinsPage: React.FC = () => {
       e.preventDefault(); // Prevent navigation
       
       try {
-        console.log(`Getting view token for model ${supabaseModel.id} before viewing`);
+        console.log(`Getting fresh view token for model ${supabaseModel.id} before viewing`);
         
-        // Call the getviewid API directly
-        const response = await fetch(`https://matrixbim-server.onrender.com/api/bimface/getviewid?fileId=${fileId}&token=cn-937d5634-69e4-4543-9ea6-d2f2545ff3bc`);
-        const data = await response.json();
+        // Use the new fresh token API
+        const tokenResponse = await getFreshViewToken(fileId);
         
-        if (data.success && data.viewToken) {
+        if (tokenResponse.success && tokenResponse.viewToken) {
           // Update the model with the new viewToken
-          await updateModelRecord(supabaseModel.id, { viewtoken: data.viewToken });
+          await updateModelRecord(supabaseModel.id, { viewtoken: tokenResponse.viewToken });
           
-          // Redirect to viewer with ONLY the obtained viewToken (no fileId to prevent conflicts)
-          window.location.href = `/digital-twins/viewer?modelId=${supabaseModel.id}&viewToken=${data.viewToken}`;
+          // Redirect to viewer with the obtained viewToken
+          window.location.href = `/digital-twins/viewer?fileId=${fileId}&viewToken=${tokenResponse.viewToken}`;
         } else {
-          console.error('Failed to get view token:', data);
+          console.error('Failed to get fresh view token:', tokenResponse);
           // If we can't get a token, try to continue anyway with just the fileId
-          window.location.href = `/digital-twins/viewer?modelId=${supabaseModel.id}&fileId=${fileId}`;
+          window.location.href = `/digital-twins/viewer?fileId=${fileId}`;
         }
       } catch (error) {
-        console.error('Error getting view token:', error);
+        console.error('Error getting fresh view token:', error);
         // If error, try to continue anyway with just the fileId
-        window.location.href = `/digital-twins/viewer?modelId=${supabaseModel.id}&fileId=${fileId}`;
+        window.location.href = `/digital-twins/viewer?fileId=${fileId}`;
       }
     }
   };

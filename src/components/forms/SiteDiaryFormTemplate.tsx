@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -20,11 +20,19 @@ import {
 interface SiteDiaryFormTemplateProps {
   onClose: () => void;
   onSave: (formData: any) => void;
+  initialData?: any;
+  isEditMode?: boolean;
+  readOnly?: boolean;
+  title?: string;
 }
 
 export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
   onClose,
-  onSave
+  onSave,
+  initialData,
+  isEditMode,
+  readOnly,
+  title
 }) => {
   const [currentPage, setCurrentPage] = useState<1 | 2>(1);
   const [formData, setFormData] = useState({
@@ -783,19 +791,54 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
     printWindow.document.close();
   };
 
+  useEffect(() => {
+    if (initialData) {
+      setFormData(initialData);
+      setStaffRows(initialData.staffData || [{ staffTitle: '', staffCount: '' }]);
+      setStaffRows2(initialData.staffData2 || [{ staffTitle: '', staffCount: '' }]);
+      setLabourRows(initialData.labourData || [{ labourType: '', labourCode: '', labourCount: '' }]);
+      setEquipmentRows(initialData.equipmentData || [{ equipmentType: '', totalOnSite: '', working: '', idling: '' }]);
+      setAssistanceRows(initialData.assistanceData || [{ description: '', workNo: '' }]);
+      setActivityRows(initialData.activityData || [{ 
+        area: '', 
+        location: '', 
+        subLocation: '', 
+        activity: '',
+        trade: '',
+        code: '',
+        labourNo: '',
+        workingHours: '',
+        equipmentType: '',
+        equipmentId: '',
+        onSite: '',
+        working: '',
+        idle: '',
+        remarks: ''
+      }]);
+      setSignatures(initialData.signatures || {
+        projectManagerName: '',
+        projectManagerDate: '',
+        contractorRepName: '',
+        contractorRepDate: '',
+        supervisorName: '',
+        supervisorDate: ''
+      });
+    }
+  }, [initialData]);
+
   return (
     <div className="w-full mx-auto bg-[#1e293b] rounded-xl shadow-2xl flex flex-col h-[90vh] overflow-hidden border border-[#334155]">
       <div className="px-6 py-4 flex justify-between items-center bg-gradient-to-r from-[#0f172a] to-[#1e293b] border-b border-[#334155]">
         <h2 className="text-xl font-semibold text-white">
           <RiFileTextLine className="inline-block mr-2" />
-          Site Diary
+          {title || 'Site Diary'}
         </h2>
         <div className="flex gap-3">
           <button 
             onClick={onClose}
             className="px-4 py-2 bg-[#334155] hover:bg-[#475569] text-gray-100 rounded-md shadow-md text-sm font-medium transition-all duration-200 hover:scale-105"
           >
-            Cancel
+            {readOnly ? 'Close' : 'Cancel'}
           </button>
           
           <button 
@@ -819,12 +862,15 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
             ))}
           </div>
           
-          <button
-            onClick={handleSave}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-md text-sm font-medium"
-          >
-            Save
-          </button>
+          {!readOnly && (
+            <button
+              onClick={handleSave}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-md text-sm font-medium flex items-center gap-1"
+            >
+              <RiCheckLine />
+              {isEditMode ? 'Update' : 'Save'}
+            </button>
+          )}
         </div>
       </div>
       
@@ -845,6 +891,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
                         className="w-full border-none outline-none bg-transparent" 
                         value={formData.contractNo}
                         onChange={(e) => handleInputChange('contractNo', e.target.value)}
+                        readOnly={readOnly}
                       />
                     </div>
                   </div>
@@ -857,6 +904,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
                         className="w-full border-none outline-none bg-transparent" 
                         value={formData.date}
                         onChange={(e) => handleInputChange('date', e.target.value)}
+                        readOnly={readOnly}
                       />
                     </div>
                   </div>
@@ -869,6 +917,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
                         className="w-full border-none outline-none bg-transparent" 
                         value={formData.day}
                         onChange={(e) => handleInputChange('day', e.target.value)}
+                        readOnly={readOnly}
                       />
                     </div>
                   </div>
@@ -881,6 +930,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
                         className="w-full border-none outline-none bg-transparent" 
                         value={formData.contractDate}
                         onChange={(e) => handleInputChange('contractDate', e.target.value)}
+                        readOnly={readOnly}
                       />
                     </div>
                   </div>
@@ -908,6 +958,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
                       className="w-full border-b border-gray-400 outline-none bg-transparent mb-3" 
                       value={formData.clientDepartment}
                       onChange={(e) => handleInputChange('clientDepartment', e.target.value)}
+                      readOnly={readOnly}
                     />
                     
                     <div className="font-semibold mb-1">Contractor:</div>
@@ -916,6 +967,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
                       className="w-full border-b border-gray-400 outline-none bg-transparent" 
                       value={formData.contractor}
                       onChange={(e) => handleInputChange('contractor', e.target.value)}
+                      readOnly={readOnly}
                     />
                   </div>
                 </div>
@@ -1444,6 +1496,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
                           className="w-full border-none outline-none bg-transparent" 
                           value={formData.contractNo}
                           onChange={(e) => handleInputChange('contractNo', e.target.value)}
+                          readOnly={readOnly}
                         />
                       </div>
                     </div>
@@ -1456,6 +1509,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
                           className="w-full border-none outline-none bg-transparent" 
                           value={formData.date}
                           onChange={(e) => handleInputChange('date', e.target.value)}
+                          readOnly={readOnly}
                         />
                       </div>
                     </div>
@@ -1468,6 +1522,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
                           className="w-full border-none outline-none bg-transparent" 
                           value={formData.day}
                           onChange={(e) => handleInputChange('day', e.target.value)}
+                          readOnly={readOnly}
                         />
                       </div>
                     </div>
@@ -1480,6 +1535,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
                           className="w-full border-none outline-none bg-transparent" 
                           value={formData.contractDate}
                           onChange={(e) => handleInputChange('contractDate', e.target.value)}
+                          readOnly={readOnly}
                         />
                       </div>
                     </div>
@@ -1507,6 +1563,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
                         className="w-full border-b border-gray-400 outline-none bg-transparent mb-3" 
                         value={formData.clientDepartment}
                         onChange={(e) => handleInputChange('clientDepartment', e.target.value)}
+                        readOnly={readOnly}
                       />
                       
                       <div className="font-semibold mb-1">Contractor:</div>
@@ -1515,6 +1572,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
                         className="w-full border-b border-gray-400 outline-none bg-transparent" 
                         value={formData.contractor}
                         onChange={(e) => handleInputChange('contractor', e.target.value)}
+                        readOnly={readOnly}
                       />
                     </div>
                   </div>

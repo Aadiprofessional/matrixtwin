@@ -3,12 +3,51 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { RiAddLine, RiBrushLine, RiCheckboxCircleLine, RiCloseCircleLine, RiCalendarCheckLine, RiTaskLine, RiEyeLine, RiMapPinLine, RiFilterLine, RiUploadCloud2Line, RiArrowLeftRightLine, RiPercentLine, RiCheckLine, RiArrowRightLine, RiArrowLeftLine, RiListCheck, RiLayoutGridLine, RiFilter3Line, RiCloseLine } from 'react-icons/ri';
+import { RiAddLine, RiBrushLine, RiCheckboxCircleLine, RiCloseCircleLine, RiCalendarCheckLine, RiTaskLine, RiEyeLine, RiMapPinLine, RiFilterLine, RiUploadCloud2Line, RiArrowLeftRightLine, RiPercentLine, RiCheckLine, RiArrowRightLine, RiArrowLeftLine, RiListCheck, RiLayoutGridLine, RiFilter3Line, RiCloseLine, RiLoader4Line, RiFlowChart, RiSettings4Line, RiUserLine, RiSearchLine, RiArrowDownLine, RiDropLine, RiNotificationLine, RiErrorWarningLine, RiFileWarningLine, RiAlertLine, RiMapPin2Line, RiCalendarLine, RiTeamLine, RiFileTextLine } from 'react-icons/ri';
 import { IconContext } from 'react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { DailyCleaningInspectionTemplate } from '../components/forms/DailyCleaningInspectionTemplate';
 import { Dialog } from '../components/ui/Dialog';
+import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
+import { emailService } from '../services/emailService';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatar?: string;
+}
+
+interface ProcessNode {
+  id: string;
+  type: 'start' | 'node' | 'end';
+  name: string;
+  executor?: string;
+  settings: Record<string, any>;
+}
+
+interface CleansingEntry {
+  id: string;
+  date: string;
+  project: string;
+  project_id?: string;
+  submitter: string;
+  area: string;
+  cleanliness_score: number;
+  cleaning_status: string;
+  notes: string;
+  form_data?: any;
+  status: string;
+  current_node_index: number;
+  cleansing_workflow_nodes?: any[];
+  cleansing_assignments?: any[];
+  cleansing_comments?: any[];
+  created_by: string;
+  created_at: string;
+  updated_at?: string;
+}
 
 interface CleansingRecord {
   id: number;
@@ -29,6 +68,114 @@ interface AreaStats {
   status: 'clean' | 'due' | 'overdue';
 }
 
+// People selector modal component
+const PeopleSelectorModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (user: User) => void;
+  title: string;
+  users: User[];
+  loading: boolean;
+}> = ({ isOpen, onClose, onSelect, title, users, loading }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Filter users based on search
+  const filteredUsers = searchQuery 
+    ? users.filter(user => 
+        user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : users;
+  
+  if (!isOpen) return null;
+  
+  return (
+    <div 
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      onClick={onClose}
+    >
+      <motion.div
+        className="w-full max-w-md max-h-[80vh] bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.2 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+          <h3 className="text-lg font-semibold flex items-center">
+            <RiUserLine className="mr-2" />
+            {title}
+          </h3>
+          <button 
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            onClick={onClose}
+          >
+            <RiCloseLine className="text-xl" />
+          </button>
+        </div>
+        
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="relative">
+            <RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by name, role, or email..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+        
+        <div className="overflow-y-auto max-h-[400px] p-2">
+          {loading ? (
+            <div className="p-4 text-center text-gray-600 dark:text-gray-400">
+              <RiLoader4Line className="animate-spin text-2xl mx-auto mb-2" />
+              Loading users...
+            </div>
+          ) : filteredUsers.length > 0 ? (
+            <div className="grid grid-cols-1 gap-2">
+              {filteredUsers.map(user => (
+                <div 
+                  key={user.id}
+                  className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md cursor-pointer transition-colors flex items-center"
+                  onClick={() => {
+                    onSelect(user);
+                    onClose();
+                  }}
+                >
+                  {user.avatar ? (
+                    <img 
+                      src={user.avatar} 
+                      alt={user.name}
+                      className="w-10 h-10 rounded-full mr-3"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 flex items-center justify-center font-medium mr-3">
+                      {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-grow">
+                    <div className="font-medium text-gray-900 dark:text-white">{user.name}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">{user.role}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-500">{user.email}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+              No users found matching "{searchQuery}"
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const CleansingPage: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -40,6 +187,29 @@ const CleansingPage: React.FC = () => {
   const [recordNotes, setRecordNotes] = useState('');
   const [showGridView, setShowGridView] = useState(false);
   const [selectedAreaStats, setSelectedAreaStats] = useState<AreaStats | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // API integration states
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [cleansingEntries, setCleansingEntries] = useState<CleansingEntry[]>([]);
+  const [selectedCleansingEntry, setSelectedCleansingEntry] = useState<CleansingEntry | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [showFormView, setShowFormView] = useState(false);
+  
+  // Process flow states
+  const [showProcessFlow, setShowProcessFlow] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<any>(null);
+  const [processNodes, setProcessNodes] = useState<ProcessNode[]>([
+    { id: 'start', type: 'start', name: 'Start', settings: {} },
+    { id: 'review', type: 'node', name: 'Cleansing Review & Approval', settings: {} },
+    { id: 'end', type: 'end', name: 'Complete', settings: {} }
+  ]);
+  const [selectedNode, setSelectedNode] = useState<ProcessNode | null>(null);
+  const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
+  const [showPeopleSelector, setShowPeopleSelector] = useState(false);
+  const [peopleSelectorType, setPeopleSelectorType] = useState<'executor' | 'cc'>('executor');
   
   // Add filter state
   const [showFilters, setShowFilters] = useState(false);
@@ -52,279 +222,477 @@ const CleansingPage: React.FC = () => {
   const [formStep, setFormStep] = useState<number>(1);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [assignees, setAssignees] = useState<string[]>([]);
-  
-  // Mock cleansing data
-  const [cleansingRecords, setCleansingRecords] = useState<CleansingRecord[]>([
-    {
-      id: 1,
-      date: '2025-10-25',
-      area: 'Main Building - Ground Floor',
-      status: 'completed',
-      notes: 'All areas cleaned and waste removed',
-      project: 'Project Alpha',
-      completedBy: 'John Doe',
-      imageUrl: 'https://images.unsplash.com/photo-1520277739336-7bf67edfa768?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=256&q=80'
-    },
-    {
-      id: 2,
-      date: '2025-10-24',
-      area: 'Exterior Pathways',
-      status: 'completed',
-      notes: 'Debris removed, paths swept',
-      project: 'Project Alpha',
-      completedBy: 'Jane Smith'
-    },
-    {
-      id: 3,
-      date: '2025-10-26',
-      area: 'Materials Storage Area',
-      status: 'pending',
-      notes: 'Scheduled for afternoon cleaning',
-      project: 'Project Alpha'
-    },
-    {
-      id: 4,
-      date: '2025-10-23',
-      area: 'Site Office',
-      status: 'failed',
-      notes: 'Insufficient cleaning, needs to be redone',
-      project: 'Harbor Tower',
-      completedBy: 'Mike Johnson'
-    }
-  ]);
 
-  // Mock area statistics data
-  const [areaStats, setAreaStats] = useState<AreaStats[]>([
-    {
-      area: 'Main Building - Ground Floor',
-      cleanlinessScore: 94,
-      lastCleaned: '2025-10-25',
-      nextDue: '2025-10-28',
-      status: 'clean'
-    },
-    {
-      area: 'Main Building - First Floor',
-      cleanlinessScore: 87,
-      lastCleaned: '2025-10-22',
-      nextDue: '2025-10-25',
-      status: 'due'
-    },
-    {
-      area: 'Main Building - Second Floor',
-      cleanlinessScore: 90,
-      lastCleaned: '2025-10-23',
-      nextDue: '2025-10-26',
-      status: 'due'
-    },
-    {
-      area: 'Exterior Pathways',
-      cleanlinessScore: 92,
-      lastCleaned: '2025-10-24',
-      nextDue: '2025-10-27',
-      status: 'clean'
-    },
-    {
-      area: 'Materials Storage Area',
-      cleanlinessScore: 76,
-      lastCleaned: '2025-10-20',
-      nextDue: '2025-10-23',
-      status: 'overdue'
-    },
-    {
-      area: 'Site Office',
-      cleanlinessScore: 65,
-      lastCleaned: '2025-10-18',
-      nextDue: '2025-10-21',
-      status: 'overdue'
-    },
-    {
-      area: 'Worker Facilities',
-      cleanlinessScore: 88,
-      lastCleaned: '2025-10-24',
-      nextDue: '2025-10-27',
-      status: 'clean'
-    },
-    {
-      area: 'Waste Collection Point',
-      cleanlinessScore: 85,
-      lastCleaned: '2025-10-23',
-      nextDue: '2025-10-26',
-      status: 'due'
+  // Fetch cleansing entries on component mount and when project changes
+  useEffect(() => {
+    if (user?.id) {
+      fetchCleansingEntries();
+      fetchUsers();
     }
-  ]);
+  }, [user?.id, selectedProject?.id]);
 
-  // Calculate cleanliness metrics
-  const getCleanlinessMetrics = () => {
-    const areas = areaStats.length;
-    const cleanAreas = areaStats.filter(a => a.status === 'clean').length;
-    const dueAreas = areaStats.filter(a => a.status === 'due').length;
-    const overdueAreas = areaStats.filter(a => a.status === 'overdue').length;
-    const averageScore = Math.round(areaStats.reduce((sum, a) => sum + a.cleanlinessScore, 0) / areas);
+  // Calculate metrics from cleansing entries
+  const getMetrics = () => {
+    const totalEntries = cleansingEntries.length;
+    const averageScore = totalEntries > 0 
+      ? Math.round(cleansingEntries.reduce((sum, entry) => sum + (entry.cleanliness_score || 0), 0) / totalEntries)
+      : 0;
+    
+    // Mock area statistics for now - in a real app this would come from API
+    const cleanAreas = cleansingEntries.filter(entry => entry.cleanliness_score >= 90).length;
+    const dueAreas = cleansingEntries.filter(entry => entry.cleanliness_score >= 70 && entry.cleanliness_score < 90).length;
+    const overdueAreas = cleansingEntries.filter(entry => entry.cleanliness_score < 70).length;
+    const complianceRate = totalEntries > 0 ? Math.round((cleanAreas / totalEntries) * 100) : 0;
     
     return {
+      averageScore,
       cleanAreas,
       dueAreas,
       overdueAreas,
-      averageScore,
-      complianceRate: Math.round((cleanAreas / areas) * 100)
+      complianceRate
     };
   };
 
-  const metrics = getCleanlinessMetrics();
+  const metrics = getMetrics();
 
-  // Mock cleaning schedule histogram data
-  const scheduleData = [
-    { day: 'Mon', count: 3 },
-    { day: 'Tue', count: 5 },
-    { day: 'Wed', count: 2 },
-    { day: 'Thu', count: 4 },
-    { day: 'Fri', count: 6 },
-    { day: 'Sat', count: 1 },
-    { day: 'Sun', count: 0 }
+  // Mock area statistics for now - in a real app this would come from API
+  const areaStats: AreaStats[] = [
+    { area: 'Main Entrance', cleanlinessScore: 95, lastCleaned: '2024-01-15', nextDue: '2024-01-22', status: 'clean' },
+    { area: 'Office Area', cleanlinessScore: 88, lastCleaned: '2024-01-14', nextDue: '2024-01-21', status: 'due' },
+    { area: 'Storage Room', cleanlinessScore: 65, lastCleaned: '2024-01-10', nextDue: '2024-01-17', status: 'overdue' },
+    { area: 'Break Room', cleanlinessScore: 92, lastCleaned: '2024-01-15', nextDue: '2024-01-22', status: 'clean' }
   ];
-  
-  // Areas options
-  const cleaningAreas = [
-    'Main Building - Ground Floor',
-    'Main Building - First Floor',
-    'Main Building - Second Floor',
-    'Exterior Pathways',
-    'Materials Storage Area',
-    'Site Office',
-    'Worker Facilities',
-    'Waste Collection Point'
-  ];
-  
-  // Function to handle the cleansing record form submission
-  const handleSubmitRecord = (formData: any) => {
-    // Create new cleansing record from form data
-    const newRecord: CleansingRecord = {
-      id: Date.now(),
-      date: formData.inspectionDate || new Date().toISOString().split('T')[0],
-      area: formData.location || 'Unknown Area',
-      status: 'pending',
-      notes: formData.checklistItems?.map((item: any) => item.remark).filter(Boolean).join(', ') || '',
-      project: selectedProject?.name || 'Project Alpha'
-    };
-    
-    // Add the new record to the list
-    setCleansingRecords([newRecord, ...cleansingRecords]);
-    
-    // Close the form
-    setShowNewRecord(false);
-  };
-  
-  // Function to navigate between form steps
-  const handleFormStepChange = (step: number) => {
-    setFormStep(step);
-  };
 
-  // Function to handle form data updates
-  const updateFormData = (data: Record<string, any>) => {
-    setFormData({ ...formData, ...data });
-  };
-
-  // Function to handle form submission from any step
-  const handleFormStepSubmit = (data: Record<string, any>) => {
-    updateFormData(data);
-    
-    if (formStep < 3) {
-      // Move to next step
-      setFormStep(formStep + 1);
-    } else {
-      // Final submission
-      handleSubmitRecord({ ...formData, ...data, assignees });
-    }
-  };
-  
-  // Function to get records based on filters
-  const getFilteredRecords = () => {
-    return cleansingRecords.filter(record => {
-      // Filter by user role and project
-      if (user?.role !== 'admin' && user?.role !== 'projectManager') {
-        if (record.project !== selectedProject?.name && record.project !== 'Project Alpha') {
-          return false;
+  // Fetch cleansing entries from API with project filtering
+  const fetchCleansingEntries = async () => {
+    try {
+      setLoading(true);
+      const projectParam = selectedProject?.id ? `?projectId=${selectedProject.id}` : '';
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/list/${user?.id}${projectParam}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
-      }
+      });
       
-      return true;
-    });
-  };
-  
-  // Get status info (color, text, etc.)
-  const getStatusInfo = (status: string) => {
-    switch(status) {
-      case 'completed':
-        return {
-          color: 'text-green-500',
-          bgColor: 'bg-green-100 dark:bg-green-900/30',
-          icon: <RiCheckboxCircleLine className="text-green-500" />
-        };
-      case 'pending':
-        return {
-          color: 'text-yellow-500',
-          bgColor: 'bg-yellow-100 dark:bg-yellow-900/30',
-          icon: <RiTaskLine className="text-yellow-500" />
-        };
-      case 'failed':
-        return {
-          color: 'text-red-500',
-          bgColor: 'bg-red-100 dark:bg-red-900/30',
-          icon: <RiCloseCircleLine className="text-red-500" />
-        };
-      default:
-        return {
-          color: 'text-gray-500',
-          bgColor: 'bg-gray-100 dark:bg-gray-900/30',
-          icon: <RiTaskLine className="text-gray-500" />
-        };
+      if (response.ok) {
+        const data = await response.json();
+        setCleansingEntries(data);
+      } else {
+        console.error('Failed to fetch cleansing entries');
+      }
+    } catch (error) {
+      console.error('Error fetching cleansing entries:', error);
+    } finally {
+      setLoading(false);
     }
   };
-  
-  // Get area status color
-  const getAreaStatusColor = (status: string) => {
-    switch(status) {
-      case 'clean':
-        return 'from-green-500 to-green-600';
-      case 'due':
-        return 'from-yellow-500 to-yellow-600';
-      case 'overdue':
-        return 'from-red-500 to-red-600';
-      default:
-        return 'from-gray-500 to-gray-600';
+
+  // Fetch users from API (similar to Projects.tsx)
+  const fetchUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${user?.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      } else {
+        console.error('Failed to fetch users');
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoadingUsers(false);
     }
   };
-  
-  // Handle area card click
-  const handleAreaClick = (area: AreaStats) => {
-    setSelectedAreaStats(area);
+
+  // Filtered entries based on search
+  const filteredEntries = cleansingEntries.filter(entry => 
+    entry.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    entry.submitter.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    entry.area.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    entry.date.includes(searchQuery)
+  );
+
+  const addNewNode = () => {
+    const newNode: ProcessNode = {
+      id: `node_${Date.now()}`,
+      type: 'node',
+      name: `Process Step ${processNodes.length - 1}`,
+      settings: {}
+    };
+    
+    // Insert before the end node
+    const newNodes = [...processNodes];
+    newNodes.splice(-1, 0, newNode);
+    setProcessNodes(newNodes);
   };
-  
-  // Get filtered area stats
+
+  const openPeopleSelector = (type: 'executor' | 'cc') => {
+    setPeopleSelectorType(type);
+    setShowPeopleSelector(true);
+  };
+
+  const handleUserSelection = (selectedUser: User) => {
+    if (peopleSelectorType === 'executor' && selectedNode) {
+      const updatedNodes = processNodes.map(node => 
+        node.id === selectedNode.id 
+          ? { ...node, executor: selectedUser.name }
+          : node
+      );
+      setProcessNodes(updatedNodes);
+      setSelectedNode({ ...selectedNode, executor: selectedUser.name });
+    } else if (peopleSelectorType === 'cc') {
+      if (!selectedCcs.find(cc => cc.id === selectedUser.id)) {
+        setSelectedCcs([...selectedCcs, selectedUser]);
+      }
+    }
+  };
+
+  const removeUserFromCc = (userId: string) => {
+    setSelectedCcs(selectedCcs.filter(cc => cc.id !== userId));
+  };
+
+  const handleCreateRecord = (formData: any) => {
+    setPendingFormData(formData);
+    setShowNewRecord(false);
+    setShowProcessFlow(true);
+  };
+
+  const handleFinalSave = async () => {
+    if (!pendingFormData || !user?.id) return;
+    
+    try {
+      const response = await fetch('https://matrixbim-server.onrender.com/api/cleansing/create', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          formData: pendingFormData,
+          processNodes: processNodes,
+          selectedCcs: selectedCcs,
+          createdBy: user.id,
+          projectId: selectedProject?.id
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Send email notifications
+        try {
+          const ccEmails = selectedCcs.map(cc => cc.email);
+          await emailService.sendCleansingNotification({
+            entryId: result.id || 'new',
+            projectName: selectedProject?.name || 'Unknown Project',
+            action: 'created',
+            ccRecipients: ccEmails,
+            formData: pendingFormData,
+            currentNodeName: processNodes.find(node => node.type === 'node')?.name
+          });
+        } catch (emailError) {
+          console.error('Failed to send email notifications:', emailError);
+        }
+        
+        // Refresh cleansing entries
+        await fetchCleansingEntries();
+        
+        // Reset states
+        setShowProcessFlow(false);
+        setPendingFormData(null);
+        setSelectedCcs([]);
+        setSelectedNode(null);
+        
+        // Show success message
+        alert('Cleansing entry created successfully! Notifications have been sent to assigned users.');
+      } else {
+        const error = await response.json();
+        alert(`Failed to create cleansing entry: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error creating cleansing entry:', error);
+      alert('Failed to create cleansing entry. Please try again.');
+    }
+  };
+
+  const handleCancelProcessFlow = () => {
+    setPendingFormData(null);
+    setShowProcessFlow(false);
+    setSelectedCcs([]);
+    setSelectedNode(null);
+  };
+
+  const handleViewDetails = async (entry: CleansingEntry) => {
+    try {
+      // Fetch full entry details including workflow and comments
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${entry.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const fullEntry = await response.json();
+        setSelectedCleansingEntry(fullEntry);
+        setShowDetails(true);
+      } else {
+        setSelectedCleansingEntry(entry);
+        setShowDetails(true);
+      }
+    } catch (error) {
+      console.error('Error fetching entry details:', error);
+      setSelectedCleansingEntry(entry);
+      setShowDetails(true);
+    }
+  };
+
+  const handleViewForm = async (entry: CleansingEntry) => {
+    try {
+      // Fetch full entry details including form data
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${entry.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const fullEntry = await response.json();
+        setSelectedCleansingEntry(fullEntry);
+        setShowFormView(true);
+      } else {
+        setSelectedCleansingEntry(entry);
+        setShowFormView(true);
+      }
+    } catch (error) {
+      console.error('Error fetching entry details:', error);
+      setSelectedCleansingEntry(entry);
+      setShowFormView(true);
+    }
+  };
+
+  const handleFormUpdate = async (formData: any) => {
+    if (!selectedCleansingEntry || !user?.id) return;
+    
+    try {
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${selectedCleansingEntry.id}/update`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          formData: formData,
+          updatedBy: user.id
+        })
+      });
+
+      if (response.ok) {
+        // Refresh cleansing entries
+        await fetchCleansingEntries();
+        setShowFormView(false);
+        setSelectedCleansingEntry(null);
+        alert('Cleansing entry updated successfully!');
+      } else {
+        const error = await response.json();
+        alert(`Failed to update cleansing entry: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error updating cleansing entry:', error);
+      alert('Failed to update cleansing entry. Please try again.');
+    }
+  };
+
+  const handleWorkflowAction = async (action: 'approve' | 'reject') => {
+    if (!selectedCleansingEntry || !user?.id) return;
+    
+    try {
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${selectedCleansingEntry.id}/workflow`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: action,
+          userId: user.id,
+          comment: '' // You can add a comment input if needed
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Send email notifications
+        try {
+          const ccEmails = selectedCleansingEntry.cleansing_assignments?.map(assignment => assignment.user_email).filter(Boolean) || [];
+          await emailService.sendCleansingNotification({
+            entryId: selectedCleansingEntry.id,
+            projectName: selectedCleansingEntry.project,
+            action: action === 'approve' ? 'approved' : 'rejected',
+            ccRecipients: ccEmails,
+            formData: selectedCleansingEntry.form_data,
+            currentNodeName: selectedCleansingEntry.cleansing_workflow_nodes?.find(node => 
+              node.node_order === selectedCleansingEntry.current_node_index
+            )?.node_name,
+            comments: '' // Add comment if available
+          });
+        } catch (emailError) {
+          console.error('Failed to send email notifications:', emailError);
+        }
+        
+        // Refresh cleansing entries
+        await fetchCleansingEntries();
+        setShowDetails(false);
+        setSelectedCleansingEntry(null);
+        alert(`Cleansing entry ${action}d successfully!`);
+      } else {
+        const error = await response.json();
+        alert(`Failed to ${action} cleansing entry: ${error.error}`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing cleansing entry:`, error);
+      alert(`Failed to ${action} cleansing entry. Please try again.`);
+    }
+  };
+
+  const canUserEditEntry = (entry: CleansingEntry) => {
+    if (!user) return false;
+    
+    // Admin can edit any entry
+    if (user.role === 'admin') return true;
+    
+    // Creator can edit their own entries
+    if (entry.created_by === user.id) return true;
+    
+    // Check if user is assigned to this entry
+    return entry.cleansing_assignments?.some(assignment => 
+      assignment.user_id === user.id && assignment.role === 'executor'
+    ) || false;
+  };
+
+  const canUserApproveEntry = (entry: CleansingEntry) => {
+    if (!user) return false;
+    
+    // Only allow approval if entry is pending and user has permission
+    if (entry.status !== 'pending') return false;
+    
+    // Admin can approve any entry
+    if (user.role === 'admin') return true;
+    
+    // Check if user is the current workflow executor
+    const currentNode = entry.cleansing_workflow_nodes?.find(node => 
+      node.node_order === entry.current_node_index && node.status === 'pending'
+    );
+    
+    return currentNode?.executor_name === user.name;
+  };
+
+  const getWorkflowStatusBadge = (entry: CleansingEntry) => {
+    const statusColors = {
+      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+      in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+      completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+    };
+    
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[entry.status as keyof typeof statusColors] || statusColors.pending}`}>
+        {entry.status?.charAt(0).toUpperCase() + entry.status?.slice(1) || 'Pending'}
+      </span>
+    );
+  };
+
+  // ProcessFlowBuilder component
+  const ProcessFlowBuilder: React.FC<{
+    nodes: ProcessNode[];
+    selectedNodeId: string | null;
+    onSelectNode: (node: ProcessNode) => void;
+  }> = ({ nodes, selectedNodeId, onSelectNode }) => {
+    const getNodeColor = (type: string) => {
+      switch (type) {
+        case 'start':
+          return 'bg-green-100 border-green-600 text-green-600 dark:bg-green-900/30 dark:text-green-400';
+        case 'end':
+          return 'bg-red-100 border-red-600 text-red-600 dark:bg-red-900/30 dark:text-red-400';
+        default:
+          return 'bg-blue-100 border-blue-600 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
+      }
+    };
+    
+    return (
+      <div className="py-2">
+        <div className="flex flex-col items-center">
+          {nodes.map((node, index) => (
+            <React.Fragment key={node.id}>
+              <motion.div
+                whileHover={{ scale: 1.03 }}
+                className={`w-full max-w-sm rounded-lg p-3 border-2 cursor-pointer transition-colors ${
+                  selectedNodeId === node.id ? 'ring-2 ring-offset-2 ring-blue-600' : ''
+                } ${getNodeColor(node.type)}`}
+                onClick={() => onSelectNode(node)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="font-medium">{node.name}</div>
+                  <div className="text-xs px-2 py-1 rounded-full bg-white/20 dark:bg-gray-800/50">
+                    {node.type === 'start' ? 'Start' : node.type === 'end' ? 'End' : 'Process'}
+                  </div>
+                </div>
+                
+                {node.type === 'node' && (
+                  <div className="mt-1 text-sm opacity-80">
+                    {node.executor ? `Executor: ${node.executor}` : 'No executor assigned'}
+                  </div>
+                )}
+              </motion.div>
+              
+              {/* Connector line between nodes */}
+              {index < nodes.length - 1 && (
+                <div className="w-px h-10 bg-gray-300 dark:bg-gray-600 flex justify-center items-center my-1">
+                  <div className="bg-white dark:bg-gray-800 rounded-full p-1">
+                    <RiArrowDownLine className="text-gray-500 dark:text-gray-400" />
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Helper functions
   const getFilteredAreaStats = () => {
-    let filtered = areaStats;
-    
-    // Filter by status
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(area => area.status === filterStatus);
-    }
-    
-    // Filter by date range
-    if (filterDateFrom) {
-      filtered = filtered.filter(area => 
-        new Date(area.lastCleaned) >= new Date(filterDateFrom)
-      );
-    }
-    
-    if (filterDateTo) {
-      filtered = filtered.filter(area => 
-        new Date(area.lastCleaned) <= new Date(filterDateTo)
-      );
-    }
-    
-    return filtered;
+    return areaStats; // For now, return all areas. Can add filtering logic later
   };
-  
+
+  const handleAreaClick = (area: AreaStats) => {
+    console.log('Area clicked:', area);
+    // Add area-specific actions here
+  };
+
+  const getAreaStatusColor = (status: string) => {
+    switch (status) {
+      case 'clean':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+      case 'due':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
+      case 'overdue':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
+    }
+  };
+
+  const handleSubmitRecord = (formData: any) => {
+    handleCreateRecord(formData);
+  };
+
   return (
     <div className="space-y-6">
       {/* Enhanced header with cleansing dashboard */}
@@ -867,6 +1235,300 @@ const CleansingPage: React.FC = () => {
       </Card>
       </motion.div>
       
+      {/* Cleansing Entries Section */}
+      <motion.div 
+        className="w-full rounded-lg overflow-hidden"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.4 }}
+      >
+        <Card>
+          <div className="p-6 border-b border-secondary-200 dark:border-secondary-700 flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-display font-semibold">Cleansing Records</h2>
+              <p className="text-secondary-600 dark:text-secondary-400 text-sm mt-1">
+                View and manage cleansing inspection records
+              </p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <div className="relative">
+                <RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-secondary-400" />
+                <input
+                  type="text"
+                  placeholder="Search records..."
+                  className="pl-10 pr-4 py-2 border border-secondary-300 dark:border-secondary-600 rounded-lg bg-white dark:bg-secondary-700 text-secondary-900 dark:text-white"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div className="overflow-x-auto">
+            {loading ? (
+              <div className="p-8 text-center">
+                <RiLoader4Line className="animate-spin text-3xl mx-auto mb-4 text-secondary-400" />
+                <p className="text-secondary-600 dark:text-secondary-400">Loading cleansing records...</p>
+              </div>
+            ) : filteredEntries.length > 0 ? (
+              <table className="w-full">
+                <thead className="bg-secondary-50 dark:bg-secondary-800">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
+                      Project
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
+                      Area
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
+                      Submitter
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
+                      Score
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-secondary-200 dark:divide-secondary-700">
+                  {filteredEntries.map((entry) => (
+                    <tr key={entry.id} className="hover:bg-secondary-50 dark:hover:bg-secondary-800/50">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
+                        {entry.date}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
+                        {entry.project}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
+                        {entry.area}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
+                        {entry.submitter}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm">
+                        <span className={`font-medium ${
+                          entry.cleanliness_score >= 90 ? 'text-green-600 dark:text-green-400' :
+                          entry.cleanliness_score >= 75 ? 'text-yellow-600 dark:text-yellow-400' :
+                          'text-red-600 dark:text-red-400'
+                        }`}>
+                          {entry.cleanliness_score}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        {getWorkflowStatusBadge(entry)}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<RiEyeLine />}
+                          onClick={() => handleViewDetails(entry)}
+                        >
+                          View
+                        </Button>
+                        {canUserEditEntry(entry) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            leftIcon={<RiFileTextLine />}
+                            onClick={() => handleViewForm(entry)}
+                          >
+                            Edit
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="p-8 text-center">
+                <RiDropLine className="text-4xl mx-auto mb-4 text-secondary-400" />
+                <p className="text-secondary-600 dark:text-secondary-400">No cleansing records found</p>
+                <p className="text-sm text-secondary-500 dark:text-secondary-500 mt-1">
+                  Create your first cleansing record to get started
+                </p>
+              </div>
+            )}
+          </div>
+        </Card>
+      </motion.div>
+      
+      {/* Process Flow Modal */}
+      <AnimatePresence>
+        {showProcessFlow && (
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={handleCancelProcessFlow}
+          >
+            <motion.div
+              className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Setup Workflow</h2>
+                    <p className="text-gray-600 dark:text-gray-400 mt-1">Configure the approval process for this cleansing record</p>
+                  </div>
+                  <button 
+                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    onClick={handleCancelProcessFlow}
+                  >
+                    <RiCloseLine className="text-2xl" />
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Process Flow Builder */}
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Workflow Steps</h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        leftIcon={<RiAddLine />}
+                        onClick={addNewNode}
+                      >
+                        Add Step
+                      </Button>
+                    </div>
+                    
+                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 max-h-96 overflow-y-auto">
+                      <ProcessFlowBuilder
+                        nodes={processNodes}
+                        selectedNodeId={selectedNode?.id || null}
+                        onSelectNode={setSelectedNode}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Node Configuration */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {selectedNode ? `Configure: ${selectedNode.name}` : 'Select a step to configure'}
+                    </h3>
+                    
+                    {selectedNode && selectedNode.type === 'node' && (
+                      <div className="space-y-4 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Step Name
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            value={selectedNode.name}
+                            onChange={(e) => {
+                              const updatedNodes = processNodes.map(node => 
+                                node.id === selectedNode.id 
+                                  ? { ...node, name: e.target.value }
+                                  : node
+                              );
+                              setProcessNodes(updatedNodes);
+                              setSelectedNode({ ...selectedNode, name: e.target.value });
+                            }}
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Executor
+                          </label>
+                          <div className="flex space-x-2">
+                            <input
+                              type="text"
+                              className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              value={selectedNode.executor || ''}
+                              placeholder="Select executor..."
+                              readOnly
+                            />
+                            <Button
+                              variant="outline"
+                              onClick={() => openPeopleSelector('executor')}
+                            >
+                              Select
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* CC Recipients */}
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-md font-medium text-gray-900 dark:text-white">CC Recipients</h4>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<RiUserLine />}
+                          onClick={() => openPeopleSelector('cc')}
+                        >
+                          Add People
+                        </Button>
+                      </div>
+                      
+                      {selectedCcs.length > 0 && (
+                        <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 max-h-32 overflow-y-auto">
+                          <div className="space-y-2">
+                            {selectedCcs.map(cc => (
+                              <div key={cc.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 rounded-md p-2">
+                                <div className="flex items-center">
+                                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 flex items-center justify-center font-medium mr-2">
+                                    {cc.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white">{cc.name}</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">{cc.email}</div>
+                                  </div>
+                                </div>
+                                <button
+                                  className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                  onClick={() => removeUserFromCc(cc.id)}
+                                >
+                                  <RiCloseLine />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <Button
+                    variant="outline"
+                    onClick={handleCancelProcessFlow}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleFinalSave}
+                    disabled={!processNodes.some(node => node.type === 'node' && node.executor)}
+                  >
+                    Create Record
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
       {/* ISO19650 Cleansing Record Form Modal */}
       <AnimatePresence>
         {showNewRecord && (
@@ -875,7 +1537,7 @@ const CleansingPage: React.FC = () => {
             onClick={() => setShowNewRecord(false)}
           >
             <motion.div
-              className="w-full max-w-6xl max-h-[90vh] overflow-auto"
+              className="w-full max-6xl max-h-[90vh] overflow-auto"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -890,6 +1552,250 @@ const CleansingPage: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* People Selector Modal */}
+      <AnimatePresence>
+        {showPeopleSelector && (
+          <PeopleSelectorModal
+            isOpen={showPeopleSelector}
+            onClose={() => setShowPeopleSelector(false)}
+            onSelect={handleUserSelection}
+            title={peopleSelectorType === 'executor' ? 'Select Executor' : 'Add People to CC'}
+            users={users}
+            loading={loadingUsers}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Entry Details Dialog */}
+      <AnimatePresence>
+        {showDetails && selectedCleansingEntry && (
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => setShowDetails(false)}
+          >
+            <motion.div
+              className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 space-y-6">
+                <div className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                  <div className="text-lg font-bold text-green-900 dark:text-green-300 flex items-center">
+                    <RiDropLine className="mr-2 text-green-600 dark:text-green-400" />
+                    Cleansing Record - {selectedCleansingEntry.date}
+                  </div>
+                  <div className="px-3 py-1 bg-white dark:bg-gray-700 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
+                    {selectedCleansingEntry.project}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                      <RiUserLine className="mr-2 text-green-600 dark:text-green-400" />
+                      <span className="text-sm font-medium uppercase tracking-wide">Submitter</span>
+                    </div>
+                    <div className="font-medium">{selectedCleansingEntry.submitter}</div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                      <RiMapPinLine className="mr-2 text-green-600 dark:text-green-400" />
+                      <span className="text-sm font-medium uppercase tracking-wide">Area</span>
+                    </div>
+                    <div className="font-medium">{selectedCleansingEntry.area}</div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                      <RiDropLine className="mr-2 text-green-600 dark:text-green-400" />
+                      <span className="text-sm font-medium uppercase tracking-wide">Cleaning Status</span>
+                    </div>
+                    <div className="font-medium">{selectedCleansingEntry.cleaning_status}</div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                      <RiPercentLine className="mr-2 text-green-600 dark:text-green-400" />
+                      <span className="text-sm font-medium uppercase tracking-wide">Cleanliness Score</span>
+                    </div>
+                    <div className="font-medium">{selectedCleansingEntry.cleanliness_score}%</div>
+                  </div>
+                </div>
+                
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
+                    <RiSettings4Line className="mr-2 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium uppercase tracking-wide">Notes</span>
+                  </div>
+                  <div className="whitespace-pre-line">{selectedCleansingEntry.notes || 'None'}</div>
+                </div>
+                
+                {/* Workflow Status Section */}
+                {selectedCleansingEntry.cleansing_workflow_nodes && selectedCleansingEntry.cleansing_workflow_nodes.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-4">
+                      <RiFlowChart className="mr-2 text-green-600 dark:text-green-400" />
+                      <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {selectedCleansingEntry.cleansing_workflow_nodes
+                        .sort((a: any, b: any) => a.node_order - b.node_order)
+                        .map((node: any) => (
+                          <div key={node.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div className="flex items-center">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                                node.status === 'completed' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
+                                node.status === 'pending' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                node.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' :
+                                'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400'
+                              }`}>
+                                {node.status === 'completed' ? <RiCheckLine /> :
+                                 node.status === 'pending' ? <RiNotificationLine /> :
+                                 node.status === 'rejected' ? <RiCloseLine /> :
+                                 <RiSettings4Line />}
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">{node.node_name}</div>
+                                {node.executor_name && (
+                                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                                    Assigned to: {node.executor_name}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                              node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                              node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                              'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+                            }`}>
+                              {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Comments Section */}
+                {selectedCleansingEntry.cleansing_comments && selectedCleansingEntry.cleansing_comments.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-4">
+                      <RiNotificationLine className="mr-2 text-green-600 dark:text-green-400" />
+                      <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {selectedCleansingEntry.cleansing_comments
+                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                        .map((comment: any) => (
+                          <div key={comment.id} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-medium text-gray-900 dark:text-white">{comment.user_name}</div>
+                              <div className="flex items-center space-x-2">
+                                {comment.action && (
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                    comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                                  }`}>
+                                    {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
+                                  </span>
+                                )}
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {new Date(comment.created_at).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-gray-700 dark:text-gray-300">{comment.comment}</div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  {/* Workflow Action Buttons */}
+                  {selectedCleansingEntry.status === 'pending' && (
+                    <>
+                      {canUserEditEntry(selectedCleansingEntry) && (
+                        <Button 
+                          variant="outline"
+                          leftIcon={<RiFileWarningLine />}
+                          onClick={() => {
+                            setShowDetails(false);
+                            handleViewForm(selectedCleansingEntry);
+                          }}
+                        >
+                          Edit Form
+                        </Button>
+                      )}
+                      
+                      {canUserApproveEntry(selectedCleansingEntry) && (
+                        <>
+                          <Button 
+                            variant="outline"
+                            leftIcon={<RiCloseLine />}
+                            onClick={() => handleWorkflowAction('reject')}
+                            className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            Reject
+                          </Button>
+                          <Button 
+                            variant="primary"
+                            leftIcon={<RiCheckLine />}
+                            onClick={() => handleWorkflowAction('approve')}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            Approve
+                          </Button>
+                        </>
+                      )}
+                    </>
+                  )}
+                  
+                  <Button 
+                    variant="primary"
+                    onClick={() => setShowDetails(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Form View Modal */}
+      {showFormView && selectedCleansingEntry && (
+        <AnimatePresence>
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => setShowFormView(false)}
+          >
+            <motion.div
+              className="w-full max-w-6xl max-h-[90vh] overflow-auto"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <DailyCleaningInspectionTemplate
+                onClose={() => setShowFormView(false)}
+                onSave={handleFormUpdate}
+              />
+            </motion.div>
+          </div>
+        </AnimatePresence>
+      )}
     </div>
   );
 };
