@@ -7,6 +7,8 @@ import { Button } from '../components/ui/Button';
 import { IconContext } from 'react-icons';
 import { Dialog } from '../components/ui/Dialog';
 import ReactDOM from 'react-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { roleService, Role } from '../services/roleService';
 import { 
   RiUserLine,
   RiTeamLine,
@@ -30,7 +32,10 @@ import {
   RiGridFill,
   RiListUnordered,
   RiGroupLine,
-  RiOrganizationChart
+  RiOrganizationChart,
+  RiSettings3Line,
+  RiEyeLine,
+  RiEditLine
 } from 'react-icons/ri';
 
 // Filter dropdown portal component
@@ -232,6 +237,8 @@ const ROLES = {
 const TeamPage: React.FC = () => {
   const { t } = useTranslation();
   const { user, hasPermission } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [activeRoleFilter, setActiveRoleFilter] = useState('all');
@@ -263,6 +270,45 @@ const TeamPage: React.FC = () => {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeletingMember, setIsDeletingMember] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
+
+  // Add new state for role management
+  const [customRoles, setCustomRoles] = useState<Role[]>([]);
+  const [showRoleManagement, setShowRoleManagement] = useState(false);
+  const [loadingRoles, setLoadingRoles] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Check for success message from create role page
+  useEffect(() => {
+    if (location.state?.message) {
+      setSuccessMessage(location.state.message);
+      // Clear the message after 5 seconds
+      setTimeout(() => setSuccessMessage(null), 5000);
+      // Clear the location state
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, navigate, location.pathname]);
+
+  // Load custom roles
+  const loadCustomRoles = async () => {
+    if (!user || user.role !== 'admin') return;
+    
+    try {
+      setLoadingRoles(true);
+      const roles = await roleService.getRoles();
+      setCustomRoles(roles);
+    } catch (err) {
+      console.error('Error loading custom roles:', err);
+    } finally {
+      setLoadingRoles(false);
+    }
+  };
+
+  // Load custom roles on component mount
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      loadCustomRoles();
+    }
+  }, [user]);
 
   // Fetch team members data
   useEffect(() => {
@@ -334,13 +380,23 @@ const TeamPage: React.FC = () => {
     }
   };
 
-  // Role labels for the dropdown
-  const roleLabels = {
-    'all': t('team.allRoles'),
-    [ROLES.PROJECT_MANAGER]: 'Project Manager',
-    [ROLES.SITE_INSPECTOR]: 'Site Inspector',
-    [ROLES.CONTRACTOR]: 'Contractor',
-    [ROLES.WORKER]: 'Worker'
+  // Update role labels to include custom roles
+  const getAllRoleLabels = () => {
+    const baseRoles = {
+      'all': t('team.allRoles'),
+      [ROLES.PROJECT_MANAGER]: 'Project Manager',
+      [ROLES.SITE_INSPECTOR]: 'Site Inspector',
+      [ROLES.CONTRACTOR]: 'Contractor',
+      [ROLES.WORKER]: 'Worker'
+    };
+
+    // Add custom roles
+    const customRoleLabels = customRoles.reduce((acc, role) => {
+      acc[role.name] = role.name;
+      return acc;
+    }, {} as Record<string, string>);
+
+    return { ...baseRoles, ...customRoleLabels };
   };
 
   // Get filtered team members
@@ -446,6 +502,13 @@ const TeamPage: React.FC = () => {
 
   // Get role badge color
   const getRoleBadgeColor = (role: string) => {
+    // Check if it's a custom role
+    const isCustomRole = customRoles.some(customRole => customRole.name === role);
+    
+    if (isCustomRole) {
+      return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+    }
+    
     switch(role) {
       case 'owner': return 'bg-ai-blue/10 text-ai-blue border-ai-blue/20';
       case 'generalContractor': return 'bg-ai-purple/10 text-ai-purple border-ai-purple/20';
@@ -457,6 +520,10 @@ const TeamPage: React.FC = () => {
       case 'bimConsultant': return 'bg-teal-500/10 text-teal-500 border-teal-500/20';
       case 'pendingApproval': return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
       case 'ungrouped': return 'bg-gray-400/10 text-gray-400 border-gray-400/20';
+      case ROLES.PROJECT_MANAGER: return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+      case ROLES.SITE_INSPECTOR: return 'bg-green-500/10 text-green-400 border-green-500/20';
+      case ROLES.CONTRACTOR: return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
+      case ROLES.WORKER: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
       default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
     }
   };
@@ -653,8 +720,71 @@ const TeamPage: React.FC = () => {
     </Dialog>
   );
 
+  // Handle role assignment with custom roles
+  const handleAssignCustomRole = async (userId: string, roleName: string) => {
+    if (!user?.id) return;
+
+    try {
+      await roleService.assignRoleToUser({
+        admin_uid: user.id,
+        user_id: userId,
+        new_role: roleName
+      });
+
+      // Update local state
+      setTeamMembers(members => 
+        members.map(member => 
+          member.id === userId 
+            ? { ...member, role: roleName }
+            : member
+        )
+      );
+
+      setSuccessMessage(`Role "${roleName}" assigned successfully!`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to assign role');
+    }
+  };
+
+  // Delete custom role
+  const handleDeleteRole = async (roleId: number) => {
+    if (!user?.id) return;
+
+    try {
+      await roleService.deleteRole(roleId, user.id);
+      await loadCustomRoles(); // Reload roles
+      setSuccessMessage('Role deleted successfully!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete role');
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 sm:px-6">
+      {/* Success Message */}
+      <AnimatePresence>
+        {successMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className="fixed top-4 right-4 bg-green-600 text-white p-4 rounded-lg shadow-lg max-w-md z-50"
+          >
+            <div className="flex items-center justify-between">
+              <span>{successMessage}</span>
+              <button
+                onClick={() => setSuccessMessage(null)}
+                className="ml-4 text-white hover:text-gray-200"
+              >
+                <RiCloseLine />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Enhanced header with visual appeal */}
       <div className="relative overflow-hidden rounded-xl mb-8 bg-gradient-to-r from-blue-800 via-purple-700 to-indigo-800">
         <div className="absolute inset-0 bg-ai-dots opacity-20"></div>
@@ -805,7 +935,7 @@ const TeamPage: React.FC = () => {
                     onClose={() => setShowRoleFilter(false)}
                     activeFilter={activeRoleFilter}
                     onFilterChange={handleRoleFilterChange}
-                    roleLabels={roleLabels}
+                    roleLabels={getAllRoleLabels()}
                     anchorRef={roleFilterButtonRef}
                   />
                 </div>
@@ -901,6 +1031,122 @@ const TeamPage: React.FC = () => {
           </div>
         </Card>
       </motion.div>
+      
+      {/* Role Management Section - Only for Admins */}
+      {user?.role === 'admin' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="mb-8"
+        >
+          <Card className="bg-dark-900/50 border-dark-700">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <div className="rounded-full p-3 bg-gradient-to-r from-purple-500/20 to-purple-600/20 text-purple-400 mr-4">
+                    <RiShieldUserLine className="text-2xl" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-white">Role Management</h2>
+                    <p className="text-gray-400">Manage custom roles and permissions</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowRoleManagement(!showRoleManagement)}
+                    className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                  >
+                    <RiEyeLine className="mr-2" />
+                    {showRoleManagement ? 'Hide Roles' : 'View Roles'}
+                  </Button>
+                  <Button
+                    onClick={() => navigate('/create-role')}
+                    className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800"
+                  >
+                    <RiAddLine className="mr-2" />
+                    Create Role
+                  </Button>
+                </div>
+              </div>
+
+              <AnimatePresence>
+                {showRoleManagement && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {loadingRoles ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-400"></div>
+                        <span className="ml-3 text-gray-400">Loading roles...</span>
+                      </div>
+                    ) : customRoles.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {customRoles.map((role) => (
+                          <motion.div
+                            key={role.id}
+                            className="bg-dark-800/50 border border-dark-600 rounded-lg p-4 hover:border-purple-500/30 transition-colors"
+                            whileHover={{ scale: 1.02 }}
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center">
+                                <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 flex items-center justify-center text-white font-medium text-sm mr-3">
+                                  {role.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <h3 className="font-medium text-white">{role.name}</h3>
+                                  <p className="text-xs text-gray-400">
+                                    {role.permissions?.length || 0} permissions
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleDeleteRole(role.id)}
+                                className="p-1 rounded text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                title="Delete Role"
+                              >
+                                <RiDeleteBinLine />
+                              </button>
+                            </div>
+                            <p className="text-sm text-gray-300 mb-3 line-clamp-2">
+                              {role.description || 'No description provided'}
+                            </p>
+                            <div className="flex items-center justify-between text-xs text-gray-400">
+                              <span>Created: {new Date(role.created_at).toLocaleDateString()}</span>
+                              <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded">
+                                Custom
+                              </span>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="w-16 h-16 rounded-full bg-purple-500/20 flex items-center justify-center mx-auto mb-4">
+                          <RiShieldUserLine className="text-2xl text-purple-400" />
+                        </div>
+                        <h3 className="text-lg font-medium text-white mb-2">No Custom Roles</h3>
+                        <p className="text-gray-400 mb-4">Create custom roles to better manage your team permissions</p>
+                        <Button
+                          onClick={() => navigate('/create-role')}
+                          className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800"
+                        >
+                          <RiAddLine className="mr-2" />
+                          Create Your First Role
+                        </Button>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </Card>
+        </motion.div>
+      )}
       
       {/* No members message */}
       {filteredMembers.length === 0 && (
@@ -1339,16 +1585,15 @@ const TeamPage: React.FC = () => {
                         value={newMemberData.role}
                         onChange={handleNewMemberChange}
                         className="form-select w-full rounded-lg border-dark-700 bg-dark-800 text-white"
+                        required
                       >
-                        {/* Admin can assign any role */}
-                        {hasPermission(['admin', 'projectManager']) && (
-                          <>
-                            <option value={ROLES.PROJECT_MANAGER}>Project Manager</option>
-                            <option value={ROLES.SITE_INSPECTOR}>Site Inspector</option>
-                            <option value={ROLES.CONTRACTOR}>Contractor</option>
-                            <option value={ROLES.WORKER}>Worker</option>
-                          </>
-                        )}
+                        <option value="">Select a role...</option>
+                        {/* Only show custom roles */}
+                        {customRoles.map(role => (
+                          <option key={role.id} value={role.name}>
+                            {role.name}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     
@@ -1487,12 +1732,15 @@ const TeamPage: React.FC = () => {
                         value={newMemberData.role}
                         onChange={handleNewMemberChange}
                         className="form-select w-full rounded-lg border-dark-700 bg-dark-800 text-white"
-                        disabled={!hasPermission(['admin'])} // Only admin can change roles
+                        disabled={!hasPermission(['admin'])}
                       >
-                        <option value={ROLES.PROJECT_MANAGER}>Project Manager</option>
-                        <option value={ROLES.SITE_INSPECTOR}>Site Inspector</option>
-                        <option value={ROLES.CONTRACTOR}>Contractor</option>
-                        <option value={ROLES.WORKER}>Worker</option>
+                        <option value="">Select a role...</option>
+                        {/* Only show custom roles */}
+                        {customRoles.map(role => (
+                          <option key={role.id} value={role.name}>
+                            {role.name}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     

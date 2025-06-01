@@ -27,7 +27,9 @@ import {
   RiMenuLine,
   RiArrowDownSLine,
   RiCheckLine,
-  RiInformationLine
+  RiInformationLine,
+  RiShieldUserLine,
+  RiAddLine
 } from 'react-icons/ri';
 import { IconWrapper } from '../ui/IconWrapper';
 import { useProjects } from '../../contexts/ProjectContext';
@@ -372,6 +374,22 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
             </IconContext.Provider>
           </div>
         </motion.button>
+        
+        {/* Create Role Button - Only for Admin */}
+        {user?.role === 'admin' && (
+          <motion.button
+            onClick={() => navigate('/create-role')}
+            className="hidden sm:flex items-center px-3 py-2 rounded-lg bg-gradient-to-r from-purple-600/20 to-purple-700/20 hover:from-purple-600/30 hover:to-purple-700/30 text-purple-400 hover:text-white transition-colors duration-200 border border-purple-500/30"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            title="Create New Role"
+          >
+            <IconContext.Provider value={{ className: "text-lg mr-2" }}>
+              <div><RiShieldUserLine /></div>
+            </IconContext.Provider>
+            <span className="text-sm font-medium">Create Role</span>
+          </motion.button>
+        )}
         
         {/* Help Menu */}
         <div className="relative">

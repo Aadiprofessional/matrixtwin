@@ -71,25 +71,18 @@ interface NavItemProps {
   icon: React.ReactNode;
   label: string;
   collapsed: boolean;
-  requiredRoles?: string[];
   badgeCount?: number;
   mobile?: boolean;
   onClick?: () => void;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, requiredRoles, badgeCount = 0, mobile, onClick }) => {
+const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCount = 0, mobile, onClick }) => {
   const location = useLocation();
   const auth = useAuth();
   const { t } = useTranslation();
   const { selectedProject } = useProjects();
   const [isPressed, setIsPressed] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const hasRequiredRoles = !requiredRoles || 
-    (auth.user?.role && requiredRoles.includes(auth.user.role));
-
-  if (!hasRequiredRoles) {
-    return null;
-  }
 
   // Add project ID to navigation if a project is selected
   const getNavigationPath = () => {
@@ -214,16 +207,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
       icon: (
         <div><IconWrapper icon="RiDashboardLine" className="text-xl" /></div>
       ), 
-      label: 'nav.dashboard',
-      requiredRoles: undefined
+      label: 'nav.dashboard'
     },
     { 
       to: '/digital-twins/iot-dashboard', 
       icon: (
         <div><IconWrapper icon="RiBuilding4Line" className="text-xl" /></div>
       ), 
-      label: 'nav.digitalTwins',
-      requiredRoles: undefined
+      label: 'nav.digitalTwins'
     },
     { 
       to: '/ask-ai', 
@@ -231,16 +222,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
         <div><IconWrapper icon="RiBrainLine" className="text-xl" /></div>
       ), 
       label: 'nav.askAI',
-      badgeCount: 0,
-      requiredRoles: undefined
+      badgeCount: 0
     },
     { 
       to: '/analytics', 
       icon: (
         <div><IconWrapper icon="RiPieChartLine" className="text-xl" /></div>
       ), 
-      label: 'analytics.title', 
-      requiredRoles: ['admin', 'projectManager', 'contractor'] 
+      label: 'analytics.title'
     }
   ];
   
@@ -252,40 +241,35 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
         <div><IconWrapper icon="RiFileList3Line" className="text-xl" /></div>
       ), 
       label: 'nav.forms',
-      badgeCount: 3,
-      requiredRoles: ['admin', 'projectManager', 'contractor']
+      badgeCount: 3
     },
     { 
       to: '/diary', 
       icon: (
         <div><IconWrapper icon="RiBookmarkLine" className="text-xl" /></div>
       ), 
-      label: 'diary.title',
-      requiredRoles: ['admin', 'projectManager', 'contractor', 'siteInspector']
+      label: 'diary.title'
     },
     { 
       to: '/safety', 
       icon: (
         <div><IconWrapper icon="RiShieldCheckLine" className="text-xl" /></div>
       ), 
-      label: 'safety.title', 
-      requiredRoles: ['admin', 'projectManager', 'siteInspector'] 
+      label: 'safety.title'
     },
     { 
       to: '/labour', 
       icon: (
         <div><IconWrapper icon="RiGroupLine" className="text-xl" /></div>
       ), 
-      label: 'labour.title', 
-      requiredRoles: ['admin', 'projectManager', 'contractor'] 
+      label: 'labour.title'
     },
     { 
       to: '/cleansing', 
       icon: (
         <div><IconWrapper icon="RiBrushLine" className="text-xl" /></div>
       ), 
-      label: 'cleansing.title',
-      requiredRoles: ['admin', 'projectManager', 'contractor', 'siteInspector', 'worker']
+      label: 'cleansing.title'
     }
   ];
   
@@ -297,40 +281,35 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
         <div><IconWrapper icon="RiCalendarTodoLine" className="text-xl" /></div>
       ), 
       label: 'tasks.title',
-      badgeCount: 5,
-      requiredRoles: ['admin', 'projectManager', 'contractor']
+      badgeCount: 5
     },
     { 
       to: '/forms', 
       icon: (
         <div><IconWrapper icon="RiFileUserLine" className="text-xl" /></div>
       ), 
-      label: 'nav.customForms', 
-      requiredRoles: ['admin', 'projectManager', 'contractor'] 
+      label: 'nav.customForms'
     },
     { 
       to: '/team', 
       icon: (
         <div><IconWrapper icon="RiTeamLine" className="text-xl" /></div>
       ), 
-      label: 'team.title', 
-      requiredRoles: ['admin', 'projectManager', 'contractor'] 
+      label: 'team.title'
     },
     { 
       to: '/reports', 
       icon: (
         <div><IconWrapper icon="RiBarChartBoxLine" className="text-xl" /></div>
       ), 
-      label: 'reports.title', 
-      requiredRoles: ['admin', 'projectManager', 'contractor'] 
+      label: 'reports.title'
     },
     { 
       to: '/settings', 
       icon: (
         <div><IconWrapper icon="RiSettings3Line" className="text-xl" /></div>
       ), 
-      label: 'settings.title',
-      requiredRoles: undefined
+      label: 'settings.title'
     }
   ];
   
@@ -433,7 +412,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
                       icon={item.icon}
                       label={item.label}
                       collapsed={collapsed && !mobile}
-                      requiredRoles={item.requiredRoles}
                       badgeCount={item.badgeCount}
                       mobile={mobile}
                       onClick={handleNavItemClick}
@@ -462,7 +440,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
                       icon={item.icon}
                       label={item.label}
                       collapsed={collapsed && !mobile}
-                      requiredRoles={item.requiredRoles}
                       badgeCount={item.badgeCount}
                       mobile={mobile}
                       onClick={handleNavItemClick}
@@ -491,7 +468,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
                       icon={item.icon}
                       label={item.label}
                       collapsed={collapsed && !mobile}
-                      requiredRoles={item.requiredRoles}
                       badgeCount={item.badgeCount}
                       mobile={mobile}
                       onClick={handleNavItemClick}

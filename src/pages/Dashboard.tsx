@@ -40,6 +40,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { PermissionGate } from '../components/common/PermissionGate';
 import { getUserInfo } from '../utils/userInfo';
 
 // Register ChartJS components
@@ -545,7 +546,8 @@ const Dashboard: React.FC = () => {
         description: t('dashboard.moduleDescriptions.forms', 'Create and manage forms for project documentation'),
         icon: <RiFileList3Line />,
         link: '/forms',
-        color: 'from-blue-500 to-blue-700'
+        color: 'from-blue-500 to-blue-700',
+        permission: 'dashboard_access'
       },
       {
         title: 'AI Assistant',
@@ -553,7 +555,7 @@ const Dashboard: React.FC = () => {
         description: 'Ask AI about your projects and get intelligent insights',
         link: '/ask-ai',
         color: 'from-ai-blue to-ai-purple',
-        requiredRoles: undefined
+        permission: 'dashboard_access'
       },
       {
         title: 'Safety Module',
@@ -561,7 +563,7 @@ const Dashboard: React.FC = () => {
         description: 'Conduct safety inspections and track compliance metrics',
         link: '/safety',
         color: 'from-red-500 to-orange-400',
-        requiredRoles: ['admin', 'projectManager', 'siteInspector']
+        permission: 'twin_admin'
       },
       {
         title: 'Labour Module',
@@ -569,7 +571,7 @@ const Dashboard: React.FC = () => {
         description: 'Track worker attendance and manage labour resources',
         link: '/labour',
         color: 'from-blue-500 to-indigo-600',
-        requiredRoles: ['admin', 'projectManager', 'contractor', 'worker']
+        permission: 'dashboard_access'
       },
       {
         title: 'Cleansing Module',
@@ -577,14 +579,35 @@ const Dashboard: React.FC = () => {
         description: 'Manage site cleanliness and waste management',
         link: '/cleansing',
         color: 'from-green-500 to-emerald-400',
-        requiredRoles: ['admin', 'projectManager', 'siteInspector', 'contractor', 'worker']
+        permission: 'dashboard_access'
+      },
+      {
+        title: 'Predictive Analytics',
+        icon: <RiPieChartLine />,
+        description: 'Advanced analytics and predictive insights',
+        link: '/analytics',
+        color: 'from-purple-500 to-pink-500',
+        permission: 'predictive'
+      },
+      {
+        title: 'Alarm System',
+        icon: <RiAlarmWarningLine />,
+        description: 'Monitor and manage system alarms',
+        link: '/alarms',
+        color: 'from-red-500 to-red-600',
+        permission: 'alarm'
+      },
+      {
+        title: 'Maximo Integration',
+        icon: <RiBuilding4Line />,
+        description: 'Work order management and asset tracking',
+        link: '/maximo',
+        color: 'from-orange-500 to-yellow-500',
+        permission: 'maximo'
       }
     ];
     
-    return modules.filter(module => 
-      !module.requiredRoles || 
-      (user?.role && module.requiredRoles.includes(user.role))
-    );
+    return modules;
   };
   
   return (
@@ -694,123 +717,129 @@ const Dashboard: React.FC = () => {
       
       {/* Chart Sections */}
       <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.6 }}
-        >
-          <Card variant="ai" className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-display font-semibold flex items-center">
-                <IconContext.Provider value={{ className: "mr-2 text-ai-blue" }}>
-                  <RiLineChartLine />
-                </IconContext.Provider>
-                <span>{t('dashboard.projectProgress')}</span>
-              </h3>
-              <Button variant="ghost" size="sm" rightIcon={
-                <IconContext.Provider value={{}}>
-                  <RiArrowRightLine />
-                </IconContext.Provider>
-              }>
-                {t('dashboard.viewAll')}
-              </Button>
-            </div>
-            <div className="h-[300px]">
-              <Line data={projectProgressData} options={projectProgressOptions} />
-            </div>
-          </Card>
-        </motion.div>
+        <PermissionGate permission="dashboard_access">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <Card variant="ai" className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-display font-semibold flex items-center">
+                  <IconContext.Provider value={{ className: "mr-2 text-ai-blue" }}>
+                    <RiLineChartLine />
+                  </IconContext.Provider>
+                  <span>{t('dashboard.projectProgress')}</span>
+                </h3>
+                <Button variant="ghost" size="sm" rightIcon={
+                  <IconContext.Provider value={{}}>
+                    <RiArrowRightLine />
+                  </IconContext.Provider>
+                }>
+                  {t('dashboard.viewAll')}
+                </Button>
+              </div>
+              <div className="h-[300px]">
+                <Line data={projectProgressData} options={projectProgressOptions} />
+              </div>
+            </Card>
+          </motion.div>
+        </PermissionGate>
         
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-        >
-          <Card variant="ai" className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-display font-semibold flex items-center">
-                <IconContext.Provider value={{ className: "mr-2 text-ai-blue" }}>
-                  <RiBarChartLine />
-                </IconContext.Provider>
-                <span>{t('dashboard.weeklyActivity')}</span>
-              </h3>
-              <Button variant="ghost" size="sm" rightIcon={
-                <IconContext.Provider value={{}}>
-                  <RiArrowRightLine />
-                </IconContext.Provider>
-              }>
-                {t('dashboard.viewAll')}
-              </Button>
-            </div>
-            <div className="h-[300px]">
-              <Bar data={activityData} options={activityOptions} />
-            </div>
-          </Card>
-        </motion.div>
+        <PermissionGate permission="dashboard_access">
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            <Card variant="ai" className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-display font-semibold flex items-center">
+                  <IconContext.Provider value={{ className: "mr-2 text-ai-blue" }}>
+                    <RiBarChartLine />
+                  </IconContext.Provider>
+                  <span>{t('dashboard.weeklyActivity')}</span>
+                </h3>
+                <Button variant="ghost" size="sm" rightIcon={
+                  <IconContext.Provider value={{}}>
+                    <RiArrowRightLine />
+                  </IconContext.Provider>
+                }>
+                  {t('dashboard.viewAll')}
+                </Button>
+              </div>
+              <div className="h-[300px]">
+                <Bar data={activityData} options={activityOptions} />
+              </div>
+            </Card>
+          </motion.div>
+        </PermissionGate>
       </div>
       
       {/* Sales Charts Row */}
-      <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-        >
-          <Card variant="ai" className="p-4 h-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-display font-semibold flex items-center">
-                <IconContext.Provider value={{ className: "mr-2 text-ai-blue" }}>
-                  <RiPieChartLine />
-                </IconContext.Provider>
-                <span>Sales In-progress</span>
-              </h3>
-            </div>
-            <div className="h-[200px] flex items-center justify-center">
-              <Doughnut data={salesInProgressData} options={salesChartOptions} />
-            </div>
-          </Card>
-        </motion.div>
-        
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-        >
-          <Card variant="ai" className="p-4 h-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-display font-semibold flex items-center">
-                <IconContext.Provider value={{ className: "mr-2 text-success" }}>
-                  <RiPieChartLine />
-                </IconContext.Provider>
-                <span>Sales Completed</span>
-              </h3>
-            </div>
-            <div className="h-[200px] flex items-center justify-center">
-              <Doughnut data={salesCompletedData} options={salesChartOptions} />
-            </div>
-          </Card>
-        </motion.div>
-        
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-        >
-          <Card variant="ai" className="p-4 h-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-display font-semibold flex items-center">
-                <IconContext.Provider value={{ className: "mr-2 text-ai-teal" }}>
-                  <RiPieChartLine />
-                </IconContext.Provider>
-                <span>Overall Sales</span>
-              </h3>
-            </div>
-            <div className="h-[200px] flex items-center justify-center">
-              <Doughnut data={overallSalesData} options={salesChartOptions} />
-            </div>
-          </Card>
-        </motion.div>
-      </div>
+      <PermissionGate permission="dashboard_export">
+        <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            <Card variant="ai" className="p-4 h-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-display font-semibold flex items-center">
+                  <IconContext.Provider value={{ className: "mr-2 text-ai-blue" }}>
+                    <RiPieChartLine />
+                  </IconContext.Provider>
+                  <span>Sales In-progress</span>
+                </h3>
+              </div>
+              <div className="h-[200px] flex items-center justify-center">
+                <Doughnut data={salesInProgressData} options={salesChartOptions} />
+              </div>
+            </Card>
+          </motion.div>
+          
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+          >
+            <Card variant="ai" className="p-4 h-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-display font-semibold flex items-center">
+                  <IconContext.Provider value={{ className: "mr-2 text-success" }}>
+                    <RiPieChartLine />
+                  </IconContext.Provider>
+                  <span>Sales Completed</span>
+                </h3>
+              </div>
+              <div className="h-[200px] flex items-center justify-center">
+                <Doughnut data={salesCompletedData} options={salesChartOptions} />
+              </div>
+            </Card>
+          </motion.div>
+          
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+          >
+            <Card variant="ai" className="p-4 h-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-display font-semibold flex items-center">
+                  <IconContext.Provider value={{ className: "mr-2 text-ai-teal" }}>
+                    <RiPieChartLine />
+                  </IconContext.Provider>
+                  <span>Overall Sales</span>
+                </h3>
+              </div>
+              <div className="h-[200px] flex items-center justify-center">
+                <Doughnut data={overallSalesData} options={salesChartOptions} />
+              </div>
+            </Card>
+          </motion.div>
+        </div>
+      </PermissionGate>
       
       {/* Bottom Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -886,32 +915,33 @@ const Dashboard: React.FC = () => {
       {/* Module Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {getModuleCards().map((module, index) => (
-          <motion.div
-            key={index}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.7 + index * 0.1 }}
-            whileHover={{ y: -5 }}
-          >
-            <Card className="p-6 h-full flex flex-col justify-between">
-              <div>
-                <div className={`w-12 h-12 mb-4 rounded-full bg-gradient-to-br ${module.color} flex items-center justify-center text-white`}>
-                  <IconContext.Provider value={{ className: "text-xl" }}>
-                    {module.icon}
-                  </IconContext.Provider>
+          <PermissionGate key={index} permission={module.permission}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.7 + index * 0.1 }}
+              whileHover={{ y: -5 }}
+            >
+              <Card className="p-6 h-full flex flex-col justify-between">
+                <div>
+                  <div className={`w-12 h-12 mb-4 rounded-full bg-gradient-to-br ${module.color} flex items-center justify-center text-white`}>
+                    <IconContext.Provider value={{ className: "text-xl" }}>
+                      {module.icon}
+                    </IconContext.Provider>
+                  </div>
+                  <h3 className="text-lg font-display font-semibold mb-2">{module.title}</h3>
+                  <p className="text-secondary-600 dark:text-secondary-400 text-sm mb-4">
+                    {module.description}
+                  </p>
                 </div>
-                <h3 className="text-lg font-display font-semibold mb-2">{module.title}</h3>
-                <p className="text-secondary-600 dark:text-secondary-400 text-sm mb-4">
-                  {module.description}
-                </p>
-              </div>
-              <Link to={module.link}>
-                <Button variant="outline" size="sm" rightIcon={<RiArrowRightLine />}>
-                  {t('dashboard.access')}
-                </Button>
-              </Link>
-            </Card>
-          </motion.div>
+                <Link to={module.link}>
+                  <Button variant="outline" size="sm" rightIcon={<RiArrowRightLine />}>
+                    {t('dashboard.access')}
+                  </Button>
+                </Link>
+              </Card>
+            </motion.div>
+          </PermissionGate>
         ))}
       </div>
     </div>

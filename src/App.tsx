@@ -41,6 +41,7 @@ import ModelUploadPage from './pages/ModelUploadPage';
 import IoTDashboardPage from './pages/IoTDashboardPage';
 import DigitalTwinsAnalyticsPage from './pages/DigitalTwinsAnalyticsPage';
 import DigitalTwinsControlPage from './pages/DigitalTwinsControlPage';
+import CreateRolePage from './pages/CreateRolePage';
 
 
 // Protected route wrapper
@@ -158,6 +159,16 @@ const AppRoutes: React.FC = () => {
           }
         />
         <Route
+          path="/create-role"
+          element={
+            <ProtectedRoute requiredRoles={['admin' as UserRole]}>
+              <Layout>
+                <CreateRolePage />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/rfi"
           element={
             <ProtectedRoute>
@@ -180,7 +191,7 @@ const AppRoutes: React.FC = () => {
         <Route
           path="/safety"
           element={
-            <ProtectedRoute requiredRoles={['admin' as UserRole, 'projectManager' as UserRole, 'siteInspector' as UserRole]}>
+            <ProtectedRoute>
               <Layout>
                 <SafetyPage />
               </Layout>
@@ -190,7 +201,7 @@ const AppRoutes: React.FC = () => {
         <Route
           path="/labour"
           element={
-            <ProtectedRoute requiredRoles={['admin' as UserRole, 'projectManager' as UserRole, 'contractor' as UserRole]}>
+            <ProtectedRoute>
               <Layout>
                 <LabourPage />
               </Layout>
