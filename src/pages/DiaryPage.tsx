@@ -10,7 +10,6 @@ import { useProjects } from '../contexts/ProjectContext';
 import * as RiIcons from 'react-icons/ri';
 import { SiteDiaryFormTemplate } from '../components/forms/SiteDiaryFormTemplate';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
-import { emailService } from '../services/emailService';
 
 // Add interfaces for process flow
 interface ProcessNode {
@@ -322,22 +321,8 @@ const DiaryPage: React.FC = () => {
       });
 
       if (response.ok) {
-        const result = await response.json();
-        
-        // Send email notifications
-        try {
-          const ccEmails = selectedCcs.map(cc => cc.email);
-          await emailService.sendDiaryNotification({
-            entryId: result.id || 'new',
-            projectName: selectedProject?.name || 'Unknown Project',
-            action: 'created',
-            ccRecipients: ccEmails,
-            formData: pendingFormData,
-            currentNodeName: processNodes.find(node => node.type === 'node')?.name
-          });
-        } catch (emailError) {
-          console.error('Failed to send email notifications:', emailError);
-        }
+        // The backend now handles all email notifications properly
+        // No need to send separate emails from frontend
         
         // Refresh diary entries
         await fetchDiaryEntries();
@@ -450,17 +435,18 @@ const DiaryPage: React.FC = () => {
     }
   };
 
-  // Handle workflow actions (approve/reject)
-  const handleWorkflowAction = async (action: 'approve' | 'reject') => {
+  // Handle workflow actions (approve/reject/back to previous)
+  const handleWorkflowAction = async (action: 'approve' | 'reject' | 'back') => {
     if (!selectedDiaryEntry || !user?.id) return;
 
-    const comment = action === 'reject' ? 
-      prompt('Please provide a reason for rejection:') : 
-      '';
-
-    if (action === 'reject' && !comment) {
-      alert('A comment is required when rejecting an entry.');
-      return;
+    let comment = '';
+    if (action === 'reject' || action === 'back') {
+      const promptResult = prompt(`Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`);
+      if (promptResult === null || promptResult.trim() === '') {
+        alert(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
+        return;
+      }
+      comment = promptResult.trim();
     }
 
     try {
@@ -478,25 +464,7 @@ const DiaryPage: React.FC = () => {
       });
 
       if (response.ok) {
-        const result = await response.json();
-        
-        // Send email notifications
-        try {
-          const ccEmails = selectedDiaryEntry.diary_assignments?.map(assignment => assignment.user_email).filter(Boolean) || [];
-          await emailService.sendDiaryNotification({
-            entryId: selectedDiaryEntry.id,
-            projectName: selectedDiaryEntry.project,
-            action: action === 'approve' ? 'approved' : 'rejected',
-            ccRecipients: ccEmails,
-            formData: selectedDiaryEntry.form_data,
-            currentNodeName: selectedDiaryEntry.diary_workflow_nodes?.find(node => 
-              node.node_order === selectedDiaryEntry.current_node_index
-            )?.node_name,
-            comments: comment || undefined
-          });
-        } catch (emailError) {
-          console.error('Failed to send email notifications:', emailError);
-        }
+        // Backend handles all email notifications
         
         // Refresh diary entries and entry details
         await fetchDiaryEntries();
@@ -517,14 +485,44 @@ const DiaryPage: React.FC = () => {
   const canUserEditEntry = (entry: DiaryEntry) => {
     if (!user?.id) return false;
     
-    // Admin can always edit
-    if (user.role === 'admin') return true;
+    // Only admin can edit when entry is in initial state or rejected
+    if (user.role === 'admin' && (entry.status === 'pending' || entry.status === 'rejected')) {
+      return true;
+    }
     
-    // Creator can edit
-    if (entry.created_by === user.id) return true;
+    return false;
+  };
+
+  // Check if user can update form data (current node executor)
+  const canUserUpdateForm = (entry: DiaryEntry) => {
+    if (!user?.id || entry.status !== 'pending') return false;
     
-    // Assigned users can edit
-    if (entry.diary_assignments?.some((a: any) => a.user_id === user.id)) return true;
+    // Check if user is the executor for current workflow node
+    const currentNode = entry.diary_workflow_nodes?.find((node: any) => 
+      node.node_order === entry.current_node_index && 
+      node.status === 'pending'
+    );
+    
+    if (currentNode) {
+      console.log('Checking update form permission for current node:', currentNode);
+      console.log('Current user ID:', user.id);
+      console.log('Node executor_id:', currentNode.executor_id);
+      console.log('Node executor_name:', currentNode.executor_name);
+      
+      // First check by executor_id if available
+      if (currentNode.executor_id && currentNode.executor_id === user.id) {
+        console.log('✓ User can update form (matched by executor_id)');
+        return true;
+      }
+      
+      // Fallback to name matching for backward compatibility
+      if (currentNode.executor_name && user.name === currentNode.executor_name) {
+        console.log('✓ User can update form (matched by executor_name)');
+        return true;
+      }
+      
+      console.log('✗ User cannot update form (no match)');
+    }
     
     return false;
   };
@@ -533,18 +531,102 @@ const DiaryPage: React.FC = () => {
   const canUserApproveEntry = (entry: DiaryEntry) => {
     if (!user?.id || entry.status !== 'pending') return false;
     
-    // Admin can always approve
-    if (user.role === 'admin') return true;
-    
     // Check if user is the executor for current workflow node
     const currentNode = entry.diary_workflow_nodes?.find((node: any) => 
       node.node_order === entry.current_node_index && 
       node.status === 'pending'
     );
     
-    if (currentNode && currentNode.executor_name === user.name) return true;
+    if (currentNode) {
+      console.log('Checking approve permission for current node:', currentNode);
+      console.log('Current user ID:', user.id);
+      console.log('Node executor_id:', currentNode.executor_id);
+      console.log('Node executor_name:', currentNode.executor_name);
+      
+      // First check by executor_id if available
+      if (currentNode.executor_id && currentNode.executor_id === user.id) {
+        console.log('✓ User can approve (matched by executor_id)');
+        return true;
+      }
+      
+      // Fallback to name matching for backward compatibility
+      if (currentNode.executor_name && user.name === currentNode.executor_name) {
+        console.log('✓ User can approve (matched by executor_name)');
+        return true;
+      }
+      
+      console.log('✗ User cannot approve (no match)');
+    }
     
     return false;
+  };
+
+  // Check if user can view entry (all assigned users and admin)
+  const canUserViewEntry = (entry: DiaryEntry) => {
+    if (!user?.id) return false;
+    
+    // Admin can always view
+    if (user.role === 'admin') return true;
+    
+    // Creator can view
+    if (entry.created_by === user.id) return true;
+    
+    // Assigned users (CC) can view
+    if (entry.diary_assignments?.some((a: any) => a.user_id === user.id)) return true;
+    
+    // Executors can view - check by user ID
+    if (entry.diary_workflow_nodes?.some((node: any) => {
+      // First check by executor_id if available
+      if (node.executor_id && node.executor_id === user.id) {
+        return true;
+      }
+      
+      // Fallback to name matching for backward compatibility
+      if (node.executor_name) {
+        const executorUser = users.find(u => u.name === node.executor_name);
+        return executorUser && executorUser.id === user.id;
+      }
+      
+      return false;
+    })) return true;
+    
+    return false;
+  };
+  
+  // Delete diary entry (Admin only)
+  const handleDeleteEntry = async (entry: DiaryEntry) => {
+    if (!user?.id || user.role !== 'admin') {
+      alert('Only admins can delete diary entries.');
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete this diary entry?\n\nProject: ${entry.project}\nDate: ${entry.date}\nAuthor: ${entry.author}\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/diary/${entry.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        // Refresh diary entries
+        await fetchDiaryEntries();
+        setShowDetails(false);
+        alert('Diary entry deleted successfully!');
+      } else {
+        const error = await response.json();
+        alert(`Failed to delete diary entry: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting diary entry:', error);
+      alert('Failed to delete diary entry. Please try again.');
+    }
   };
   
   // Get the weather icon based on condition
@@ -670,6 +752,7 @@ const DiaryPage: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
             >
+              {/* Only admin can see new entry button */}
               {user?.role === 'admin' && selectedProject && (
                 <Button 
                   variant="futuristic" 
@@ -795,9 +878,6 @@ const DiaryPage: React.FC = () => {
                     </div>
                     <div className="flex items-center space-x-2">
                       {getWorkflowStatusBadge(entry)}
-                      <div className="px-3 py-1 bg-white dark:bg-dark-700 rounded-full text-xs font-medium text-secondary-700 dark:text-secondary-300 shadow-sm">
-                        {entry.project}
-                      </div>
                     </div>
                   </div>
                   
@@ -842,24 +922,28 @@ const DiaryPage: React.FC = () => {
                   
                   <div className="flex justify-end mt-4">
                     <div className="flex space-x-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleViewForm(entry)}
-                        leftIcon={<RiIcons.RiFileTextLine />}
-                        className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                      >
-                        View Form
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleViewDetails(entry)}
-                        rightIcon={<RiIcons.RiArrowRightLine />}
-                        className="hover:bg-primary-50 dark:hover:bg-primary-900/20"
-                      >
-                        {t('common.viewDetails')}
-                      </Button>
+                      {canUserViewEntry(entry) && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleViewForm(entry)}
+                          leftIcon={<RiIcons.RiFileTextLine />}
+                          className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        >
+                          {canUserUpdateForm(entry) ? 'Edit Form' : 'View Form'}
+                        </Button>
+                      )}
+                      {canUserViewEntry(entry) && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleViewDetails(entry)}
+                          rightIcon={<RiIcons.RiArrowRightLine />}
+                          className="hover:bg-primary-50 dark:hover:bg-primary-900/20"
+                        >
+                          {t('common.viewDetails')}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -954,9 +1038,6 @@ const DiaryPage: React.FC = () => {
               <div className="text-lg font-bold text-primary-900 dark:text-primary-300 flex items-center">
                 <RiIcons.RiCalendarCheckLine className="mr-2 text-primary-600 dark:text-primary-400" />
                 {selectedDiaryEntry.date}
-              </div>
-              <div className="px-3 py-1 bg-white dark:bg-dark-700 rounded-full text-sm font-medium text-secondary-700 dark:text-secondary-300 shadow-sm">
-                {selectedDiaryEntry.project}
               </div>
             </div>
             
@@ -1111,24 +1192,66 @@ const DiaryPage: React.FC = () => {
                 {t('common.print')}
               </Button>
               
-              {/* Workflow Action Buttons */}
+              {/* Admin Delete Button */}
+              {user?.role === 'admin' && (
+                <Button 
+                  variant="outline"
+                  leftIcon={<RiIcons.RiDeleteBinLine />}
+                  onClick={() => handleDeleteEntry(selectedDiaryEntry)}
+                  className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                >
+                  Delete Entry
+                </Button>
+              )}
+              
+              {/* Workflow Action Buttons based on user permissions */}
               {selectedDiaryEntry.status === 'pending' && (
                 <>
+                  {/* Admin can edit when entry is pending */}
                   {canUserEditEntry(selectedDiaryEntry) && (
                     <Button 
                       variant="outline"
                       leftIcon={<RiIcons.RiEditLine />}
                       onClick={() => {
-                        // TODO: Implement edit functionality
-                        alert('Edit functionality will be implemented');
+                        setShowDetails(false);
+                        setShowFormView(true);
                       }}
+                      className="text-blue-600 border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                     >
-                      Edit
+                      Edit Form
                     </Button>
                   )}
                   
+                  {/* Current node executor can update form */}
+                  {canUserUpdateForm(selectedDiaryEntry) && !canUserEditEntry(selectedDiaryEntry) && (
+                    <Button 
+                      variant="outline"
+                      leftIcon={<RiIcons.RiEditLine />}
+                      onClick={() => {
+                        setShowDetails(false);
+                        setShowFormView(true);
+                      }}
+                      className="text-green-600 border-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                    >
+                      Update Form
+                    </Button>
+                  )}
+                  
+                  {/* Current node executor can approve, reject, or send back */}
                   {canUserApproveEntry(selectedDiaryEntry) && (
                     <>
+                      {/* Back to previous node button (only if not first node) */}
+                      {selectedDiaryEntry.current_node_index > 0 && (
+                        <Button 
+                          variant="outline"
+                          leftIcon={<RiIcons.RiArrowLeftLine />}
+                          onClick={() => handleWorkflowAction('back')}
+                          className="text-orange-600 border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                        >
+                          Send Back
+                        </Button>
+                      )}
+                      
                       <Button 
                         variant="outline"
                         leftIcon={<RiIcons.RiCloseLine />}
@@ -1143,11 +1266,34 @@ const DiaryPage: React.FC = () => {
                         onClick={() => handleWorkflowAction('approve')}
                         className="bg-green-600 hover:bg-green-700"
                       >
-                        Approve
+                        Approve & Forward
                       </Button>
                     </>
                   )}
                 </>
+              )}
+              
+              {/* Rejected status - only admin can resolve */}
+              {selectedDiaryEntry.status === 'rejected' && canUserEditEntry(selectedDiaryEntry) && (
+                <Button 
+                  variant="primary"
+                  leftIcon={<RiIcons.RiSettings4Line />}
+                  onClick={() => {
+                    setShowDetails(false);
+                    setShowFormView(true);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  Resolve & Edit
+                </Button>
+              )}
+              
+              {/* Completed status - show completion info */}
+              {selectedDiaryEntry.status === 'completed' && (
+                <div className="flex items-center text-green-600 dark:text-green-400">
+                  <RiIcons.RiCheckLine className="mr-2" />
+                  <span className="text-sm font-medium">Workflow Completed</span>
+                </div>
               )}
               
               <Button 
@@ -1404,9 +1550,13 @@ const DiaryPage: React.FC = () => {
                 onClose={() => setShowFormView(false)}
                 onSave={handleFormUpdate}
                 initialData={selectedDiaryEntry.form_data}
-                isEditMode={true}
-                readOnly={!canUserEditEntry(selectedDiaryEntry)}
-                title={`${canUserEditEntry(selectedDiaryEntry) ? 'Edit' : 'View'} Diary Entry - ${selectedDiaryEntry.date}`}
+                isEditMode={canUserEditEntry(selectedDiaryEntry) || canUserUpdateForm(selectedDiaryEntry)}
+                readOnly={!canUserEditEntry(selectedDiaryEntry) && !canUserUpdateForm(selectedDiaryEntry)}
+                title={`${
+                  canUserEditEntry(selectedDiaryEntry) ? 'Edit' : 
+                  canUserUpdateForm(selectedDiaryEntry) ? 'Update' : 
+                  'View'
+                } Diary Entry - ${selectedDiaryEntry.date}`}
               />
             </motion.div>
           </div>
