@@ -16,7 +16,10 @@ interface ProcessNode {
   id: string;
   type: 'start' | 'node' | 'end';
   name: string;
-  executor?: string;
+  executor?: string; // Keep as string for compatibility
+  executorId?: string; // Add executor ID for backend
+  ccRecipients?: User[]; // Add node-specific CC recipients
+  editAccess?: boolean; // Add edit access flag
   settings: Record<string, any>;
 }
 
@@ -43,6 +46,7 @@ interface DiaryEntry {
   form_data?: any;
   status: string;
   current_node_index: number;
+  current_active_node?: string; // Add current active node tracking
   diary_workflow_nodes?: any[];
   diary_assignments?: any[];
   diary_comments?: any[];
@@ -176,9 +180,9 @@ const DiaryPage: React.FC = () => {
   const [showProcessFlow, setShowProcessFlow] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<any>(null);
   const [processNodes, setProcessNodes] = useState<ProcessNode[]>([
-    { id: 'start', type: 'start', name: 'Start', settings: {} },
-    { id: 'review', type: 'node', name: 'Review & Approval', settings: {} },
-    { id: 'end', type: 'end', name: 'Complete', settings: {} }
+    { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
+    { id: 'review', type: 'node', name: 'Review & Approval', editAccess: true, ccRecipients: [], settings: {} },
+    { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
   ]);
   const [selectedNode, setSelectedNode] = useState<ProcessNode | null>(null);
   const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
@@ -275,21 +279,46 @@ const DiaryPage: React.FC = () => {
   
   const handleUserSelection = (selectedUser: User) => {
     if (peopleSelectorType === 'executor' && selectedNode) {
-      const updatedNode = { ...selectedNode, executor: selectedUser.name };
+      const updatedNode = { 
+        ...selectedNode, 
+        executor: selectedUser.name,
+        executorId: selectedUser.id // Store executor ID for backend
+      };
       const updatedNodes = processNodes.map(node => 
         node.id === selectedNode.id ? updatedNode : node
       );
       setProcessNodes(updatedNodes);
       setSelectedNode(updatedNode);
-    } else if (peopleSelectorType === 'cc') {
-      if (!selectedCcs.find(cc => cc.id === selectedUser.id)) {
-        setSelectedCcs([...selectedCcs, selectedUser]);
+    } else if (peopleSelectorType === 'cc' && selectedNode) {
+      // Add to node-specific CC recipients instead of global
+      const currentCcs = selectedNode.ccRecipients || [];
+      if (!currentCcs.find(cc => cc.id === selectedUser.id)) {
+        const updatedNode = {
+          ...selectedNode,
+          ccRecipients: [...currentCcs, selectedUser]
+        };
+        const updatedNodes = processNodes.map(node => 
+          node.id === selectedNode.id ? updatedNode : node
+        );
+        setProcessNodes(updatedNodes);
+        setSelectedNode(updatedNode);
       }
     }
   };
   
   const removeUserFromCc = (userId: string) => {
-    setSelectedCcs(selectedCcs.filter(cc => cc.id !== userId));
+    if (selectedNode) {
+      const updatedCcs = (selectedNode.ccRecipients || []).filter(cc => cc.id !== userId);
+      const updatedNode = {
+        ...selectedNode,
+        ccRecipients: updatedCcs
+      };
+      const updatedNodes = processNodes.map(node => 
+        node.id === selectedNode.id ? updatedNode : node
+      );
+      setProcessNodes(updatedNodes);
+      setSelectedNode(updatedNode);
+    }
   };
   
   // Create new diary entry - now shows process flow first
@@ -305,6 +334,22 @@ const DiaryPage: React.FC = () => {
     if (!pendingFormData || !user?.id) return;
     
     try {
+      // Prepare process nodes with proper structure for backend
+      const processNodesForBackend = processNodes.map(node => ({
+        ...node,
+        executorId: node.executorId, // Send executor ID
+        executorName: node.executor, // Send executor name
+        ccRecipients: node.ccRecipients || [], // Send node-specific CCs
+        editAccess: node.editAccess !== false // Default to true if not set
+      }));
+
+      console.log('Sending diary entry data:', {
+        formData: pendingFormData,
+        processNodes: processNodesForBackend,
+        createdBy: user.id,
+        projectId: selectedProject?.id
+      });
+
       const response = await fetch('https://matrixbim-server.onrender.com/api/diary/create', {
         method: 'POST',
         headers: {
@@ -313,16 +358,15 @@ const DiaryPage: React.FC = () => {
         },
         body: JSON.stringify({
           formData: pendingFormData,
-          processNodes: processNodes,
-          selectedCcs: selectedCcs,
+          processNodes: processNodesForBackend,
           createdBy: user.id,
           projectId: selectedProject?.id
         })
       });
 
       if (response.ok) {
-        // The backend now handles all email notifications properly
-        // No need to send separate emails from frontend
+        const result = await response.json();
+        console.log('Diary entry created successfully:', result);
         
         // Refresh diary entries
         await fetchDiaryEntries();
@@ -333,10 +377,18 @@ const DiaryPage: React.FC = () => {
         setSelectedCcs([]);
         setSelectedNode(null);
         
+        // Reset process nodes to default
+        setProcessNodes([
+          { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
+          { id: 'review', type: 'node', name: 'Review & Approval', editAccess: true, ccRecipients: [], settings: {} },
+          { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
+        ]);
+        
         // Show success message
         alert('Diary entry created successfully! Notifications have been sent to assigned users.');
       } else {
         const error = await response.json();
+        console.error('Failed to create diary entry:', error);
         alert(`Failed to create diary entry: ${error.error}`);
       }
     } catch (error) {
@@ -493,10 +545,13 @@ const DiaryPage: React.FC = () => {
     return false;
   };
 
-  // Check if user can update form data (current node executor)
+  // Check if user can update form data (current node executor or CC with edit access)
   const canUserUpdateForm = (entry: DiaryEntry) => {
     if (!user?.id || entry.status !== 'pending') return false;
     
+    // Admin can always edit
+    if (user.role === 'admin') return true;
+    
     // Check if user is the executor for current workflow node
     const currentNode = entry.diary_workflow_nodes?.find((node: any) => 
       node.node_order === entry.current_node_index && 
@@ -504,64 +559,40 @@ const DiaryPage: React.FC = () => {
     );
     
     if (currentNode) {
-      console.log('Checking update form permission for current node:', currentNode);
-      console.log('Current user ID:', user.id);
-      console.log('Node executor_id:', currentNode.executor_id);
-      console.log('Node executor_name:', currentNode.executor_name);
+      // Executor can always edit
+      if (currentNode.executor_id === user.id) return true;
       
-      // First check by executor_id if available
-      if (currentNode.executor_id && currentNode.executor_id === user.id) {
-        console.log('✓ User can update form (matched by executor_id)');
-        return true;
+      // CC can edit if edit access is enabled for this node
+      if (currentNode.edit_access) {
+        const isCC = entry.diary_assignments?.some((a: any) => 
+          a.user_id === user.id && a.node_id === currentNode.node_id
+        );
+        if (isCC) return true;
       }
-      
-      // Fallback to name matching for backward compatibility
-      if (currentNode.executor_name && user.name === currentNode.executor_name) {
-        console.log('✓ User can update form (matched by executor_name)');
-        return true;
-      }
-      
-      console.log('✗ User cannot update form (no match)');
     }
     
     return false;
   };
 
-  // Check if user can approve/reject current workflow step
+  // Check if user can approve/reject current workflow step (only executor)
   const canUserApproveEntry = (entry: DiaryEntry) => {
     if (!user?.id || entry.status !== 'pending') return false;
     
+    // Admin can always approve
+    if (user.role === 'admin') return true;
+    
     // Check if user is the executor for current workflow node
     const currentNode = entry.diary_workflow_nodes?.find((node: any) => 
       node.node_order === entry.current_node_index && 
       node.status === 'pending'
     );
     
-    if (currentNode) {
-      console.log('Checking approve permission for current node:', currentNode);
-      console.log('Current user ID:', user.id);
-      console.log('Node executor_id:', currentNode.executor_id);
-      console.log('Node executor_name:', currentNode.executor_name);
-      
-      // First check by executor_id if available
-      if (currentNode.executor_id && currentNode.executor_id === user.id) {
-        console.log('✓ User can approve (matched by executor_id)');
-        return true;
-      }
-      
-      // Fallback to name matching for backward compatibility
-      if (currentNode.executor_name && user.name === currentNode.executor_name) {
-        console.log('✓ User can approve (matched by executor_name)');
-        return true;
-      }
-      
-      console.log('✗ User cannot approve (no match)');
-    }
+    if (currentNode && currentNode.executor_id === user.id) return true;
     
     return false;
   };
 
-  // Check if user can view entry (all assigned users and admin)
+  // Check if user can view entry (all assigned users, executors, and admin)
   const canUserViewEntry = (entry: DiaryEntry) => {
     if (!user?.id) return false;
     
@@ -574,36 +605,20 @@ const DiaryPage: React.FC = () => {
     // Assigned users (CC) can view
     if (entry.diary_assignments?.some((a: any) => a.user_id === user.id)) return true;
     
-    // Executors can view - check by user ID
-    if (entry.diary_workflow_nodes?.some((node: any) => {
-      // First check by executor_id if available
-      if (node.executor_id && node.executor_id === user.id) {
-        return true;
-      }
-      
-      // Fallback to name matching for backward compatibility
-      if (node.executor_name) {
-        const executorUser = users.find(u => u.name === node.executor_name);
-        return executorUser && executorUser.id === user.id;
-      }
-      
-      return false;
-    })) return true;
+    // Executors can view
+    if (entry.diary_workflow_nodes?.some((node: any) => node.executor_id === user.id)) return true;
     
     return false;
   };
   
-  // Delete diary entry (Admin only)
+  // Delete diary entry (admin only)
   const handleDeleteEntry = async (entry: DiaryEntry) => {
     if (!user?.id || user.role !== 'admin') {
       alert('Only admins can delete diary entries.');
       return;
     }
 
-    const confirmDelete = window.confirm(
-      `Are you sure you want to delete this diary entry?\n\nProject: ${entry.project}\nDate: ${entry.date}\nAuthor: ${entry.author}\n\nThis action cannot be undone.`
-    );
-
+    const confirmDelete = window.confirm(`Are you sure you want to delete this diary entry from ${entry.date}? This action cannot be undone.`);
     if (!confirmDelete) return;
 
     try {
@@ -617,7 +632,6 @@ const DiaryPage: React.FC = () => {
       if (response.ok) {
         // Refresh diary entries
         await fetchDiaryEntries();
-        setShowDetails(false);
         alert('Diary entry deleted successfully!');
       } else {
         const error = await response.json();
@@ -944,6 +958,18 @@ const DiaryPage: React.FC = () => {
                           {t('common.viewDetails')}
                         </Button>
                       )}
+                      {/* Admin delete button */}
+                      {user?.role === 'admin' && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleDeleteEntry(entry)}
+                          leftIcon={<RiIcons.RiDeleteBinLine />}
+                          className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1192,12 +1218,15 @@ const DiaryPage: React.FC = () => {
                 {t('common.print')}
               </Button>
               
-              {/* Admin Delete Button */}
+              {/* Admin delete button */}
               {user?.role === 'admin' && (
                 <Button 
                   variant="outline"
                   leftIcon={<RiIcons.RiDeleteBinLine />}
-                  onClick={() => handleDeleteEntry(selectedDiaryEntry)}
+                  onClick={() => {
+                    setShowDetails(false);
+                    handleDeleteEntry(selectedDiaryEntry);
+                  }}
                   className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                 >
                   Delete Entry
@@ -1207,7 +1236,7 @@ const DiaryPage: React.FC = () => {
               {/* Workflow Action Buttons based on user permissions */}
               {selectedDiaryEntry.status === 'pending' && (
                 <>
-                  {/* Admin can edit when entry is pending */}
+                  {/* Admin can edit when entry is pending or rejected */}
                   {canUserEditEntry(selectedDiaryEntry) && (
                     <Button 
                       variant="outline"
@@ -1216,24 +1245,8 @@ const DiaryPage: React.FC = () => {
                         setShowDetails(false);
                         setShowFormView(true);
                       }}
-                      className="text-blue-600 border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                     >
                       Edit Form
-                    </Button>
-                  )}
-                  
-                  {/* Current node executor can update form */}
-                  {canUserUpdateForm(selectedDiaryEntry) && !canUserEditEntry(selectedDiaryEntry) && (
-                    <Button 
-                      variant="outline"
-                      leftIcon={<RiIcons.RiEditLine />}
-                      onClick={() => {
-                        setShowDetails(false);
-                        setShowFormView(true);
-                      }}
-                      className="text-green-600 border-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-                    >
-                      Update Form
                     </Button>
                   )}
                   
@@ -1266,7 +1279,7 @@ const DiaryPage: React.FC = () => {
                         onClick={() => handleWorkflowAction('approve')}
                         className="bg-green-600 hover:bg-green-700"
                       >
-                        Approve & Forward
+                        Approve
                       </Button>
                     </>
                   )}
@@ -1286,14 +1299,6 @@ const DiaryPage: React.FC = () => {
                 >
                   Resolve & Edit
                 </Button>
-              )}
-              
-              {/* Completed status - show completion info */}
-              {selectedDiaryEntry.status === 'completed' && (
-                <div className="flex items-center text-green-600 dark:text-green-400">
-                  <RiIcons.RiCheckLine className="mr-2" />
-                  <span className="text-sm font-medium">Workflow Completed</span>
-                </div>
               )}
               
               <Button 
@@ -1414,9 +1419,9 @@ const DiaryPage: React.FC = () => {
                                 <div className="flex flex-col space-y-2">
                                   <div className="flex items-center space-x-2">
                                     <div className="flex-grow bg-secondary-50 dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-3 min-h-[50px]">
-                                      {selectedCcs.length > 0 ? (
+                                      {selectedNode.ccRecipients && selectedNode.ccRecipients.length > 0 ? (
                                         <div className="flex flex-wrap gap-2">
-                                          {selectedCcs.map(cc => (
+                                          {selectedNode.ccRecipients.map(cc => (
                                             <div 
                                               key={cc.id} 
                                               className="bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-3 py-1 rounded-full flex items-center text-sm"
@@ -1445,10 +1450,10 @@ const DiaryPage: React.FC = () => {
                                     </Button>
                                   </div>
                                   
-                                  {selectedCcs.length > 0 && (
+                                  {selectedNode.ccRecipients && selectedNode.ccRecipients.length > 0 && (
                                     <div className="text-xs text-secondary-500 dark:text-secondary-400 flex items-center">
                                       <RiIcons.RiTeamLine className="mr-1" />
-                                      {selectedCcs.length} {selectedCcs.length === 1 ? 'person' : 'people'} will be notified
+                                      {selectedNode.ccRecipients.length} {selectedNode.ccRecipients.length === 1 ? 'person' : 'people'} will be notified
                                     </div>
                                   )}
                                 </div>
@@ -1456,24 +1461,31 @@ const DiaryPage: React.FC = () => {
                               
                               <div>
                                 <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
-                                  Execution Type
+                                  Edit Access
                                 </label>
-                                <select className="w-full bg-white dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-2 text-secondary-900 dark:text-white">
-                                  <option value="standard">Standard</option>
-                                  <option value="parallel">Parallel</option>
-                                  <option value="sequential">Sequential</option>
-                                </select>
-                              </div>
-                              
-                              <div>
-                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
-                                  Approval Condition
-                                </label>
-                                <select className="w-full bg-white dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-2 text-secondary-900 dark:text-white">
-                                  <option value="none">None</option>
-                                  <option value="approval">Approval required</option>
-                                  <option value="review">Review required</option>
-                                </select>
+                                <div className="flex items-center space-x-3">
+                                  <label className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedNode.editAccess !== false}
+                                      onChange={(e) => {
+                                        const updatedNode = { ...selectedNode, editAccess: e.target.checked };
+                                        const updatedNodes = processNodes.map(node => 
+                                          node.id === selectedNode.id ? updatedNode : node
+                                        );
+                                        setProcessNodes(updatedNodes);
+                                        setSelectedNode(updatedNode);
+                                      }}
+                                      className="mr-2 rounded border-secondary-300 dark:border-dark-600"
+                                    />
+                                    <span className="text-sm text-secondary-700 dark:text-secondary-300">
+                                      Allow editing when this node is active
+                                    </span>
+                                  </label>
+                                </div>
+                                <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-1">
+                                  When enabled, both executor and CC recipients can edit the form when this node is active
+                                </p>
                               </div>
                             </>
                           )}

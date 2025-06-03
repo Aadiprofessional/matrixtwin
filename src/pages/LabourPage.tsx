@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { RiAddLine, RiGroupLine, RiCalendarCheckLine, RiTimeLine, RiFileListLine, RiUserLine, RiArrowUpLine, RiArrowDownLine, RiCheckLine, RiCloseLine, RiSearchLine, RiArrowRightSLine, RiFilter3Line, RiLayoutGridLine, RiListCheck, RiArrowLeftLine, RiArrowRightLine, RiLoader4Line, RiFlowChart, RiSettings4Line, RiNotificationLine, RiTeamLine, RiPercentLine, RiErrorWarningLine, RiFileWarningLine, RiTaskLine } from 'react-icons/ri';
+import { RiAddLine, RiGroupLine, RiCalendarCheckLine, RiTimeLine, RiFileListLine, RiUserLine, RiArrowUpLine, RiArrowDownLine, RiCheckLine, RiCloseLine, RiSearchLine, RiArrowRightSLine, RiFilter3Line, RiLayoutGridLine, RiListCheck, RiArrowLeftLine, RiArrowRightLine, RiLoader4Line, RiFlowChart, RiSettings4Line, RiNotificationLine, RiTeamLine, RiPercentLine, RiErrorWarningLine, RiFileWarningLine, RiTaskLine, RiDeleteBinLine } from 'react-icons/ri';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { MonthlyReturnTemplate } from '../components/forms/MonthlyReturnTemplate';
@@ -25,6 +25,9 @@ interface ProcessNode {
   type: 'start' | 'node' | 'end';
   name: string;
   executor?: string;
+  executorId?: string;
+  ccRecipients?: User[];
+  editAccess?: boolean;
   settings: Record<string, any>;
 }
 
@@ -43,6 +46,7 @@ interface LabourEntry {
   form_data?: any;
   status: string;
   current_node_index: number;
+  current_active_node?: string;
   labour_workflow_nodes?: any[];
   labour_assignments?: any[];
   labour_comments?: any[];
@@ -204,12 +208,11 @@ const LabourPage: React.FC = () => {
   const [showProcessFlow, setShowProcessFlow] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<any>(null);
   const [processNodes, setProcessNodes] = useState<ProcessNode[]>([
-    { id: 'start', type: 'start', name: 'Start', settings: {} },
-    { id: 'review', type: 'node', name: 'Labour Review & Approval', settings: {} },
-    { id: 'end', type: 'end', name: 'Complete', settings: {} }
+    { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
+    { id: 'review', type: 'node', name: 'Labour Review & Approval', editAccess: true, ccRecipients: [], settings: {} },
+    { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
   ]);
   const [selectedNode, setSelectedNode] = useState<ProcessNode | null>(null);
-  const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
   const [showPeopleSelector, setShowPeopleSelector] = useState(false);
   const [peopleSelectorType, setPeopleSelectorType] = useState<'executor' | 'cc'>('executor');
   
@@ -309,14 +312,18 @@ const LabourPage: React.FC = () => {
     const newNode: ProcessNode = {
       id: `node_${Date.now()}`,
       type: 'node',
-      name: `Process Step ${processNodes.length - 1}`,
+      name: 'New Process Step',
+      editAccess: true,
+      ccRecipients: [],
       settings: {}
     };
     
     // Insert before the end node
-    const newNodes = [...processNodes];
-    newNodes.splice(-1, 0, newNode);
-    setProcessNodes(newNodes);
+    const endNodeIndex = processNodes.findIndex(node => node.type === 'end');
+    const updatedNodes = [...processNodes];
+    updatedNodes.splice(endNodeIndex, 0, newNode);
+    setProcessNodes(updatedNodes);
+    setSelectedNode(newNode);
   };
 
   const openPeopleSelector = (type: 'executor' | 'cc') => {
@@ -326,22 +333,46 @@ const LabourPage: React.FC = () => {
 
   const handleUserSelection = (selectedUser: User) => {
     if (peopleSelectorType === 'executor' && selectedNode) {
+      const updatedNode = { 
+        ...selectedNode, 
+        executor: selectedUser.name,
+        executorId: selectedUser.id // Store executor ID for backend
+      };
       const updatedNodes = processNodes.map(node => 
-        node.id === selectedNode.id 
-          ? { ...node, executor: selectedUser.name }
-          : node
+        node.id === selectedNode.id ? updatedNode : node
       );
       setProcessNodes(updatedNodes);
-      setSelectedNode({ ...selectedNode, executor: selectedUser.name });
-    } else if (peopleSelectorType === 'cc') {
-      if (!selectedCcs.find(cc => cc.id === selectedUser.id)) {
-        setSelectedCcs([...selectedCcs, selectedUser]);
+      setSelectedNode(updatedNode);
+    } else if (peopleSelectorType === 'cc' && selectedNode) {
+      // Add to node-specific CC recipients instead of global
+      const currentCcs = selectedNode.ccRecipients || [];
+      if (!currentCcs.find(cc => cc.id === selectedUser.id)) {
+        const updatedNode = {
+          ...selectedNode,
+          ccRecipients: [...currentCcs, selectedUser]
+        };
+        const updatedNodes = processNodes.map(node => 
+          node.id === selectedNode.id ? updatedNode : node
+        );
+        setProcessNodes(updatedNodes);
+        setSelectedNode(updatedNode);
       }
     }
   };
 
   const removeUserFromCc = (userId: string) => {
-    setSelectedCcs(selectedCcs.filter(cc => cc.id !== userId));
+    if (selectedNode) {
+      const updatedCcs = (selectedNode.ccRecipients || []).filter(cc => cc.id !== userId);
+      const updatedNode = {
+        ...selectedNode,
+        ccRecipients: updatedCcs
+      };
+      const updatedNodes = processNodes.map(node => 
+        node.id === selectedNode.id ? updatedNode : node
+      );
+      setProcessNodes(updatedNodes);
+      setSelectedNode(updatedNode);
+    }
   };
 
   const handleCreateReturn = (formData: any) => {
@@ -355,6 +386,22 @@ const LabourPage: React.FC = () => {
     if (!pendingFormData || !user?.id) return;
     
     try {
+      // Prepare process nodes with proper structure for backend
+      const processNodesForBackend = processNodes.map(node => ({
+        ...node,
+        executorId: node.executorId, // Send executor ID
+        executorName: node.executor, // Send executor name
+        ccRecipients: node.ccRecipients || [], // Send node-specific CCs
+        editAccess: node.editAccess !== false // Default to true if not set
+      }));
+
+      console.log('Sending labour entry data:', {
+        formData: pendingFormData,
+        processNodes: processNodesForBackend,
+        createdBy: user.id,
+        projectId: selectedProject?.id
+      });
+
       const response = await fetch('https://matrixbim-server.onrender.com/api/labour/create', {
         method: 'POST',
         headers: {
@@ -363,8 +410,7 @@ const LabourPage: React.FC = () => {
         },
         body: JSON.stringify({
           formData: pendingFormData,
-          processNodes: processNodes,
-          selectedCcs: selectedCcs,
+          processNodes: processNodesForBackend,
           createdBy: user.id,
           projectId: selectedProject?.id
         })
@@ -372,21 +418,7 @@ const LabourPage: React.FC = () => {
 
       if (response.ok) {
         const result = await response.json();
-        
-        // Send email notifications
-        try {
-          const ccEmails = selectedCcs.map(cc => cc.email);
-          await emailService.sendLabourNotification({
-            entryId: result.id || 'new',
-            projectName: selectedProject?.name || 'Unknown Project',
-            action: 'created',
-            ccRecipients: ccEmails,
-            formData: pendingFormData,
-            currentNodeName: processNodes.find(node => node.type === 'node')?.name
-          });
-        } catch (emailError) {
-          console.error('Failed to send email notifications:', emailError);
-        }
+        console.log('Labour entry created successfully:', result);
         
         // Refresh labour entries
         await fetchLabourEntries();
@@ -394,13 +426,20 @@ const LabourPage: React.FC = () => {
         // Reset states
         setShowProcessFlow(false);
         setPendingFormData(null);
-        setSelectedCcs([]);
         setSelectedNode(null);
+        
+        // Reset process nodes to default
+        setProcessNodes([
+          { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
+          { id: 'review', type: 'node', name: 'Review & Approval', editAccess: true, ccRecipients: [], settings: {} },
+          { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
+        ]);
         
         // Show success message
         alert('Labour entry created successfully! Notifications have been sent to assigned users.');
       } else {
         const error = await response.json();
+        console.error('Failed to create labour entry:', error);
         alert(`Failed to create labour entry: ${error.error}`);
       }
     } catch (error) {
@@ -412,7 +451,6 @@ const LabourPage: React.FC = () => {
   const handleCancelProcessFlow = () => {
     setPendingFormData(null);
     setShowProcessFlow(false);
-    setSelectedCcs([]);
     setSelectedNode(null);
   };
 
@@ -476,7 +514,8 @@ const LabourPage: React.FC = () => {
         },
         body: JSON.stringify({
           formData: formData,
-          updatedBy: user.id
+          action: 'update',
+          userId: user.id
         })
       });
 
@@ -484,101 +523,171 @@ const LabourPage: React.FC = () => {
         // Refresh labour entries
         await fetchLabourEntries();
         setShowFormView(false);
-        setSelectedLabourEntry(null);
-        alert('Labour entry updated successfully!');
+        alert('Form updated successfully!');
       } else {
         const error = await response.json();
-        alert(`Failed to update labour entry: ${error.error}`);
+        alert(`Failed to update form: ${error.error}`);
       }
     } catch (error) {
-      console.error('Error updating labour entry:', error);
-      alert('Failed to update labour entry. Please try again.');
+      console.error('Error updating form:', error);
+      alert('Failed to update form. Please try again.');
     }
   };
 
-  const handleWorkflowAction = async (action: 'approve' | 'reject') => {
+  // Handle workflow actions (approve/reject/back to previous)
+  const handleWorkflowAction = async (action: 'approve' | 'reject' | 'back') => {
     if (!selectedLabourEntry || !user?.id) return;
-    
+
+    let comment = '';
+    if (action === 'reject' || action === 'back') {
+      const promptResult = prompt(`Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`);
+      if (promptResult === null || promptResult.trim() === '') {
+        alert(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
+        return;
+      }
+      comment = promptResult.trim();
+    }
+
     try {
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/labour/${selectedLabourEntry.id}/workflow`, {
-        method: 'POST',
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/labour/${selectedLabourEntry.id}/update`, {
+        method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           action: action,
-          userId: user.id,
-          comment: '' // You can add a comment input if needed
+          comment: comment,
+          userId: user.id
         })
       });
 
       if (response.ok) {
-        const result = await response.json();
+        // Backend handles all email notifications
         
-        // Send email notifications
-        try {
-          const ccEmails = selectedLabourEntry.labour_assignments?.map(assignment => assignment.user_email).filter(Boolean) || [];
-          await emailService.sendLabourNotification({
-            entryId: selectedLabourEntry.id,
-            projectName: selectedLabourEntry.project,
-            action: action === 'approve' ? 'approved' : 'rejected',
-            ccRecipients: ccEmails,
-            formData: selectedLabourEntry.form_data,
-            currentNodeName: selectedLabourEntry.labour_workflow_nodes?.find(node => 
-              node.node_order === selectedLabourEntry.current_node_index
-            )?.node_name,
-            comments: '' // Add comment if available
-          });
-        } catch (emailError) {
-          console.error('Failed to send email notifications:', emailError);
-        }
-        
-        // Refresh labour entries
+        // Refresh labour entries and entry details
         await fetchLabourEntries();
-        setShowDetails(false);
-        setSelectedLabourEntry(null);
-        alert(`Labour entry ${action}d successfully!`);
+        await handleViewDetails(selectedLabourEntry);
+        
+        alert(`Entry ${action}d successfully! Notifications have been sent.`);
       } else {
         const error = await response.json();
-        alert(`Failed to ${action} labour entry: ${error.error}`);
+        alert(`Failed to ${action} entry: ${error.error}`);
       }
     } catch (error) {
-      console.error(`Error ${action}ing labour entry:`, error);
-      alert(`Failed to ${action} labour entry. Please try again.`);
+      console.error(`Error ${action}ing entry:`, error);
+      alert(`Failed to ${action} entry. Please try again.`);
     }
   };
-
+  
+  // Check if user can edit/approve the labour entry
   const canUserEditEntry = (entry: LabourEntry) => {
-    if (!user) return false;
+    if (!user?.id) return false;
     
-    // Admin can edit any entry
-    if (user.role === 'admin') return true;
+    // Only admin can edit when entry is in initial state or rejected
+    if (user.role === 'admin' && (entry.status === 'pending' || entry.status === 'rejected')) {
+      return true;
+    }
     
-    // Creator can edit their own entries
-    if (entry.created_by === user.id) return true;
-    
-    // Check if user is assigned to this entry
-    return entry.labour_assignments?.some(assignment => 
-      assignment.user_id === user.id && assignment.role === 'executor'
-    ) || false;
+    return false;
   };
 
-  const canUserApproveEntry = (entry: LabourEntry) => {
-    if (!user) return false;
+  // Check if user can update form data (current node executor or CC with edit access)
+  const canUserUpdateForm = (entry: LabourEntry) => {
+    if (!user?.id || entry.status !== 'pending') return false;
     
-    // Only allow approval if entry is pending and user has permission
-    if (entry.status !== 'pending') return false;
-    
-    // Admin can approve any entry
+    // Admin can always edit
     if (user.role === 'admin') return true;
     
-    // Check if user is the current workflow executor
-    const currentNode = entry.labour_workflow_nodes?.find(node => 
-      node.node_order === entry.current_node_index && node.status === 'pending'
+    // Check if user is the executor for current workflow node
+    const currentNode = entry.labour_workflow_nodes?.find((node: any) => 
+      node.node_order === entry.current_node_index && 
+      node.status === 'pending'
     );
     
-    return currentNode?.executor_name === user.name;
+    if (currentNode) {
+      // Executor can always edit
+      if (currentNode.executor_id === user.id) return true;
+      
+      // CC can edit if edit access is enabled for this node
+      if (currentNode.edit_access) {
+        const isCC = entry.labour_assignments?.some((a: any) => 
+          a.user_id === user.id && a.node_id === currentNode.node_id
+        );
+        if (isCC) return true;
+      }
+    }
+    
+    return false;
+  };
+
+  // Check if user can approve/reject current workflow step (only executor)
+  const canUserApproveEntry = (entry: LabourEntry) => {
+    if (!user?.id || entry.status !== 'pending') return false;
+    
+    // Admin can always approve
+    if (user.role === 'admin') return true;
+    
+    // Check if user is the executor for current workflow node
+    const currentNode = entry.labour_workflow_nodes?.find((node: any) => 
+      node.node_order === entry.current_node_index && 
+      node.status === 'pending'
+    );
+    
+    if (currentNode && currentNode.executor_id === user.id) return true;
+    
+    return false;
+  };
+
+  // Check if user can view entry (all assigned users, executors, and admin)
+  const canUserViewEntry = (entry: LabourEntry) => {
+    if (!user?.id) return false;
+    
+    // Admin can always view
+    if (user.role === 'admin') return true;
+    
+    // Creator can view
+    if (entry.created_by === user.id) return true;
+    
+    // Assigned users (CC) can view
+    if (entry.labour_assignments?.some((a: any) => a.user_id === user.id)) return true;
+    
+    // Executors can view
+    if (entry.labour_workflow_nodes?.some((node: any) => node.executor_id === user.id)) return true;
+    
+    return false;
+  };
+  
+  // Delete labour entry (admin only)
+  const handleDeleteEntry = async (entry: LabourEntry) => {
+    if (!user?.id || user.role !== 'admin') {
+      alert('Only admins can delete labour entries.');
+      return;
+    }
+
+    const confirmDelete = window.confirm(`Are you sure you want to delete this labour entry from ${entry.date}? This action cannot be undone.`);
+    if (!confirmDelete) return;
+
+    try {
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/labour/${entry.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        // Refresh labour entries
+        await fetchLabourEntries();
+        alert('Labour entry deleted successfully!');
+      } else {
+        const error = await response.json();
+        alert(`Failed to delete labour entry: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting labour entry:', error);
+      alert('Failed to delete labour entry. Please try again.');
+    }
   };
 
   const getWorkflowStatusBadge = (entry: LabourEntry) => {
@@ -1133,24 +1242,40 @@ const LabourPage: React.FC = () => {
                       
                       <div className="flex justify-end mt-4">
                         <div className="flex space-x-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleViewForm(entry)}
-                            leftIcon={<RiFileListLine />}
-                            className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                          >
-                            View Form
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleViewDetails(entry)}
-                            rightIcon={<RiArrowRightLine />}
-                            className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                          >
-                            View Details
-                          </Button>
+                          {canUserViewEntry(entry) && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleViewForm(entry)}
+                              leftIcon={<RiFileListLine />}
+                              className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                            >
+                              {canUserUpdateForm(entry) ? 'Edit Form' : 'View Form'}
+                            </Button>
+                          )}
+                          {canUserViewEntry(entry) && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleViewDetails(entry)}
+                              rightIcon={<RiArrowRightLine />}
+                              className="hover:bg-primary-50 dark:hover:bg-primary-900/20"
+                            >
+                              View Details
+                            </Button>
+                          )}
+                          {/* Admin delete button */}
+                          {user?.role === 'admin' && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleDeleteEntry(entry)}
+                              leftIcon={<RiDeleteBinLine />}
+                              className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
+                            >
+                              Delete
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1198,22 +1323,37 @@ const LabourPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                       <div className="flex justify-end space-x-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleViewForm(entry)}
-                          className="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-                        >
-                          Form
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleViewDetails(entry)}
-                          className="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-                        >
-                          Details
-                        </Button>
+                        {canUserViewEntry(entry) && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleViewForm(entry)}
+                            className="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                          >
+                            {canUserUpdateForm(entry) ? 'Edit' : 'Form'}
+                          </Button>
+                        )}
+                        {canUserViewEntry(entry) && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleViewDetails(entry)}
+                            className="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                          >
+                            Details
+                          </Button>
+                        )}
+                        {/* Admin delete button */}
+                        {user?.role === 'admin' && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleDeleteEntry(entry)}
+                            className="hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                          >
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1330,17 +1470,17 @@ const LabourPage: React.FC = () => {
                                 <div className="flex flex-col space-y-2">
                                   <div className="flex items-center space-x-2">
                                     <div className="flex-grow bg-secondary-50 dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-3 min-h-[50px]">
-                                      {selectedCcs.length > 0 ? (
+                                      {selectedNode.ccRecipients && selectedNode.ccRecipients.length > 0 ? (
                                         <div className="flex flex-wrap gap-2">
-                                          {selectedCcs.map(cc => (
+                                          {selectedNode.ccRecipients.map(cc => (
                                             <div 
                                               key={cc.id} 
-                                              className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full flex items-center text-sm"
+                                              className="bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-3 py-1 rounded-full flex items-center text-sm"
                                             >
                                               <span className="mr-2">{cc.name}</span>
                                               <button
                                                 type="button"
-                                                className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200"
+                                                className="text-primary-500 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-200"
                                                 onClick={() => removeUserFromCc(cc.id)}
                                               >
                                                 <RiCloseLine />
@@ -1361,13 +1501,42 @@ const LabourPage: React.FC = () => {
                                     </Button>
                                   </div>
                                   
-                                  {selectedCcs.length > 0 && (
+                                  {selectedNode.ccRecipients && selectedNode.ccRecipients.length > 0 && (
                                     <div className="text-xs text-secondary-500 dark:text-secondary-400 flex items-center">
                                       <RiTeamLine className="mr-1" />
-                                      {selectedCcs.length} {selectedCcs.length === 1 ? 'person' : 'people'} will be notified
+                                      {selectedNode.ccRecipients.length} {selectedNode.ccRecipients.length === 1 ? 'person' : 'people'} will be notified
                                     </div>
                                   )}
                                 </div>
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                  Edit Access
+                                </label>
+                                <div className="flex items-center space-x-3">
+                                  <label className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedNode.editAccess !== false}
+                                      onChange={(e) => {
+                                        const updatedNode = { ...selectedNode, editAccess: e.target.checked };
+                                        const updatedNodes = processNodes.map(node => 
+                                          node.id === selectedNode.id ? updatedNode : node
+                                        );
+                                        setProcessNodes(updatedNodes);
+                                        setSelectedNode(updatedNode);
+                                      }}
+                                      className="mr-2 rounded border-secondary-300 dark:border-secondary-600"
+                                    />
+                                    <span className="text-sm text-secondary-700 dark:text-secondary-300">
+                                      Allow editing when this node is active
+                                    </span>
+                                  </label>
+                                </div>
+                                <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-1">
+                                  When enabled, both executor and CC recipients can edit the form when this node is active
+                                </p>
                               </div>
                               
                               <div>
@@ -1613,24 +1782,66 @@ const LabourPage: React.FC = () => {
                 )}
                 
                 <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  {/* Workflow Action Buttons */}
+                  <Button 
+                    variant="outline"
+                    leftIcon={<RiArrowRightLine />}
+                  >
+                    Export
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    leftIcon={<RiFileListLine />}
+                  >
+                    Print
+                  </Button>
+                  
+                  {/* Admin delete button */}
+                  {user?.role === 'admin' && (
+                    <Button 
+                      variant="outline"
+                      leftIcon={<RiDeleteBinLine />}
+                      onClick={() => {
+                        setShowDetails(false);
+                        handleDeleteEntry(selectedLabourEntry);
+                      }}
+                      className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    >
+                      Delete Entry
+                    </Button>
+                  )}
+                  
+                  {/* Workflow Action Buttons based on user permissions */}
                   {selectedLabourEntry.status === 'pending' && (
                     <>
+                      {/* Admin can edit when entry is pending or rejected */}
                       {canUserEditEntry(selectedLabourEntry) && (
                         <Button 
                           variant="outline"
                           leftIcon={<RiFileWarningLine />}
                           onClick={() => {
                             setShowDetails(false);
-                            handleViewForm(selectedLabourEntry);
+                            setShowFormView(true);
                           }}
                         >
                           Edit Form
                         </Button>
                       )}
                       
+                      {/* Current node executor can approve, reject, or send back */}
                       {canUserApproveEntry(selectedLabourEntry) && (
                         <>
+                          {/* Back to previous node button (only if not first node) */}
+                          {selectedLabourEntry.current_node_index > 0 && (
+                            <Button 
+                              variant="outline"
+                              leftIcon={<RiArrowLeftLine />}
+                              onClick={() => handleWorkflowAction('back')}
+                              className="text-orange-600 border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                            >
+                              Send Back
+                            </Button>
+                          )}
+                          
                           <Button 
                             variant="outline"
                             leftIcon={<RiCloseLine />}
@@ -1650,6 +1861,21 @@ const LabourPage: React.FC = () => {
                         </>
                       )}
                     </>
+                  )}
+                  
+                  {/* Rejected status - only admin can resolve */}
+                  {selectedLabourEntry.status === 'rejected' && canUserEditEntry(selectedLabourEntry) && (
+                    <Button 
+                      variant="primary"
+                      leftIcon={<RiSettings4Line />}
+                      onClick={() => {
+                        setShowDetails(false);
+                        setShowFormView(true);
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      Resolve & Edit
+                    </Button>
                   )}
                   
                   <Button 

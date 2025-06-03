@@ -25,7 +25,10 @@ interface ProcessNode {
   id: string;
   type: 'start' | 'node' | 'end';
   name: string;
-  executor?: string;
+  executor?: string; // Keep as string for compatibility
+  executorId?: string; // Add executor ID for backend
+  ccRecipients?: User[]; // Add node-specific CC recipients
+  editAccess?: boolean; // Add edit access flag
   settings: Record<string, any>;
 }
 
@@ -44,6 +47,7 @@ interface SafetyEntry {
   form_data?: any;
   status: string;
   current_node_index: number;
+  current_active_node?: string; // Add current active node tracking
   safety_workflow_nodes?: any[];
   safety_assignments?: any[];
   safety_comments?: any[];
@@ -198,9 +202,9 @@ const SafetyPage: React.FC = () => {
   const [showProcessFlow, setShowProcessFlow] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<any>(null);
   const [processNodes, setProcessNodes] = useState<ProcessNode[]>([
-    { id: 'start', type: 'start', name: 'Start', settings: {} },
-    { id: 'review', type: 'node', name: 'Safety Review & Approval', settings: {} },
-    { id: 'end', type: 'end', name: 'Complete', settings: {} }
+    { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
+    { id: 'review', type: 'node', name: 'Safety Review & Approval', editAccess: true, ccRecipients: [], settings: {} },
+    { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
   ]);
   const [selectedNode, setSelectedNode] = useState<ProcessNode | null>(null);
   const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
@@ -329,14 +333,18 @@ const SafetyPage: React.FC = () => {
     const newNode: ProcessNode = {
       id: `node_${Date.now()}`,
       type: 'node',
-      name: `Process Step ${processNodes.length - 1}`,
+      name: 'New Process Step',
+      editAccess: true,
+      ccRecipients: [],
       settings: {}
     };
     
     // Insert before the end node
-    const newNodes = [...processNodes];
-    newNodes.splice(-1, 0, newNode);
-    setProcessNodes(newNodes);
+    const endNodeIndex = processNodes.findIndex(node => node.type === 'end');
+    const updatedNodes = [...processNodes];
+    updatedNodes.splice(endNodeIndex, 0, newNode);
+    setProcessNodes(updatedNodes);
+    setSelectedNode(newNode);
   };
 
   const openPeopleSelector = (type: 'executor' | 'cc') => {
@@ -346,22 +354,46 @@ const SafetyPage: React.FC = () => {
 
   const handleUserSelection = (selectedUser: User) => {
     if (peopleSelectorType === 'executor' && selectedNode) {
+      const updatedNode = { 
+        ...selectedNode, 
+        executor: selectedUser.name,
+        executorId: selectedUser.id // Store executor ID for backend
+      };
       const updatedNodes = processNodes.map(node => 
-        node.id === selectedNode.id 
-          ? { ...node, executor: selectedUser.name }
-          : node
+        node.id === selectedNode.id ? updatedNode : node
       );
       setProcessNodes(updatedNodes);
-      setSelectedNode({ ...selectedNode, executor: selectedUser.name });
-    } else if (peopleSelectorType === 'cc') {
-      if (!selectedCcs.find(cc => cc.id === selectedUser.id)) {
-        setSelectedCcs([...selectedCcs, selectedUser]);
+      setSelectedNode(updatedNode);
+    } else if (peopleSelectorType === 'cc' && selectedNode) {
+      // Add to node-specific CC recipients instead of global
+      const currentCcs = selectedNode.ccRecipients || [];
+      if (!currentCcs.find(cc => cc.id === selectedUser.id)) {
+        const updatedNode = {
+          ...selectedNode,
+          ccRecipients: [...currentCcs, selectedUser]
+        };
+        const updatedNodes = processNodes.map(node => 
+          node.id === selectedNode.id ? updatedNode : node
+        );
+        setProcessNodes(updatedNodes);
+        setSelectedNode(updatedNode);
       }
     }
   };
 
   const removeUserFromCc = (userId: string) => {
-    setSelectedCcs(selectedCcs.filter(cc => cc.id !== userId));
+    if (selectedNode) {
+      const updatedCcs = (selectedNode.ccRecipients || []).filter(cc => cc.id !== userId);
+      const updatedNode = {
+        ...selectedNode,
+        ccRecipients: updatedCcs
+      };
+      const updatedNodes = processNodes.map(node => 
+        node.id === selectedNode.id ? updatedNode : node
+      );
+      setProcessNodes(updatedNodes);
+      setSelectedNode(updatedNode);
+    }
   };
 
   const handleCreateInspection = (formData: any) => {
@@ -375,6 +407,22 @@ const SafetyPage: React.FC = () => {
     if (!pendingFormData || !user?.id) return;
     
     try {
+      // Prepare process nodes with proper structure for backend
+      const processNodesForBackend = processNodes.map(node => ({
+        ...node,
+        executorId: node.executorId, // Send executor ID
+        executorName: node.executor, // Send executor name
+        ccRecipients: node.ccRecipients || [], // Send node-specific CCs
+        editAccess: node.editAccess !== false // Default to true if not set
+      }));
+
+      console.log('Sending safety entry data:', {
+        formData: pendingFormData,
+        processNodes: processNodesForBackend,
+        createdBy: user.id,
+        projectId: selectedProject?.id
+      });
+
       const response = await fetch('https://matrixbim-server.onrender.com/api/safety/create', {
         method: 'POST',
         headers: {
@@ -383,8 +431,7 @@ const SafetyPage: React.FC = () => {
         },
         body: JSON.stringify({
           formData: pendingFormData,
-          processNodes: processNodes,
-          selectedCcs: selectedCcs,
+          processNodes: processNodesForBackend,
           createdBy: user.id,
           projectId: selectedProject?.id
         })
@@ -392,21 +439,7 @@ const SafetyPage: React.FC = () => {
 
       if (response.ok) {
         const result = await response.json();
-        
-        // Send email notifications
-        try {
-          const ccEmails = selectedCcs.map(cc => cc.email);
-          await emailService.sendSafetyNotification({
-            entryId: result.id || 'new',
-            projectName: selectedProject?.name || 'Unknown Project',
-            action: 'created',
-            ccRecipients: ccEmails,
-            formData: pendingFormData,
-            currentNodeName: processNodes.find(node => node.type === 'node')?.name
-          });
-        } catch (emailError) {
-          console.error('Failed to send email notifications:', emailError);
-        }
+        console.log('Safety entry created successfully:', result);
         
         // Refresh safety entries
         await fetchSafetyEntries();
@@ -414,13 +447,20 @@ const SafetyPage: React.FC = () => {
         // Reset states
         setShowProcessFlow(false);
         setPendingFormData(null);
-        setSelectedCcs([]);
         setSelectedNode(null);
+        
+        // Reset process nodes to default
+        setProcessNodes([
+          { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
+          { id: 'review', type: 'node', name: 'Safety Review & Approval', editAccess: true, ccRecipients: [], settings: {} },
+          { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
+        ]);
         
         // Show success message
         alert('Safety entry created successfully! Notifications have been sent to assigned users.');
       } else {
         const error = await response.json();
+        console.error('Failed to create safety entry:', error);
         alert(`Failed to create safety entry: ${error.error}`);
       }
     } catch (error) {
@@ -516,89 +556,128 @@ const SafetyPage: React.FC = () => {
     }
   };
 
-  const handleWorkflowAction = async (action: 'approve' | 'reject') => {
+  // Handle workflow actions (approve/reject/back to previous)
+  const handleWorkflowAction = async (action: 'approve' | 'reject' | 'back') => {
     if (!selectedSafetyEntry || !user?.id) return;
-    
+
+    let comment = '';
+    if (action === 'reject' || action === 'back') {
+      const promptResult = prompt(`Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`);
+      if (promptResult === null || promptResult.trim() === '') {
+        alert(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
+        return;
+      }
+      comment = promptResult.trim();
+    }
+
     try {
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/safety/${selectedSafetyEntry.id}/workflow`, {
-        method: 'POST',
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/safety/${selectedSafetyEntry.id}/update`, {
+        method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           action: action,
-          userId: user.id,
-          comment: '' // You can add a comment input if needed
+          comment: comment,
+          userId: user.id
         })
       });
 
       if (response.ok) {
-        const result = await response.json();
+        // Backend handles all email notifications
         
-        // Send email notifications
-        try {
-          const ccEmails = selectedSafetyEntry.safety_assignments?.map(assignment => assignment.user_email).filter(Boolean) || [];
-          await emailService.sendSafetyNotification({
-            entryId: selectedSafetyEntry.id,
-            projectName: selectedSafetyEntry.project,
-            action: action === 'approve' ? 'approved' : 'rejected',
-            ccRecipients: ccEmails,
-            formData: selectedSafetyEntry.form_data,
-            currentNodeName: selectedSafetyEntry.safety_workflow_nodes?.find(node => 
-              node.node_order === selectedSafetyEntry.current_node_index
-            )?.node_name,
-            comments: '' // Add comment if available
-          });
-        } catch (emailError) {
-          console.error('Failed to send email notifications:', emailError);
-        }
-        
-        // Refresh safety entries
+        // Refresh safety entries and entry details
         await fetchSafetyEntries();
-        setShowDetails(false);
-        setSelectedSafetyEntry(null);
-        alert(`Safety entry ${action}d successfully!`);
+        await handleViewDetails(selectedSafetyEntry);
+        
+        alert(`Entry ${action}d successfully! Notifications have been sent.`);
       } else {
         const error = await response.json();
-        alert(`Failed to ${action} safety entry: ${error.error}`);
+        alert(`Failed to ${action} entry: ${error.error}`);
       }
     } catch (error) {
-      console.error(`Error ${action}ing safety entry:`, error);
-      alert(`Failed to ${action} safety entry. Please try again.`);
+      console.error(`Error ${action}ing entry:`, error);
+      alert(`Failed to ${action} entry. Please try again.`);
     }
   };
 
+  // Check if user can edit/approve the safety entry
   const canUserEditEntry = (entry: SafetyEntry) => {
-    if (!user) return false;
+    if (!user?.id) return false;
     
-    // Admin can edit any entry
-    if (user.role === 'admin') return true;
+    // Only admin can edit when entry is in initial state or rejected
+    if (user.role === 'admin' && (entry.status === 'pending' || entry.status === 'rejected')) {
+      return true;
+    }
     
-    // Creator can edit their own entries
-    if (entry.created_by === user.id) return true;
-    
-    // Check if user is assigned to this entry
-    return entry.safety_assignments?.some(assignment => 
-      assignment.user_id === user.id && assignment.role === 'executor'
-    ) || false;
+    return false;
   };
 
-  const canUserApproveEntry = (entry: SafetyEntry) => {
-    if (!user) return false;
+  // Check if user can update form data (current node executor or CC with edit access)
+  const canUserUpdateForm = (entry: SafetyEntry) => {
+    if (!user?.id || entry.status !== 'pending') return false;
     
-    // Only allow approval if entry is pending and user has permission
-    if (entry.status !== 'pending') return false;
-    
-    // Admin can approve any entry
+    // Admin can always edit
     if (user.role === 'admin') return true;
     
-    // Check if user is the current workflow executor
-    const currentNode = entry.safety_workflow_nodes?.find(node => 
-      node.node_order === entry.current_node_index && node.status === 'pending'
+    // Check if user is the executor for current workflow node
+    const currentNode = entry.safety_workflow_nodes?.find((node: any) => 
+      node.node_order === entry.current_node_index && 
+      node.status === 'pending'
     );
     
-    return currentNode?.executor_name === user.name;
+    if (currentNode) {
+      // Executor can always edit
+      if (currentNode.executor_id === user.id) return true;
+      
+      // CC can edit if edit access is enabled for this node
+      if (currentNode.edit_access) {
+        const isCC = entry.safety_assignments?.some((a: any) => 
+          a.user_id === user.id && a.node_id === currentNode.node_id
+        );
+        if (isCC) return true;
+      }
+    }
+    
+    return false;
+  };
+
+  // Check if user can approve/reject current workflow step (only executor)
+  const canUserApproveEntry = (entry: SafetyEntry) => {
+    if (!user?.id || entry.status !== 'pending') return false;
+    
+    // Admin can always approve
+    if (user.role === 'admin') return true;
+    
+    // Check if user is the executor for current workflow node
+    const currentNode = entry.safety_workflow_nodes?.find((node: any) => 
+      node.node_order === entry.current_node_index && 
+      node.status === 'pending'
+    );
+    
+    if (currentNode && currentNode.executor_id === user.id) return true;
+    
+    return false;
+  };
+
+  // Check if user can view entry (all assigned users, executors, and admin)
+  const canUserViewEntry = (entry: SafetyEntry) => {
+    if (!user?.id) return false;
+    
+    // Admin can always view
+    if (user.role === 'admin') return true;
+    
+    // Creator can view
+    if (entry.created_by === user.id) return true;
+    
+    // Assigned users (CC) can view
+    if (entry.safety_assignments?.some((a: any) => a.user_id === user.id)) return true;
+    
+    // Executors can view
+    if (entry.safety_workflow_nodes?.some((node: any) => node.executor_id === user.id)) return true;
+    
+    return false;
   };
 
   const getWeatherIcon = (weather: string) => {
@@ -672,6 +751,38 @@ const SafetyPage: React.FC = () => {
         {entry.status?.charAt(0).toUpperCase() + entry.status?.slice(1) || 'Pending'}
       </span>
     );
+  };
+
+  // Delete safety entry (admin only)
+  const handleDeleteEntry = async (entry: SafetyEntry) => {
+    if (!user?.id || user.role !== 'admin') {
+      alert('Only admins can delete safety entries.');
+      return;
+    }
+
+    const confirmDelete = window.confirm(`Are you sure you want to delete this safety entry from ${entry.date}? This action cannot be undone.`);
+    if (!confirmDelete) return;
+
+    try {
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/safety/${entry.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        // Refresh safety entries
+        await fetchSafetyEntries();
+        alert('Safety entry deleted successfully!');
+      } else {
+        const error = await response.json();
+        alert(`Failed to delete safety entry: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting safety entry:', error);
+      alert('Failed to delete safety entry. Please try again.');
+    }
   };
 
   return (
@@ -1304,24 +1415,40 @@ const SafetyPage: React.FC = () => {
                         
                         <div className="flex justify-end mt-4">
                           <div className="flex space-x-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleViewForm(entry)}
-                              leftIcon={<RiFileWarningLine />}
-                              className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                            >
-                              View Form
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleViewDetails(entry)}
-                              rightIcon={<RiArrowRightLine />}
-                              className="hover:bg-red-50 dark:hover:bg-red-900/20"
-                            >
-                              View Details
-                            </Button>
+                            {canUserViewEntry(entry) && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleViewForm(entry)}
+                                leftIcon={<RiFileWarningLine />}
+                                className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                              >
+                                {canUserUpdateForm(entry) ? 'Edit Form' : 'View Form'}
+                              </Button>
+                            )}
+                            {canUserViewEntry(entry) && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleViewDetails(entry)}
+                                rightIcon={<RiArrowRightLine />}
+                                className="hover:bg-red-50 dark:hover:bg-red-900/20"
+                              >
+                                View Details
+                              </Button>
+                            )}
+                            {/* Admin delete button */}
+                            {user?.role === 'admin' && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleDeleteEntry(entry)}
+                                leftIcon={<RiCloseLine />}
+                                className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
+                              >
+                                Delete
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1389,22 +1516,40 @@ const SafetyPage: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                           <div className="flex justify-end space-x-2">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleViewForm(entry)}
-                              className="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-                            >
-                              Form
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleViewDetails(entry)}
-                              className="hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                            >
-                              Details
-                            </Button>
+                            {canUserViewEntry(entry) && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleViewForm(entry)}
+                                leftIcon={<RiFileWarningLine />}
+                                className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                              >
+                                {canUserUpdateForm(entry) ? 'Edit Form' : 'View Form'}
+                              </Button>
+                            )}
+                            {canUserViewEntry(entry) && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleViewDetails(entry)}
+                                rightIcon={<RiArrowRightLine />}
+                                className="hover:bg-red-50 dark:hover:bg-red-900/20"
+                              >
+                                View Details
+                              </Button>
+                            )}
+                            {/* Admin delete button */}
+                            {user?.role === 'admin' && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleDeleteEntry(entry)}
+                                leftIcon={<RiCloseLine />}
+                                className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
+                              >
+                                Delete
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1506,9 +1651,9 @@ const SafetyPage: React.FC = () => {
                                 <div className="flex flex-col space-y-2">
                                   <div className="flex items-center space-x-2">
                                     <div className="flex-grow bg-secondary-50 dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-3 min-h-[50px]">
-                                      {selectedCcs.length > 0 ? (
+                                      {(selectedNode.ccRecipients || []).length > 0 ? (
                                         <div className="flex flex-wrap gap-2">
-                                          {selectedCcs.map(cc => (
+                                          {(selectedNode.ccRecipients || []).map(cc => (
                                             <div 
                                               key={cc.id} 
                                               className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-3 py-1 rounded-full flex items-center text-sm"
@@ -1537,13 +1682,38 @@ const SafetyPage: React.FC = () => {
                                     </Button>
                                   </div>
                                   
-                                  {selectedCcs.length > 0 && (
+                                  {(selectedNode.ccRecipients || []).length > 0 && (
                                     <div className="text-xs text-secondary-500 dark:text-secondary-400 flex items-center">
                                       <RiTeamLine className="mr-1" />
-                                      {selectedCcs.length} {selectedCcs.length === 1 ? 'person' : 'people'} will be notified
+                                      {(selectedNode.ccRecipients || []).length} {(selectedNode.ccRecipients || []).length === 1 ? 'person' : 'people'} will be notified
                                     </div>
                                   )}
                                 </div>
+                              </div>
+                              
+                              {/* Edit Access Toggle */}
+                              <div>
+                                <label className="flex items-center space-x-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedNode.editAccess !== false}
+                                    onChange={(e) => {
+                                      const updatedNode = { ...selectedNode, editAccess: e.target.checked };
+                                      const updatedNodes = processNodes.map(node => 
+                                        node.id === selectedNode.id ? updatedNode : node
+                                      );
+                                      setProcessNodes(updatedNodes);
+                                      setSelectedNode(updatedNode);
+                                    }}
+                                    className="rounded border-secondary-300 dark:border-secondary-600 text-red-600 focus:ring-red-500"
+                                  />
+                                  <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300">
+                                    Allow CC recipients to edit when this node is active
+                                  </span>
+                                </label>
+                                <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-1">
+                                  When enabled, CC recipients can edit the form data when this workflow node is active. Executors can always edit.
+                                </p>
                               </div>
                               
                               <div>
@@ -1817,6 +1987,17 @@ const SafetyPage: React.FC = () => {
                       
                       {canUserApproveEntry(selectedSafetyEntry) && (
                         <>
+                          {/* Back to Previous Node Button (if not at first node) */}
+                          {selectedSafetyEntry.current_node_index > 0 && (
+                            <Button 
+                              variant="outline"
+                              leftIcon={<RiArrowLeftLine />}
+                              onClick={() => handleWorkflowAction('back')}
+                              className="text-blue-600 border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                            >
+                              Back to Previous
+                            </Button>
+                          )}
                           <Button 
                             variant="outline"
                             leftIcon={<RiCloseLine />}

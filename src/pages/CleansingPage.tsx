@@ -25,6 +25,9 @@ interface ProcessNode {
   type: 'start' | 'node' | 'end';
   name: string;
   executor?: string;
+  executorId?: string; // Add executor ID for backend
+  ccRecipients?: User[]; // Add node-specific CC recipients
+  editAccess?: boolean; // Add edit access flag
   settings: Record<string, any>;
 }
 
@@ -41,6 +44,7 @@ interface CleansingEntry {
   form_data?: any;
   status: string;
   current_node_index: number;
+  current_active_node?: string; // Add current active node tracking
   cleansing_workflow_nodes?: any[];
   cleansing_assignments?: any[];
   cleansing_comments?: any[];
@@ -202,9 +206,9 @@ const CleansingPage: React.FC = () => {
   const [showProcessFlow, setShowProcessFlow] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<any>(null);
   const [processNodes, setProcessNodes] = useState<ProcessNode[]>([
-    { id: 'start', type: 'start', name: 'Start', settings: {} },
-    { id: 'review', type: 'node', name: 'Cleansing Review & Approval', settings: {} },
-    { id: 'end', type: 'end', name: 'Complete', settings: {} }
+    { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
+    { id: 'review', type: 'node', name: 'Cleansing Review & Approval', editAccess: true, ccRecipients: [], settings: {} },
+    { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
   ]);
   const [selectedNode, setSelectedNode] = useState<ProcessNode | null>(null);
   const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
@@ -322,14 +326,18 @@ const CleansingPage: React.FC = () => {
     const newNode: ProcessNode = {
       id: `node_${Date.now()}`,
       type: 'node',
-      name: `Process Step ${processNodes.length - 1}`,
+      name: 'New Process Step',
+      editAccess: true,
+      ccRecipients: [],
       settings: {}
     };
     
     // Insert before the end node
-    const newNodes = [...processNodes];
-    newNodes.splice(-1, 0, newNode);
-    setProcessNodes(newNodes);
+    const endNodeIndex = processNodes.findIndex(node => node.type === 'end');
+    const updatedNodes = [...processNodes];
+    updatedNodes.splice(endNodeIndex, 0, newNode);
+    setProcessNodes(updatedNodes);
+    setSelectedNode(newNode);
   };
 
   const openPeopleSelector = (type: 'executor' | 'cc') => {
@@ -339,22 +347,46 @@ const CleansingPage: React.FC = () => {
 
   const handleUserSelection = (selectedUser: User) => {
     if (peopleSelectorType === 'executor' && selectedNode) {
+      const updatedNode = { 
+        ...selectedNode, 
+        executor: selectedUser.name,
+        executorId: selectedUser.id // Store executor ID for backend
+      };
       const updatedNodes = processNodes.map(node => 
-        node.id === selectedNode.id 
-          ? { ...node, executor: selectedUser.name }
-          : node
+        node.id === selectedNode.id ? updatedNode : node
       );
       setProcessNodes(updatedNodes);
-      setSelectedNode({ ...selectedNode, executor: selectedUser.name });
-    } else if (peopleSelectorType === 'cc') {
-      if (!selectedCcs.find(cc => cc.id === selectedUser.id)) {
-        setSelectedCcs([...selectedCcs, selectedUser]);
+      setSelectedNode(updatedNode);
+    } else if (peopleSelectorType === 'cc' && selectedNode) {
+      // Add to node-specific CC recipients instead of global
+      const currentCcs = selectedNode.ccRecipients || [];
+      if (!currentCcs.find(cc => cc.id === selectedUser.id)) {
+        const updatedNode = {
+          ...selectedNode,
+          ccRecipients: [...currentCcs, selectedUser]
+        };
+        const updatedNodes = processNodes.map(node => 
+          node.id === selectedNode.id ? updatedNode : node
+        );
+        setProcessNodes(updatedNodes);
+        setSelectedNode(updatedNode);
       }
     }
   };
 
   const removeUserFromCc = (userId: string) => {
-    setSelectedCcs(selectedCcs.filter(cc => cc.id !== userId));
+    if (selectedNode) {
+      const updatedCcs = (selectedNode.ccRecipients || []).filter(cc => cc.id !== userId);
+      const updatedNode = {
+        ...selectedNode,
+        ccRecipients: updatedCcs
+      };
+      const updatedNodes = processNodes.map(node => 
+        node.id === selectedNode.id ? updatedNode : node
+      );
+      setProcessNodes(updatedNodes);
+      setSelectedNode(updatedNode);
+    }
   };
 
   const handleCreateRecord = (formData: any) => {
@@ -367,6 +399,22 @@ const CleansingPage: React.FC = () => {
     if (!pendingFormData || !user?.id) return;
     
     try {
+      // Prepare process nodes with proper structure for backend
+      const processNodesForBackend = processNodes.map(node => ({
+        ...node,
+        executorId: node.executorId, // Send executor ID
+        executorName: node.executor, // Send executor name
+        ccRecipients: node.ccRecipients || [], // Send node-specific CCs
+        editAccess: node.editAccess !== false // Default to true if not set
+      }));
+
+      console.log('Sending cleansing entry data:', {
+        formData: pendingFormData,
+        processNodes: processNodesForBackend,
+        createdBy: user.id,
+        projectId: selectedProject?.id
+      });
+
       const response = await fetch('https://matrixbim-server.onrender.com/api/cleansing/create', {
         method: 'POST',
         headers: {
@@ -375,8 +423,7 @@ const CleansingPage: React.FC = () => {
         },
         body: JSON.stringify({
           formData: pendingFormData,
-          processNodes: processNodes,
-          selectedCcs: selectedCcs,
+          processNodes: processNodesForBackend,
           createdBy: user.id,
           projectId: selectedProject?.id
         })
@@ -384,21 +431,7 @@ const CleansingPage: React.FC = () => {
 
       if (response.ok) {
         const result = await response.json();
-        
-        // Send email notifications
-        try {
-          const ccEmails = selectedCcs.map(cc => cc.email);
-          await emailService.sendCleansingNotification({
-            entryId: result.id || 'new',
-            projectName: selectedProject?.name || 'Unknown Project',
-            action: 'created',
-            ccRecipients: ccEmails,
-            formData: pendingFormData,
-            currentNodeName: processNodes.find(node => node.type === 'node')?.name
-          });
-        } catch (emailError) {
-          console.error('Failed to send email notifications:', emailError);
-        }
+        console.log('Cleansing entry created successfully:', result);
         
         // Refresh cleansing entries
         await fetchCleansingEntries();
@@ -406,13 +439,20 @@ const CleansingPage: React.FC = () => {
         // Reset states
         setShowProcessFlow(false);
         setPendingFormData(null);
-        setSelectedCcs([]);
         setSelectedNode(null);
+        
+        // Reset process nodes to default
+        setProcessNodes([
+          { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
+          { id: 'review', type: 'node', name: 'Cleansing Review & Approval', editAccess: true, ccRecipients: [], settings: {} },
+          { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
+        ]);
         
         // Show success message
         alert('Cleansing entry created successfully! Notifications have been sent to assigned users.');
       } else {
         const error = await response.json();
+        console.error('Failed to create cleansing entry:', error);
         alert(`Failed to create cleansing entry: ${error.error}`);
       }
     } catch (error) {
@@ -480,6 +520,12 @@ const CleansingPage: React.FC = () => {
     if (!selectedCleansingEntry || !user?.id) return;
     
     try {
+      console.log('Updating cleansing form data:', {
+        cleansingId: selectedCleansingEntry.id,
+        formData,
+        updatedBy: user.id
+      });
+
       const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${selectedCleansingEntry.id}/update`, {
         method: 'PUT',
         headers: {
@@ -499,98 +545,234 @@ const CleansingPage: React.FC = () => {
         setSelectedCleansingEntry(null);
         alert('Cleansing entry updated successfully!');
       } else {
-        const error = await response.json();
-        alert(`Failed to update cleansing entry: ${error.error}`);
+        // Try to parse as JSON first, fallback to text if it fails
+        let errorMessage = 'Failed to update cleansing entry';
+        try {
+          const errorData = await response.json();
+          errorMessage = `Failed to update cleansing entry: ${errorData.error || errorData.message || 'Unknown error'}`;
+        } catch (parseError) {
+          // If JSON parsing fails, get the response as text
+          const errorText = await response.text();
+          console.error('Server returned non-JSON response:', errorText);
+          
+          if (errorText.includes('<!DOCTYPE')) {
+            errorMessage = `Server error (${response.status}): The cleansing API endpoint may be temporarily unavailable. Please try again in a few moments.`;
+          } else {
+            errorMessage = `Failed to update cleansing entry: Server returned ${response.status} - ${errorText.substring(0, 100)}`;
+          }
+        }
+        
+        console.error('Error updating cleansing entry:', errorMessage);
+        alert(errorMessage);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating cleansing entry:', error);
-      alert('Failed to update cleansing entry. Please try again.');
+      
+      // Provide more specific error messages based on error type
+      let errorMessage = 'Failed to update cleansing entry. ';
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        errorMessage += 'Network connection error. Please check your internet connection and try again.';
+      } else if (error.message && error.message.includes('JSON')) {
+        errorMessage += 'Server returned an invalid response. The API may be temporarily unavailable.';
+      } else {
+        errorMessage += 'Please try again.';
+      }
+      
+      alert(errorMessage);
     }
   };
 
-  const handleWorkflowAction = async (action: 'approve' | 'reject') => {
+  const handleWorkflowAction = async (action: 'approve' | 'reject' | 'back') => {
     if (!selectedCleansingEntry || !user?.id) return;
-    
+
+    let comment = '';
+    if (action === 'reject' || action === 'back') {
+      const promptResult = prompt(`Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`);
+      if (promptResult === null || promptResult.trim() === '') {
+        alert(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
+        return;
+      }
+      comment = promptResult.trim();
+    }
+
     try {
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${selectedCleansingEntry.id}/workflow`, {
-        method: 'POST',
+      console.log(`Attempting to ${action} cleansing entry:`, {
+        cleansingId: selectedCleansingEntry.id,
+        action,
+        comment,
+        userId: user.id
+      });
+
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${selectedCleansingEntry.id}/update`, {
+        method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           action: action,
-          userId: user.id,
-          comment: '' // You can add a comment input if needed
+          comment: comment,
+          userId: user.id
         })
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
       if (response.ok) {
-        const result = await response.json();
+        // Backend handles all email notifications
         
-        // Send email notifications
+        // Refresh cleansing entries and entry details
+        await fetchCleansingEntries();
+        await handleViewDetails(selectedCleansingEntry);
+        
+        alert(`Entry ${action}d successfully! Notifications have been sent.`);
+      } else {
+        // Try to parse as JSON first, fallback to text if it fails
+        let errorMessage = `Failed to ${action} entry`;
         try {
-          const ccEmails = selectedCleansingEntry.cleansing_assignments?.map(assignment => assignment.user_email).filter(Boolean) || [];
-          await emailService.sendCleansingNotification({
-            entryId: selectedCleansingEntry.id,
-            projectName: selectedCleansingEntry.project,
-            action: action === 'approve' ? 'approved' : 'rejected',
-            ccRecipients: ccEmails,
-            formData: selectedCleansingEntry.form_data,
-            currentNodeName: selectedCleansingEntry.cleansing_workflow_nodes?.find(node => 
-              node.node_order === selectedCleansingEntry.current_node_index
-            )?.node_name,
-            comments: '' // Add comment if available
-          });
-        } catch (emailError) {
-          console.error('Failed to send email notifications:', emailError);
+          const errorData = await response.json();
+          errorMessage = `Failed to ${action} entry: ${errorData.error || errorData.message || 'Unknown error'}`;
+        } catch (parseError) {
+          // If JSON parsing fails, get the response as text
+          const errorText = await response.text();
+          console.error('Server returned non-JSON response:', errorText);
+          
+          if (errorText.includes('<!DOCTYPE')) {
+            errorMessage = `Server error (${response.status}): The cleansing API endpoint may be temporarily unavailable. Please try again in a few moments.`;
+          } else {
+            errorMessage = `Failed to ${action} entry: Server returned ${response.status} - ${errorText.substring(0, 100)}`;
+          }
         }
         
-        // Refresh cleansing entries
-        await fetchCleansingEntries();
-        setShowDetails(false);
-        setSelectedCleansingEntry(null);
-        alert(`Cleansing entry ${action}d successfully!`);
-      } else {
-        const error = await response.json();
-        alert(`Failed to ${action} cleansing entry: ${error.error}`);
+        console.error(`Error ${action}ing entry:`, errorMessage);
+        alert(errorMessage);
       }
-    } catch (error) {
-      console.error(`Error ${action}ing cleansing entry:`, error);
-      alert(`Failed to ${action} cleansing entry. Please try again.`);
+    } catch (error: any) {
+      console.error(`Error ${action}ing entry:`, error);
+      
+      // Provide more specific error messages based on error type
+      let errorMessage = `Failed to ${action} entry. `;
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        errorMessage += 'Network connection error. Please check your internet connection and try again.';
+      } else if (error.message && error.message.includes('JSON')) {
+        errorMessage += 'Server returned an invalid response. The API may be temporarily unavailable.';
+      } else {
+        errorMessage += 'Please try again.';
+      }
+      
+      alert(errorMessage);
     }
   };
 
+  // Check if user can edit/approve the cleansing entry
   const canUserEditEntry = (entry: CleansingEntry) => {
-    if (!user) return false;
+    if (!user?.id) return false;
     
-    // Admin can edit any entry
-    if (user.role === 'admin') return true;
+    // Only admin can edit when entry is in initial state or rejected
+    if (user.role === 'admin' && (entry.status === 'pending' || entry.status === 'rejected')) {
+      return true;
+    }
     
-    // Creator can edit their own entries
-    if (entry.created_by === user.id) return true;
-    
-    // Check if user is assigned to this entry
-    return entry.cleansing_assignments?.some(assignment => 
-      assignment.user_id === user.id && assignment.role === 'executor'
-    ) || false;
+    return false;
   };
 
-  const canUserApproveEntry = (entry: CleansingEntry) => {
-    if (!user) return false;
+  // Check if user can update form data (current node executor or CC with edit access)
+  const canUserUpdateForm = (entry: CleansingEntry) => {
+    if (!user?.id || entry.status !== 'pending') return false;
     
-    // Only allow approval if entry is pending and user has permission
-    if (entry.status !== 'pending') return false;
-    
-    // Admin can approve any entry
+    // Admin can always edit
     if (user.role === 'admin') return true;
     
-    // Check if user is the current workflow executor
-    const currentNode = entry.cleansing_workflow_nodes?.find(node => 
-      node.node_order === entry.current_node_index && node.status === 'pending'
+    // Check if user is the executor for current workflow node
+    const currentNode = entry.cleansing_workflow_nodes?.find((node: any) => 
+      node.node_order === entry.current_node_index && 
+      node.status === 'pending'
     );
     
-    return currentNode?.executor_name === user.name;
+    if (currentNode) {
+      // Executor can always edit
+      if (currentNode.executor_id === user.id) return true;
+      
+      // CC can edit if edit access is enabled for this node
+      if (currentNode.edit_access) {
+        const isCC = entry.cleansing_assignments?.some((a: any) => 
+          a.user_id === user.id && a.node_id === currentNode.node_id
+        );
+        if (isCC) return true;
+      }
+    }
+    
+    return false;
+  };
+
+  // Check if user can approve/reject current workflow step (only executor)
+  const canUserApproveEntry = (entry: CleansingEntry) => {
+    if (!user?.id || entry.status !== 'pending') return false;
+    
+    // Admin can always approve
+    if (user.role === 'admin') return true;
+    
+    // Check if user is the executor for current workflow node
+    const currentNode = entry.cleansing_workflow_nodes?.find((node: any) => 
+      node.node_order === entry.current_node_index && 
+      node.status === 'pending'
+    );
+    
+    if (currentNode && currentNode.executor_id === user.id) return true;
+    
+    return false;
+  };
+
+  // Check if user can view entry (all assigned users, executors, and admin)
+  const canUserViewEntry = (entry: CleansingEntry) => {
+    if (!user?.id) return false;
+    
+    // Admin can always view
+    if (user.role === 'admin') return true;
+    
+    // Creator can view
+    if (entry.created_by === user.id) return true;
+    
+    // Assigned users (CC) can view
+    if (entry.cleansing_assignments?.some((a: any) => a.user_id === user.id)) return true;
+    
+    // Executors can view
+    if (entry.cleansing_workflow_nodes?.some((node: any) => node.executor_id === user.id)) return true;
+    
+    return false;
+  };
+  
+  // Delete cleansing entry (admin only)
+  const handleDeleteEntry = async (entry: CleansingEntry) => {
+    if (!user?.id || user.role !== 'admin') {
+      alert('Only admins can delete cleansing entries.');
+      return;
+    }
+
+    const confirmDelete = window.confirm(`Are you sure you want to delete this cleansing entry from ${entry.date}? This action cannot be undone.`);
+    if (!confirmDelete) return;
+
+    try {
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${entry.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        // Refresh cleansing entries
+        await fetchCleansingEntries();
+        alert('Cleansing entry deleted successfully!');
+      } else {
+        const error = await response.json();
+        alert(`Failed to delete cleansing entry: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting cleansing entry:', error);
+      alert('Failed to delete cleansing entry. Please try again.');
+    }
   };
 
   const getWorkflowStatusBadge = (entry: CleansingEntry) => {
