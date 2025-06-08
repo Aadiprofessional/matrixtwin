@@ -28,6 +28,8 @@ interface ProcessNode {
   executorId?: string;
   ccRecipients?: User[];
   editAccess?: boolean;
+  expireTime?: string; // Add expire time field
+  expireDuration?: number | null; // Add expire duration in hours (null = unlimited)
   settings: Record<string, any>;
 }
 
@@ -438,9 +440,18 @@ const LabourPage: React.FC = () => {
         // Show success message
         alert('Labour entry created successfully! Notifications have been sent to assigned users.');
       } else {
-        const error = await response.json();
-        console.error('Failed to create labour entry:', error);
-        alert(`Failed to create labour entry: ${error.error}`);
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          errorData = { message: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        console.error('Failed to create labour entry:', errorData);
+        console.error('Response status:', response.status);
+        console.error('Response headers:', Object.fromEntries(response.headers.entries()));
+        
+        alert(`Failed to create labour entry: ${errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`}`);
       }
     } catch (error) {
       console.error('Error creating labour entry:', error);
@@ -1538,6 +1549,75 @@ const LabourPage: React.FC = () => {
                                   When enabled, both executor and CC recipients can edit the form when this node is active
                                 </p>
                               </div>
+
+                              {/* Expire Time Configuration */}
+                              <div>
+                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                  Task Expiration
+                                </label>
+                                <div className="space-y-3">
+                                  <div className="flex items-center space-x-2">
+                                    <select 
+                                      value={selectedNode.expireTime === 'unlimited' || !selectedNode.expireTime ? 'unlimited' : 'custom'}
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        const updatedNode = { 
+                                          ...selectedNode, 
+                                          expireTime: value === 'unlimited' ? 'unlimited' : '',
+                                          expireDuration: value === 'unlimited' ? null : (selectedNode.expireDuration || 24)
+                                        };
+                                        const updatedNodes = processNodes.map(node => 
+                                          node.id === selectedNode.id ? updatedNode : node
+                                        );
+                                        setProcessNodes(updatedNodes);
+                                        setSelectedNode(updatedNode);
+                                      }}
+                                      className="flex-1 bg-white dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-2 text-secondary-900 dark:text-white"
+                                    >
+                                      <option value="unlimited">Unlimited</option>
+                                      <option value="custom">Custom Date & Time</option>
+                                    </select>
+                                  </div>
+                                  
+                                  {(selectedNode.expireTime !== 'unlimited' && selectedNode.expireTime !== undefined) && (
+                                    <div className="space-y-2">
+                                      <div className="flex items-center space-x-2">
+                                        <input
+                                          type="datetime-local"
+                                          value={selectedNode.expireTime && selectedNode.expireTime !== 'unlimited' ? 
+                                            (selectedNode.expireTime.includes('T') ? selectedNode.expireTime.slice(0, 16) : '') : ''}
+                                          onChange={(e) => {
+                                            const updatedNode = { 
+                                              ...selectedNode, 
+                                              expireTime: e.target.value ? new Date(e.target.value).toISOString() : '',
+                                              expireDuration: null
+                                            };
+                                            const updatedNodes = processNodes.map(node => 
+                                              node.id === selectedNode.id ? updatedNode : node
+                                            );
+                                            setProcessNodes(updatedNodes);
+                                            setSelectedNode(updatedNode);
+                                          }}
+                                          min={new Date().toISOString().slice(0, 16)}
+                                          className="flex-1 bg-white dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-2 text-secondary-900 dark:text-white"
+                                        />
+                                      </div>
+                                      <p className="text-xs text-secondary-500 dark:text-secondary-400">
+                                        Select the date and time when this task should expire
+                                      </p>
+                                    </div>
+                                  )}
+                                  
+                                  <p className="text-xs text-secondary-500 dark:text-secondary-400">
+                                    {selectedNode.expireTime === 'unlimited' 
+                                      ? 'This task will not expire automatically.'
+                                      : selectedNode.expireTime && selectedNode.expireTime !== 'unlimited'
+                                        ? `This task will expire on ${new Date(selectedNode.expireTime).toLocaleString()}`
+                                        : 'Select a custom expiration date and time above.'
+                                    }
+                                  </p>
+                                </div>
+                              </div>
                               
                               <div>
                                 <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
@@ -1781,109 +1861,115 @@ const LabourPage: React.FC = () => {
                   </div>
                 )}
                 
-                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <Button 
-                    variant="outline"
-                    leftIcon={<RiArrowRightLine />}
-                  >
-                    Export
-                  </Button>
-                  <Button 
-                    variant="outline"
-                    leftIcon={<RiFileListLine />}
-                  >
-                    Print
-                  </Button>
-                  
-                  {/* Admin delete button */}
-                  {user?.role === 'admin' && (
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  {/* First row - Export and Delete buttons */}
+                  <div className="flex justify-end space-x-3 mb-3">
                     <Button 
                       variant="outline"
-                      leftIcon={<RiDeleteBinLine />}
-                      onClick={() => {
-                        setShowDetails(false);
-                        handleDeleteEntry(selectedLabourEntry);
-                      }}
-                      className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      leftIcon={<RiArrowRightLine />}
                     >
-                      Delete Entry
+                      Export
                     </Button>
-                  )}
-                  
-                  {/* Workflow Action Buttons based on user permissions */}
-                  {selectedLabourEntry.status === 'pending' && (
-                    <>
-                      {/* Admin can edit when entry is pending or rejected */}
-                      {canUserEditEntry(selectedLabourEntry) && (
-                        <Button 
-                          variant="outline"
-                          leftIcon={<RiFileWarningLine />}
-                          onClick={() => {
-                            setShowDetails(false);
-                            setShowFormView(true);
-                          }}
-                        >
-                          Edit Form
-                        </Button>
-                      )}
-                      
-                      {/* Current node executor can approve, reject, or send back */}
-                      {canUserApproveEntry(selectedLabourEntry) && (
-                        <>
-                          {/* Back to previous node button (only if not first node) */}
-                          {selectedLabourEntry.current_node_index > 0 && (
-                            <Button 
-                              variant="outline"
-                              leftIcon={<RiArrowLeftLine />}
-                              onClick={() => handleWorkflowAction('back')}
-                              className="text-orange-600 border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                            >
-                              Send Back
-                            </Button>
-                          )}
-                          
+                    <Button 
+                      variant="outline"
+                      leftIcon={<RiFileListLine />}
+                    >
+                      Print
+                    </Button>
+                    
+                    {/* Admin delete button */}
+                    {user?.role === 'admin' && (
+                      <Button 
+                        variant="outline"
+                        leftIcon={<RiDeleteBinLine />}
+                        onClick={() => {
+                          setShowDetails(false);
+                          handleDeleteEntry(selectedLabourEntry);
+                        }}
+                        className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      >
+                        Delete Entry
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Second row - Workflow action buttons */}
+                  <div className="flex justify-end space-x-3">
+                    {/* Workflow Action Buttons based on user permissions */}
+                    {selectedLabourEntry.status === 'pending' && (
+                      <>
+                        {/* Admin can edit when entry is pending or rejected */}
+                        {canUserEditEntry(selectedLabourEntry) && (
                           <Button 
                             variant="outline"
-                            leftIcon={<RiCloseLine />}
-                            onClick={() => handleWorkflowAction('reject')}
-                            className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            leftIcon={<RiFileWarningLine />}
+                            onClick={() => {
+                              setShowDetails(false);
+                              setShowFormView(true);
+                            }}
                           >
-                            Reject
+                            Edit Form
                           </Button>
-                          <Button 
-                            variant="primary"
-                            leftIcon={<RiCheckLine />}
-                            onClick={() => handleWorkflowAction('approve')}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            Approve
-                          </Button>
-                        </>
-                      )}
-                    </>
-                  )}
-                  
-                  {/* Rejected status - only admin can resolve */}
-                  {selectedLabourEntry.status === 'rejected' && canUserEditEntry(selectedLabourEntry) && (
+                        )}
+                        
+                        {/* Current node executor can approve, reject, or send back */}
+                        {canUserApproveEntry(selectedLabourEntry) && (
+                          <>
+                            {/* Back to previous node button (only if not first node) */}
+                            {selectedLabourEntry.current_node_index > 0 && (
+                              <Button 
+                                variant="outline"
+                                leftIcon={<RiArrowLeftLine />}
+                                onClick={() => handleWorkflowAction('back')}
+                                className="text-orange-600 border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                              >
+                                Send Back
+                              </Button>
+                            )}
+                            
+                            <Button 
+                              variant="outline"
+                              leftIcon={<RiCloseLine />}
+                              onClick={() => handleWorkflowAction('reject')}
+                              className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            >
+                              Reject
+                            </Button>
+                            <Button 
+                              variant="primary"
+                              leftIcon={<RiCheckLine />}
+                              onClick={() => handleWorkflowAction('approve')}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              {selectedLabourEntry.current_node_index === 1 ? 'Complete' : 'Approve'}
+                            </Button>
+                          </>
+                        )}
+                      </>
+                    )}
+                    
+                    {/* Rejected status - only admin can resolve */}
+                    {selectedLabourEntry.status === 'rejected' && canUserEditEntry(selectedLabourEntry) && (
+                      <Button 
+                        variant="primary"
+                        leftIcon={<RiSettings4Line />}
+                        onClick={() => {
+                          setShowDetails(false);
+                          setShowFormView(true);
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        Resolve & Edit
+                      </Button>
+                    )}
+                    
                     <Button 
                       variant="primary"
-                      leftIcon={<RiSettings4Line />}
-                      onClick={() => {
-                        setShowDetails(false);
-                        setShowFormView(true);
-                      }}
-                      className="bg-blue-600 hover:bg-blue-700"
+                      onClick={() => setShowDetails(false)}
                     >
-                      Resolve & Edit
+                      Close
                     </Button>
-                  )}
-                  
-                  <Button 
-                    variant="primary"
-                    onClick={() => setShowDetails(false)}
-                  >
-                    Close
-                  </Button>
+                  </div>
                 </div>
               </div>
             </motion.div>

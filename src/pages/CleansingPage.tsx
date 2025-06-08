@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { RiAddLine, RiBrushLine, RiCheckboxCircleLine, RiCloseCircleLine, RiCalendarCheckLine, RiTaskLine, RiEyeLine, RiMapPinLine, RiFilterLine, RiUploadCloud2Line, RiArrowLeftRightLine, RiPercentLine, RiCheckLine, RiArrowRightLine, RiArrowLeftLine, RiListCheck, RiLayoutGridLine, RiFilter3Line, RiCloseLine, RiLoader4Line, RiFlowChart, RiSettings4Line, RiUserLine, RiSearchLine, RiArrowDownLine, RiDropLine, RiNotificationLine, RiErrorWarningLine, RiFileWarningLine, RiAlertLine, RiMapPin2Line, RiCalendarLine, RiTeamLine, RiFileTextLine } from 'react-icons/ri';
+import { RiAddLine, RiBrushLine, RiCheckboxCircleLine, RiCloseCircleLine, RiCalendarCheckLine, RiTaskLine, RiEyeLine, RiMapPinLine, RiFilterLine, RiUploadCloud2Line, RiArrowLeftRightLine, RiPercentLine, RiCheckLine, RiArrowRightLine, RiArrowLeftLine, RiListCheck, RiLayoutGridLine, RiFilter3Line, RiCloseLine, RiLoader4Line, RiFlowChart, RiSettings4Line, RiUserLine, RiSearchLine, RiArrowDownLine, RiDropLine, RiNotificationLine, RiErrorWarningLine, RiFileWarningLine, RiAlertLine, RiMapPin2Line, RiCalendarLine, RiTeamLine, RiFileTextLine, RiDownload2Line, RiPrinterLine, RiDeleteBinLine } from 'react-icons/ri';
 import { IconContext } from 'react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
@@ -25,9 +25,11 @@ interface ProcessNode {
   type: 'start' | 'node' | 'end';
   name: string;
   executor?: string;
-  executorId?: string; // Add executor ID for backend
-  ccRecipients?: User[]; // Add node-specific CC recipients
-  editAccess?: boolean; // Add edit access flag
+  executorId?: string;
+  ccRecipients?: User[];
+  editAccess?: boolean;
+  expireTime?: string; // Add expire time field
+  expireDuration?: number | null; // Add expire duration in hours (null = unlimited)
   settings: Record<string, any>;
 }
 
@@ -439,6 +441,7 @@ const CleansingPage: React.FC = () => {
         // Reset states
         setShowProcessFlow(false);
         setPendingFormData(null);
+        setSelectedCcs([]);
         setSelectedNode(null);
         
         // Reset process nodes to default
@@ -451,9 +454,18 @@ const CleansingPage: React.FC = () => {
         // Show success message
         alert('Cleansing entry created successfully! Notifications have been sent to assigned users.');
       } else {
-        const error = await response.json();
-        console.error('Failed to create cleansing entry:', error);
-        alert(`Failed to create cleansing entry: ${error.error}`);
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          errorData = { message: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        console.error('Failed to create cleansing entry:', errorData);
+        console.error('Response status:', response.status);
+        console.error('Response headers:', Object.fromEntries(response.headers.entries()));
+        
+        alert(`Failed to create cleansing entry: ${errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`}`);
       }
     } catch (error) {
       console.error('Error creating cleansing entry:', error);
@@ -1644,6 +1656,75 @@ const CleansingPage: React.FC = () => {
                             </Button>
                           </div>
                         </div>
+
+                        {/* Expire Time Configuration */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Task Expiration
+                          </label>
+                          <div className="space-y-3">
+                            <div className="flex items-center space-x-2">
+                              <select 
+                                value={selectedNode.expireTime === 'unlimited' || !selectedNode.expireTime ? 'unlimited' : 'custom'}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  const updatedNode = { 
+                                    ...selectedNode, 
+                                    expireTime: value === 'unlimited' ? 'unlimited' : '',
+                                    expireDuration: value === 'unlimited' ? null : (selectedNode.expireDuration || 24)
+                                  };
+                                  const updatedNodes = processNodes.map(node => 
+                                    node.id === selectedNode.id ? updatedNode : node
+                                  );
+                                  setProcessNodes(updatedNodes);
+                                  setSelectedNode(updatedNode);
+                                }}
+                                className="flex-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                              >
+                                <option value="unlimited">Unlimited</option>
+                                <option value="custom">Custom Date & Time</option>
+                              </select>
+                            </div>
+                            
+                            {(selectedNode.expireTime !== 'unlimited' && selectedNode.expireTime !== undefined) && (
+                              <div className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="datetime-local"
+                                    value={selectedNode.expireTime && selectedNode.expireTime !== 'unlimited' ? 
+                                      (selectedNode.expireTime.includes('T') ? selectedNode.expireTime.slice(0, 16) : '') : ''}
+                                    onChange={(e) => {
+                                      const updatedNode = { 
+                                        ...selectedNode, 
+                                        expireTime: e.target.value ? new Date(e.target.value).toISOString() : '',
+                                        expireDuration: null
+                                      };
+                                      const updatedNodes = processNodes.map(node => 
+                                        node.id === selectedNode.id ? updatedNode : node
+                                      );
+                                      setProcessNodes(updatedNodes);
+                                      setSelectedNode(updatedNode);
+                                    }}
+                                    min={new Date().toISOString().slice(0, 16)}
+                                    className="flex-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
+                                  />
+                                </div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  Select the date and time when this task should expire
+                                </p>
+                              </div>
+                            )}
+                            
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {selectedNode.expireTime === 'unlimited' 
+                                ? 'This task will not expire automatically.'
+                                : selectedNode.expireTime && selectedNode.expireTime !== 'unlimited'
+                                  ? `This task will expire on ${new Date(selectedNode.expireTime).toLocaleString()}`
+                                  : 'Select a custom expiration date and time above.'
+                              }
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     )}
                     
@@ -1902,52 +1983,86 @@ const CleansingPage: React.FC = () => {
                   </div>
                 )}
                 
-                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  {/* Workflow Action Buttons */}
-                  {selectedCleansingEntry.status === 'pending' && (
-                    <>
-                      {canUserEditEntry(selectedCleansingEntry) && (
-                        <Button 
-                          variant="outline"
-                          leftIcon={<RiFileWarningLine />}
-                          onClick={() => {
-                            setShowDetails(false);
-                            handleViewForm(selectedCleansingEntry);
-                          }}
-                        >
-                          Edit Form
-                        </Button>
-                      )}
-                      
-                      {canUserApproveEntry(selectedCleansingEntry) && (
-                        <>
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  {/* First row - Export and Delete buttons */}
+                  <div className="flex justify-end space-x-3 mb-3">
+                    <Button 
+                      variant="outline"
+                      leftIcon={<RiDownload2Line />}
+                    >
+                      Export
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      leftIcon={<RiPrinterLine />}
+                    >
+                      Print
+                    </Button>
+                    
+                    {/* Admin delete button */}
+                    {user?.role === 'admin' && (
+                      <Button 
+                        variant="outline"
+                        leftIcon={<RiDeleteBinLine />}
+                        onClick={() => {
+                          setShowDetails(false);
+                          handleDeleteEntry(selectedCleansingEntry);
+                        }}
+                        className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      >
+                        Delete Entry
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Second row - Workflow action buttons */}
+                  <div className="flex justify-end space-x-3">
+                    {/* Workflow Action Buttons */}
+                    {selectedCleansingEntry.status === 'pending' && (
+                      <>
+                        {canUserEditEntry(selectedCleansingEntry) && (
                           <Button 
                             variant="outline"
-                            leftIcon={<RiCloseLine />}
-                            onClick={() => handleWorkflowAction('reject')}
-                            className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            leftIcon={<RiFileWarningLine />}
+                            onClick={() => {
+                              setShowDetails(false);
+                              handleViewForm(selectedCleansingEntry);
+                            }}
                           >
-                            Reject
+                            Edit Form
                           </Button>
-                          <Button 
-                            variant="primary"
-                            leftIcon={<RiCheckLine />}
-                            onClick={() => handleWorkflowAction('approve')}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            Approve
-                          </Button>
-                        </>
-                      )}
-                    </>
-                  )}
-                  
-                  <Button 
-                    variant="primary"
-                    onClick={() => setShowDetails(false)}
-                  >
-                    Close
-                  </Button>
+                        )}
+                        
+                        {canUserApproveEntry(selectedCleansingEntry) && (
+                          <>
+                            <Button 
+                              variant="outline"
+                              leftIcon={<RiCloseLine />}
+                              onClick={() => handleWorkflowAction('reject')}
+                              className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            >
+                              Reject
+                            </Button>
+                            <Button 
+                              variant="primary"
+                              leftIcon={<RiCheckLine />}
+                              onClick={() => handleWorkflowAction('approve')}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              {selectedCleansingEntry.current_node_index === 1 ? 'Complete' : 'Approve'}
+                            </Button>
+                          </>
+                        )}
+                      </>
+                    )}
+                    
+                    <Button 
+                      variant="primary"
+                      onClick={() => setShowDetails(false)}
+                    >
+                      Close
+                    </Button>
+                  </div>
                 </div>
               </div>
             </motion.div>

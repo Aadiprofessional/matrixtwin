@@ -20,6 +20,8 @@ interface ProcessNode {
   executorId?: string; // Add executor ID for backend
   ccRecipients?: User[]; // Add node-specific CC recipients
   editAccess?: boolean; // Add edit access flag
+  expireTime?: string; // Add expire time field - can be 'unlimited' or ISO datetime string
+  expireDuration?: number | null; // Add expire duration in hours (null = unlimited)
   settings: Record<string, any>;
 }
 
@@ -1204,109 +1206,115 @@ const DiaryPage: React.FC = () => {
               </div>
             )}
             
-            <div className="flex justify-end space-x-3 pt-4 border-t border-secondary-200 dark:border-dark-700">
-              <Button 
-                variant="outline"
-                leftIcon={<RiIcons.RiDownload2Line />}
-              >
-                {t('common.export')}
-              </Button>
-              <Button 
-                variant="outline"
-                leftIcon={<RiIcons.RiPrinterLine />}
-              >
-                {t('common.print')}
-              </Button>
-              
-              {/* Admin delete button */}
-              {user?.role === 'admin' && (
+            <div className="pt-4 border-t border-secondary-200 dark:border-dark-700">
+              {/* First row - Primary action buttons */}
+              <div className="flex justify-end space-x-3 mb-3">
                 <Button 
                   variant="outline"
-                  leftIcon={<RiIcons.RiDeleteBinLine />}
-                  onClick={() => {
-                    setShowDetails(false);
-                    handleDeleteEntry(selectedDiaryEntry);
-                  }}
-                  className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  leftIcon={<RiIcons.RiDownload2Line />}
                 >
-                  Delete Entry
+                  {t('common.export')}
                 </Button>
-              )}
-              
-              {/* Workflow Action Buttons based on user permissions */}
-              {selectedDiaryEntry.status === 'pending' && (
-                <>
-                  {/* Admin can edit when entry is pending or rejected */}
-                  {canUserEditEntry(selectedDiaryEntry) && (
-                    <Button 
-                      variant="outline"
-                      leftIcon={<RiIcons.RiEditLine />}
-                      onClick={() => {
-                        setShowDetails(false);
-                        setShowFormView(true);
-                      }}
-                    >
-                      Edit Form
-                    </Button>
-                  )}
-                  
-                  {/* Current node executor can approve, reject, or send back */}
-                  {canUserApproveEntry(selectedDiaryEntry) && (
-                    <>
-                      {/* Back to previous node button (only if not first node) */}
-                      {selectedDiaryEntry.current_node_index > 0 && (
-                        <Button 
-                          variant="outline"
-                          leftIcon={<RiIcons.RiArrowLeftLine />}
-                          onClick={() => handleWorkflowAction('back')}
-                          className="text-orange-600 border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                        >
-                          Send Back
-                        </Button>
-                      )}
-                      
+                <Button 
+                  variant="outline"
+                  leftIcon={<RiIcons.RiPrinterLine />}
+                >
+                  {t('common.print')}
+                </Button>
+                
+                {/* Admin delete button */}
+                {user?.role === 'admin' && (
+                  <Button 
+                    variant="outline"
+                    leftIcon={<RiIcons.RiDeleteBinLine />}
+                    onClick={() => {
+                      setShowDetails(false);
+                      handleDeleteEntry(selectedDiaryEntry);
+                    }}
+                    className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  >
+                    Delete Entry
+                  </Button>
+                )}
+              </div>
+
+              {/* Second row - Workflow action buttons */}
+              <div className="flex justify-end space-x-3">
+                {/* Workflow Action Buttons based on user permissions */}
+                {selectedDiaryEntry.status === 'pending' && (
+                  <>
+                    {/* Admin can edit when entry is pending or rejected */}
+                    {canUserEditEntry(selectedDiaryEntry) && (
                       <Button 
                         variant="outline"
-                        leftIcon={<RiIcons.RiCloseLine />}
-                        onClick={() => handleWorkflowAction('reject')}
-                        className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        leftIcon={<RiIcons.RiEditLine />}
+                        onClick={() => {
+                          setShowDetails(false);
+                          setShowFormView(true);
+                        }}
                       >
-                        Reject
+                        Edit Form
                       </Button>
-                      <Button 
-                        variant="primary"
-                        leftIcon={<RiIcons.RiCheckLine />}
-                        onClick={() => handleWorkflowAction('approve')}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        Approve
-                      </Button>
-                    </>
-                  )}
-                </>
-              )}
-              
-              {/* Rejected status - only admin can resolve */}
-              {selectedDiaryEntry.status === 'rejected' && canUserEditEntry(selectedDiaryEntry) && (
+                    )}
+                    
+                    {/* Current node executor can approve, reject, or send back */}
+                    {canUserApproveEntry(selectedDiaryEntry) && (
+                      <>
+                        {/* Back to previous node button (only if not first node) */}
+                        {selectedDiaryEntry.current_node_index > 0 && (
+                          <Button 
+                            variant="outline"
+                            leftIcon={<RiIcons.RiArrowLeftLine />}
+                            onClick={() => handleWorkflowAction('back')}
+                            className="text-orange-600 border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                          >
+                            Send Back
+                          </Button>
+                        )}
+                        
+                        <Button 
+                          variant="outline"
+                          leftIcon={<RiIcons.RiCloseLine />}
+                          onClick={() => handleWorkflowAction('reject')}
+                          className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        >
+                          Reject
+                        </Button>
+                        <Button 
+                          variant="primary"
+                          leftIcon={<RiIcons.RiCheckLine />}
+                          onClick={() => handleWorkflowAction('approve')}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          {selectedDiaryEntry.current_node_index === 1 ? 'Complete' : 'Approve'}
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
+                
+                {/* Rejected status - only admin can resolve */}
+                {selectedDiaryEntry.status === 'rejected' && canUserEditEntry(selectedDiaryEntry) && (
+                  <Button 
+                    variant="primary"
+                    leftIcon={<RiIcons.RiSettings4Line />}
+                    onClick={() => {
+                      setShowDetails(false);
+                      setShowFormView(true);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Resolve & Edit
+                  </Button>
+                )}
+                
                 <Button 
                   variant="primary"
-                  leftIcon={<RiIcons.RiSettings4Line />}
-                  onClick={() => {
-                    setShowDetails(false);
-                    setShowFormView(true);
-                  }}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  onClick={() => setShowDetails(false)}
                 >
-                  Resolve & Edit
+                  {t('common.close')}
                 </Button>
-              )}
-              
-              <Button 
-                variant="primary"
-                onClick={() => setShowDetails(false)}
-              >
-                {t('common.close')}
-              </Button>
+              </div>
             </div>
           </div>
         )}
@@ -1486,6 +1494,75 @@ const DiaryPage: React.FC = () => {
                                 <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-1">
                                   When enabled, both executor and CC recipients can edit the form when this node is active
                                 </p>
+                              </div>
+
+                              {/* Expire Time Configuration */}
+                              <div>
+                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                  Task Expiration
+                                </label>
+                                <div className="space-y-3">
+                                  <div className="flex items-center space-x-2">
+                                    <select 
+                                      value={selectedNode.expireTime === 'unlimited' || !selectedNode.expireTime ? 'unlimited' : 'custom'}
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        const updatedNode = { 
+                                          ...selectedNode, 
+                                          expireTime: value === 'unlimited' ? 'unlimited' : '',
+                                          expireDuration: value === 'unlimited' ? null : (selectedNode.expireDuration || 24)
+                                        };
+                                        const updatedNodes = processNodes.map(node => 
+                                          node.id === selectedNode.id ? updatedNode : node
+                                        );
+                                        setProcessNodes(updatedNodes);
+                                        setSelectedNode(updatedNode);
+                                      }}
+                                      className="flex-1 bg-white dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-2 text-secondary-900 dark:text-white"
+                                    >
+                                      <option value="unlimited">Unlimited</option>
+                                      <option value="custom">Custom Date & Time</option>
+                                    </select>
+                                  </div>
+                                  
+                                  {(selectedNode.expireTime !== 'unlimited' && selectedNode.expireTime !== undefined) && (
+                                    <div className="space-y-2">
+                                      <div className="flex items-center space-x-2">
+                                        <input
+                                          type="datetime-local"
+                                          value={selectedNode.expireTime && selectedNode.expireTime !== 'unlimited' ? 
+                                            (selectedNode.expireTime.includes('T') ? selectedNode.expireTime.slice(0, 16) : '') : ''}
+                                          onChange={(e) => {
+                                            const updatedNode = { 
+                                              ...selectedNode, 
+                                              expireTime: e.target.value ? new Date(e.target.value).toISOString() : '',
+                                              expireDuration: null
+                                            };
+                                            const updatedNodes = processNodes.map(node => 
+                                              node.id === selectedNode.id ? updatedNode : node
+                                            );
+                                            setProcessNodes(updatedNodes);
+                                            setSelectedNode(updatedNode);
+                                          }}
+                                          min={new Date().toISOString().slice(0, 16)}
+                                          className="flex-1 bg-white dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-2 text-secondary-900 dark:text-white"
+                                        />
+                                      </div>
+                                      <p className="text-xs text-secondary-500 dark:text-secondary-400">
+                                        Select the date and time when this task should expire
+                                      </p>
+                                    </div>
+                                  )}
+                                  
+                                  <p className="text-xs text-secondary-500 dark:text-secondary-400">
+                                    {selectedNode.expireTime === 'unlimited' 
+                                      ? 'This task will not expire automatically.'
+                                      : selectedNode.expireTime && selectedNode.expireTime !== 'unlimited'
+                                        ? `This task will expire on ${new Date(selectedNode.expireTime).toLocaleString()}`
+                                        : 'Select a custom expiration date and time above.'
+                                    }
+                                  </p>
+                                </div>
                               </div>
                             </>
                           )}
