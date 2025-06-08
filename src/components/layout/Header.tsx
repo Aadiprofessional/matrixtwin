@@ -38,6 +38,7 @@ import { SearchInput } from '../common/SearchInput';
 import Notifications from '../../components/Notifications';
 import LanguageSelector from '../../components/LanguageSelector';
 import ModeToggle from '../../components/ModeToggle';
+import { notificationService, type Notification } from '../../services/notificationService';
 
 interface NotificationProps {
   id: string;
@@ -55,36 +56,8 @@ interface HeaderProps {
   sidebarCollapsed?: boolean;
 }
 
-// Mock notifications
-const initialNotifications: NotificationProps[] = [
-  {
-    id: '1',
-    title: 'New Inspection Report',
-    message: 'Safety inspection report for Project Alpha has been submitted',
-    time: '10 mins ago',
-    read: false,
-    type: 'info'
-  },
-  {
-    id: '2',
-    title: 'Approval Required',
-    message: 'RFI #2458 needs your approval',
-    time: '1 hour ago',
-    read: false,
-    type: 'warning'
-  },
-  {
-    id: '3',
-    title: 'Task Completed',
-    message: 'Daily cleaning record has been verified',
-    time: '3 hours ago',
-    read: true,
-    type: 'success'
-  }
-];
-
 export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuToggle, isMobile, sidebarCollapsed }) => {
-  const [notifications, setNotifications] = useState<NotificationProps[]>(initialNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -94,6 +67,8 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   
   const searchRef = useRef<HTMLInputElement>(null);
   const { user, logout } = useAuth();
@@ -103,41 +78,50 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
   const { t } = useTranslation();
   const { selectedProject } = useProjects();
   
-  const unreadCount = notifications.filter(n => !n.read).length;
-  
+  // Fetch notifications on component mount and when user changes
   useEffect(() => {
-    // Simulate receiving a new notification after 60 seconds
-    const timer = setTimeout(() => {
-      const newNotification: NotificationProps = {
-        id: String(Date.now()),
-        title: 'New Project Assignment',
-        message: 'You have been assigned to Corporate HQ project',
-        time: 'Just now',
-        read: false,
-        type: 'info'
-      };
-      
-      setNotifications(prev => [newNotification, ...prev]);
-      setHasNewNotification(true);
-      
-      // Play notification sound
-      const audio = new Audio('/notification.mp3');
-      audio.play().catch(err => console.log('Audio play failed:', err));
-    }, 60000);
-    
-    return () => clearTimeout(timer);
-  }, []);
-  
-  // Add pulse animation when new notification arrives
-  useEffect(() => {
-    if (hasNewNotification) {
-      const timer = setTimeout(() => {
-        setHasNewNotification(false);
-      }, 10000);
-      
-      return () => clearTimeout(timer);
+    if (user?.id) {
+      fetchNotifications();
+      // Set up polling for new notifications every 30 seconds
+      const interval = setInterval(fetchNotifications, 30000);
+      return () => clearInterval(interval);
     }
-  }, [hasNewNotification]);
+  }, [user?.id]);
+
+  const fetchNotifications = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setNotificationsLoading(true);
+      const response = await notificationService.getNotifications({
+        limit: 20,
+        page: 1
+      });
+      
+      // Check if there are new notifications
+      const newNotifications = response.notifications.filter(
+        n => !notifications.find(existing => existing.id === n.id) && !n.read
+      );
+      
+      if (newNotifications.length > 0) {
+        setHasNewNotification(true);
+        // Play notification sound
+        try {
+          const audio = new Audio('/notification.mp3');
+          audio.play().catch(err => console.log('Audio play failed:', err));
+        } catch (error) {
+          console.log('Audio not available:', error);
+        }
+      }
+      
+      setNotifications(response.notifications);
+      setUnreadCount(response.unreadCount);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
   
   // Handle window resize for responsive search
   useEffect(() => {
@@ -160,23 +144,69 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
     return () => window.removeEventListener('resize', handleResize);
   }, [isSearchFocused]);
   
-  const markAsRead = (id: string) => {
-    setNotifications(
-      notifications.map(n => (n.id === id ? { ...n, read: true } : n))
-    );
+  // Add pulse animation when new notification arrives
+  useEffect(() => {
+    if (hasNewNotification) {
+      const timer = setTimeout(() => {
+        setHasNewNotification(false);
+      }, 10000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [hasNewNotification]);
+  
+  const markAsRead = async (id: string) => {
+    try {
+      await notificationService.markAsRead(id);
+      setNotifications(prev =>
+        prev.map(n => (n.id === id ? { ...n, read: true } : n))
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
   
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
+  const markAllAsRead = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
   };
   
-  const deleteNotification = (id: string, e: React.MouseEvent) => {
+  const deleteNotification = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setNotifications(notifications.filter(n => n.id !== id));
+    try {
+      await notificationService.deleteNotification(id);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      // Update unread count if the deleted notification was unread
+      const deletedNotification = notifications.find(n => n.id === id);
+      if (deletedNotification && !deletedNotification.read) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    }
   };
   
-  const clearAllNotifications = () => {
-    setNotifications([]);
+  const clearAllNotifications = async () => {
+    try {
+      await notificationService.clearAllNotifications();
+      setNotifications([]);
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error clearing all notifications:', error);
+    }
+  };
+
+  const handleNotificationClick = (notification: Notification) => {
+    // Mark as read and navigate
+    notificationService.handleNotificationClick(notification, navigate);
+    markAsRead(notification.id);
+    setShowNotifications(false);
   };
   
   const closeAllMenus = () => {
@@ -526,7 +556,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                           className={`px-4 py-3 border-b border-dark-800 hover:bg-dark-800/50 cursor-pointer ${
                             getNotificationClassName(notification.type)
                           }`}
-                          onClick={() => markAsRead(notification.id)}
+                          onClick={() => handleNotificationClick(notification)}
                           initial={{ opacity: 0, y: -10 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: 10 }}
@@ -546,7 +576,9 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                                 </button>
                               </div>
                               <p className="text-sm mt-1 opacity-90">{notification.message}</p>
-                              <span className="text-xs mt-1 opacity-70">{notification.time}</span>
+                              <span className="text-xs mt-1 opacity-70">
+                                {notificationService.formatRelativeTime(notification.created_at)}
+                              </span>
                             </div>
                           </div>
                         </motion.div>

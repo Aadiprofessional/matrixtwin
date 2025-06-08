@@ -618,8 +618,22 @@ const SafetyPage: React.FC = () => {
   const canUserEditEntry = (entry: SafetyEntry) => {
     if (!user?.id) return false;
     
-    // Only admin can edit when entry is in initial state or rejected
+    // Check if entry is permanently rejected
+    if (entry.status === 'permanently_rejected') {
+      return false;
+    }
+    
+    // Admin can edit when entry is in initial state, rejected, or pending
     if (user.role === 'admin' && (entry.status === 'pending' || entry.status === 'rejected')) {
+      return true;
+    }
+    
+    // Check if user is executor of current node and entry is rejected
+    const currentNode = entry.safety_workflow_nodes?.find(
+      node => node.node_order === entry.current_node_index
+    );
+    
+    if (currentNode && currentNode.executor_id === user.id && entry.status === 'rejected') {
       return true;
     }
     
@@ -628,27 +642,39 @@ const SafetyPage: React.FC = () => {
 
   // Check if user can update form data (current node executor or CC with edit access)
   const canUserUpdateForm = (entry: SafetyEntry) => {
-    if (!user?.id || entry.status !== 'pending') return false;
+    if (!user?.id) return false;
+    
+    // Check if entry is permanently rejected
+    if (entry.status === 'permanently_rejected') {
+      return false;
+    }
     
     // Admin can always edit
     if (user.role === 'admin') return true;
     
     // Check if user is the executor for current workflow node
     const currentNode = entry.safety_workflow_nodes?.find((node: any) => 
-      node.node_order === entry.current_node_index && 
-      node.status === 'pending'
+      node.node_order === entry.current_node_index
     );
     
     if (currentNode) {
-      // Executor can always edit
-      if (currentNode.executor_id === user.id) return true;
+      // If entry status is 'rejected', the current node should have full access
+      if (entry.status === 'rejected' && currentNode.executor_id === user.id) {
+        return true;
+      }
       
-      // CC can edit if edit access is enabled for this node
-      if (currentNode.edit_access) {
-        const isCC = entry.safety_assignments?.some((a: any) => 
-          a.user_id === user.id && a.node_id === currentNode.node_id
-        );
-        if (isCC) return true;
+      // For pending status, check normal permissions
+      if (entry.status === 'pending') {
+        // Executor can always edit
+        if (currentNode.executor_id === user.id) return true;
+        
+        // CC can edit if edit access is enabled for this node
+        if (currentNode.edit_access) {
+          const isCC = entry.safety_assignments?.some((a: any) => 
+            a.user_id === user.id && a.node_id === currentNode.node_id
+          );
+          if (isCC) return true;
+        }
       }
     }
     
@@ -657,18 +683,32 @@ const SafetyPage: React.FC = () => {
 
   // Check if user can approve/reject current workflow step (only executor)
   const canUserApproveEntry = (entry: SafetyEntry) => {
-    if (!user?.id || entry.status !== 'pending') return false;
+    if (!user?.id) return false;
+    
+    // Check if entry is permanently rejected or completed
+    if (entry.status === 'permanently_rejected' || entry.status === 'completed') {
+      return false;
+    }
     
     // Admin can always approve
     if (user.role === 'admin') return true;
     
     // Check if user is the executor for current workflow node
     const currentNode = entry.safety_workflow_nodes?.find((node: any) => 
-      node.node_order === entry.current_node_index && 
-      node.status === 'pending'
+      node.node_order === entry.current_node_index
     );
     
-    if (currentNode && currentNode.executor_id === user.id) return true;
+    if (currentNode && currentNode.executor_id === user.id) {
+      // If entry status is 'rejected', the current node should have full access
+      if (entry.status === 'rejected') {
+        return true;
+      }
+      
+      // For pending status, allow approval
+      if (entry.status === 'pending') {
+        return true;
+      }
+    }
     
     return false;
   };
@@ -2083,8 +2123,8 @@ const SafetyPage: React.FC = () => {
 
                   {/* Second row - Workflow action buttons */}
                   <div className="flex justify-end space-x-3">
-                    {/* Workflow Action Buttons */}
-                    {selectedSafetyEntry.status === 'pending' && (
+                    {/* Workflow Action Buttons - show for pending entries and rejected entries where user has permissions */}
+                    {(selectedSafetyEntry.status === 'pending' || selectedSafetyEntry.status === 'rejected') && (
                       <>
                         {canUserEditEntry(selectedSafetyEntry) && (
                           <Button 
@@ -2107,9 +2147,9 @@ const SafetyPage: React.FC = () => {
                                 variant="outline"
                                 leftIcon={<RiArrowLeftLine />}
                                 onClick={() => handleWorkflowAction('back')}
-                                className="text-blue-600 border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                className="text-orange-600 border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
                               >
-                                Back to Previous
+                                Send Back
                               </Button>
                             )}
                             <Button 

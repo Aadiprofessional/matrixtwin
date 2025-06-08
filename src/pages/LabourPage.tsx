@@ -595,8 +595,22 @@ const LabourPage: React.FC = () => {
   const canUserEditEntry = (entry: LabourEntry) => {
     if (!user?.id) return false;
     
-    // Only admin can edit when entry is in initial state or rejected
+    // Check if entry is permanently rejected
+    if (entry.status === 'permanently_rejected') {
+      return false;
+    }
+    
+    // Admin can edit when entry is in initial state, rejected, or pending
     if (user.role === 'admin' && (entry.status === 'pending' || entry.status === 'rejected')) {
+      return true;
+    }
+    
+    // Check if user is executor of current node and entry is rejected
+    const currentNode = entry.labour_workflow_nodes?.find(
+      node => node.node_order === entry.current_node_index
+    );
+    
+    if (currentNode && currentNode.executor_id === user.id && entry.status === 'rejected') {
       return true;
     }
     
@@ -605,27 +619,39 @@ const LabourPage: React.FC = () => {
 
   // Check if user can update form data (current node executor or CC with edit access)
   const canUserUpdateForm = (entry: LabourEntry) => {
-    if (!user?.id || entry.status !== 'pending') return false;
+    if (!user?.id) return false;
+    
+    // Check if entry is permanently rejected
+    if (entry.status === 'permanently_rejected') {
+      return false;
+    }
     
     // Admin can always edit
     if (user.role === 'admin') return true;
     
     // Check if user is the executor for current workflow node
     const currentNode = entry.labour_workflow_nodes?.find((node: any) => 
-      node.node_order === entry.current_node_index && 
-      node.status === 'pending'
+      node.node_order === entry.current_node_index
     );
     
     if (currentNode) {
-      // Executor can always edit
-      if (currentNode.executor_id === user.id) return true;
+      // If entry status is 'rejected', the current node should have full access
+      if (entry.status === 'rejected' && currentNode.executor_id === user.id) {
+        return true;
+      }
       
-      // CC can edit if edit access is enabled for this node
-      if (currentNode.edit_access) {
-        const isCC = entry.labour_assignments?.some((a: any) => 
-          a.user_id === user.id && a.node_id === currentNode.node_id
-        );
-        if (isCC) return true;
+      // For pending status, check normal permissions
+      if (entry.status === 'pending') {
+        // Executor can always edit
+        if (currentNode.executor_id === user.id) return true;
+        
+        // CC can edit if edit access is enabled for this node
+        if (currentNode.edit_access) {
+          const isCC = entry.labour_assignments?.some((a: any) => 
+            a.user_id === user.id && a.node_id === currentNode.node_id
+          );
+          if (isCC) return true;
+        }
       }
     }
     
@@ -634,18 +660,32 @@ const LabourPage: React.FC = () => {
 
   // Check if user can approve/reject current workflow step (only executor)
   const canUserApproveEntry = (entry: LabourEntry) => {
-    if (!user?.id || entry.status !== 'pending') return false;
+    if (!user?.id) return false;
+    
+    // Check if entry is permanently rejected or completed
+    if (entry.status === 'permanently_rejected' || entry.status === 'completed') {
+      return false;
+    }
     
     // Admin can always approve
     if (user.role === 'admin') return true;
     
     // Check if user is the executor for current workflow node
     const currentNode = entry.labour_workflow_nodes?.find((node: any) => 
-      node.node_order === entry.current_node_index && 
-      node.status === 'pending'
+      node.node_order === entry.current_node_index
     );
     
-    if (currentNode && currentNode.executor_id === user.id) return true;
+    if (currentNode && currentNode.executor_id === user.id) {
+      // If entry status is 'rejected', the current node should have full access
+      if (entry.status === 'rejected') {
+        return true;
+      }
+      
+      // For pending status, allow approval
+      if (entry.status === 'pending') {
+        return true;
+      }
+    }
     
     return false;
   };
@@ -1895,8 +1935,8 @@ const LabourPage: React.FC = () => {
 
                   {/* Second row - Workflow action buttons */}
                   <div className="flex justify-end space-x-3">
-                    {/* Workflow Action Buttons based on user permissions */}
-                    {selectedLabourEntry.status === 'pending' && (
+                    {/* Workflow Action Buttons - show for pending entries and rejected entries where user has permissions */}
+                    {(selectedLabourEntry.status === 'pending' || selectedLabourEntry.status === 'rejected') && (
                       <>
                         {/* Admin can edit when entry is pending or rejected */}
                         {canUserEditEntry(selectedLabourEntry) && (
@@ -1946,21 +1986,6 @@ const LabourPage: React.FC = () => {
                           </>
                         )}
                       </>
-                    )}
-                    
-                    {/* Rejected status - only admin can resolve */}
-                    {selectedLabourEntry.status === 'rejected' && canUserEditEntry(selectedLabourEntry) && (
-                      <Button 
-                        variant="primary"
-                        leftIcon={<RiSettings4Line />}
-                        onClick={() => {
-                          setShowDetails(false);
-                          setShowFormView(true);
-                        }}
-                        className="bg-blue-600 hover:bg-blue-700"
-                      >
-                        Resolve & Edit
-                      </Button>
                     )}
                     
                     <Button 

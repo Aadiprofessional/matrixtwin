@@ -546,7 +546,8 @@ const CleansingPage: React.FC = () => {
         },
         body: JSON.stringify({
           formData: formData,
-          updatedBy: user.id
+          action: 'update',
+          userId: user.id
         })
       });
 
@@ -557,40 +558,18 @@ const CleansingPage: React.FC = () => {
         setSelectedCleansingEntry(null);
         alert('Cleansing entry updated successfully!');
       } else {
-        // Try to parse as JSON first, fallback to text if it fails
-        let errorMessage = 'Failed to update cleansing entry';
-        try {
-          const errorData = await response.json();
-          errorMessage = `Failed to update cleansing entry: ${errorData.error || errorData.message || 'Unknown error'}`;
-        } catch (parseError) {
-          // If JSON parsing fails, get the response as text
-          const errorText = await response.text();
-          console.error('Server returned non-JSON response:', errorText);
-          
-          if (errorText.includes('<!DOCTYPE')) {
-            errorMessage = `Server error (${response.status}): The cleansing API endpoint may be temporarily unavailable. Please try again in a few moments.`;
-          } else {
-            errorMessage = `Failed to update cleansing entry: Server returned ${response.status} - ${errorText.substring(0, 100)}`;
-          }
-        }
+        const error = await response.json();
         
-        console.error('Error updating cleansing entry:', errorMessage);
-        alert(errorMessage);
+        // Handle completion limit errors
+        if (error.error?.includes('completion limit')) {
+          alert(`Cannot update form: ${error.error}\n${error.details || ''}`);
+        } else {
+          alert(`Failed to update cleansing entry: ${error.error}`);
+        }
       }
     } catch (error: any) {
       console.error('Error updating cleansing entry:', error);
-      
-      // Provide more specific error messages based on error type
-      let errorMessage = 'Failed to update cleansing entry. ';
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        errorMessage += 'Network connection error. Please check your internet connection and try again.';
-      } else if (error.message && error.message.includes('JSON')) {
-        errorMessage += 'Server returned an invalid response. The API may be temporarily unavailable.';
-      } else {
-        errorMessage += 'Please try again.';
-      }
-      
-      alert(errorMessage);
+      alert('Failed to update cleansing entry. Please try again.');
     }
   };
 
@@ -628,52 +607,34 @@ const CleansingPage: React.FC = () => {
         })
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-
       if (response.ok) {
-        // Backend handles all email notifications
+        const result = await response.json();
+        
+        // Handle permanent rejection
+        if (result.permanently_rejected) {
+          alert('Entry has been permanently rejected - no more edits are allowed as all nodes have reached their completion limit.');
+        } else {
+          alert(`Entry ${action}d successfully! Notifications have been sent.`);
+        }
         
         // Refresh cleansing entries and entry details
         await fetchCleansingEntries();
         await handleViewDetails(selectedCleansingEntry);
-        
-        alert(`Entry ${action}d successfully! Notifications have been sent.`);
       } else {
-        // Try to parse as JSON first, fallback to text if it fails
-        let errorMessage = `Failed to ${action} entry`;
-        try {
-          const errorData = await response.json();
-          errorMessage = `Failed to ${action} entry: ${errorData.error || errorData.message || 'Unknown error'}`;
-        } catch (parseError) {
-          // If JSON parsing fails, get the response as text
-          const errorText = await response.text();
-          console.error('Server returned non-JSON response:', errorText);
-          
-          if (errorText.includes('<!DOCTYPE')) {
-            errorMessage = `Server error (${response.status}): The cleansing API endpoint may be temporarily unavailable. Please try again in a few moments.`;
-          } else {
-            errorMessage = `Failed to ${action} entry: Server returned ${response.status} - ${errorText.substring(0, 100)}`;
-          }
-        }
+        const error = await response.json();
         
-        console.error(`Error ${action}ing entry:`, errorMessage);
-        alert(errorMessage);
+        // Handle specific error cases
+        if (error.error?.includes('completion limit')) {
+          alert(`Cannot ${action}: ${error.error}\n${error.details || ''}`);
+        } else if (error.error?.includes('No previous node available')) {
+          alert(`Cannot send back: ${error.error}\n${error.details || ''}`);
+        } else {
+          alert(`Failed to ${action} entry: ${error.error}`);
+        }
       }
     } catch (error: any) {
       console.error(`Error ${action}ing entry:`, error);
-      
-      // Provide more specific error messages based on error type
-      let errorMessage = `Failed to ${action} entry. `;
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        errorMessage += 'Network connection error. Please check your internet connection and try again.';
-      } else if (error.message && error.message.includes('JSON')) {
-        errorMessage += 'Server returned an invalid response. The API may be temporarily unavailable.';
-      } else {
-        errorMessage += 'Please try again.';
-      }
-      
-      alert(errorMessage);
+      alert(`Failed to ${action} entry. Please try again.`);
     }
   };
 
@@ -681,57 +642,109 @@ const CleansingPage: React.FC = () => {
   const canUserEditEntry = (entry: CleansingEntry) => {
     if (!user?.id) return false;
     
-    // Only admin can edit when entry is in initial state or rejected
+    // Check if entry is permanently rejected
+    if (entry.status === 'permanently_rejected') {
+      return false;
+    }
+    
+    // Admin can edit when entry is in initial state, rejected, or pending
     if (user.role === 'admin' && (entry.status === 'pending' || entry.status === 'rejected')) {
+      return true;
+    }
+    
+    // Check if user is executor of current node and entry is rejected
+    const currentNode = entry.cleansing_workflow_nodes?.find(
+      node => node.node_order === entry.current_node_index
+    );
+    
+    if (currentNode && currentNode.executor_id === user.id && entry.status === 'rejected') {
       return true;
     }
     
     return false;
   };
 
-  // Check if user can update form data (current node executor or CC with edit access)
+  // Check if user can update form data (with completion limit awareness)
   const canUserUpdateForm = (entry: CleansingEntry) => {
-    if (!user?.id || entry.status !== 'pending') return false;
+    if (!user?.id) return false;
     
-    // Admin can always edit
-    if (user.role === 'admin') return true;
-    
-    // Check if user is the executor for current workflow node
-    const currentNode = entry.cleansing_workflow_nodes?.find((node: any) => 
-      node.node_order === entry.current_node_index && 
-      node.status === 'pending'
-    );
-    
-    if (currentNode) {
-      // Executor can always edit
-      if (currentNode.executor_id === user.id) return true;
-      
-      // CC can edit if edit access is enabled for this node
-      if (currentNode.edit_access) {
-        const isCC = entry.cleansing_assignments?.some((a: any) => 
-          a.user_id === user.id && a.node_id === currentNode.node_id
-        );
-        if (isCC) return true;
-      }
+    // Check if entry is permanently rejected
+    if (entry.status === 'permanently_rejected') {
+      return false;
     }
     
-    return false;
-  };
-
-  // Check if user can approve/reject current workflow step (only executor)
-  const canUserApproveEntry = (entry: CleansingEntry) => {
-    if (!user?.id || entry.status !== 'pending') return false;
+    // Admin can always edit their own entries
+    if (user.role === 'admin' && entry.created_by === user.id) {
+      return true;
+    }
     
-    // Admin can always approve
-    if (user.role === 'admin') return true;
-    
-    // Check if user is the executor for current workflow node
-    const currentNode = entry.cleansing_workflow_nodes?.find((node: any) => 
-      node.node_order === entry.current_node_index && 
-      node.status === 'pending'
+    // Check if user is assigned to current node
+    const currentNode = entry.cleansing_workflow_nodes?.find(
+      node => node.node_order === entry.current_node_index
     );
     
-    if (currentNode && currentNode.executor_id === user.id) return true;
+    if (currentNode && currentNode.executor_id === user.id) {
+      // If entry status is 'rejected', the current node should have full access
+      // regardless of completion limits (fresh chance after rejection)
+      if (entry.status === 'rejected') {
+        return true;
+      }
+      
+      // For other statuses, check completion limits
+      const completionCount = currentNode.completion_count || 0;
+      const maxCompletions = currentNode.max_completions || 2;
+      const canReEdit = currentNode.can_re_edit !== false;
+      
+      return canReEdit && completionCount < maxCompletions;
+    }
+    
+    // Check if user is in assignments for current node
+    const isAssigned = entry.cleansing_assignments?.some(
+      assignment => assignment.user_id === user.id && 
+                   assignment.node_id === currentNode?.node_id
+    );
+    
+    // If assigned and entry is rejected, give full access
+    if (isAssigned && entry.status === 'rejected') {
+      return true;
+    }
+    
+    return isAssigned;
+  };
+
+  // Check if user can approve/reject current workflow step (with completion limit awareness)
+  const canUserApproveEntry = (entry: CleansingEntry) => {
+    if (!user?.id) return false;
+    
+    // Check if entry is permanently rejected or completed
+    if (entry.status === 'permanently_rejected' || entry.status === 'completed') {
+      return false;
+    }
+    
+    // Admin can approve any entry
+    if (user.role === 'admin') {
+      return true;
+    }
+    
+    // Check if user is executor of current node
+    const currentNode = entry.cleansing_workflow_nodes?.find(
+      node => node.node_order === entry.current_node_index
+    );
+    
+    if (currentNode && currentNode.executor_id === user.id) {
+      // If entry status is 'rejected', the current node should have full access
+      // regardless of completion limits (fresh chance after rejection)
+      if (entry.status === 'rejected') {
+        return true;
+      }
+      
+      // For other statuses, check completion limits
+      const completionCount = currentNode.completion_count || 0;
+      const maxCompletions = currentNode.max_completions || 2;
+      const canReEdit = currentNode.can_re_edit !== false;
+      
+      return canReEdit && completionCount < maxCompletions;
+    }
     
     return false;
   };
@@ -792,13 +805,41 @@ const CleansingPage: React.FC = () => {
       pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
       in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
       completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-      rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+      rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+      permanently_rejected: 'bg-red-200 text-red-900 dark:bg-red-900/40 dark:text-red-300'
     };
+
+    // Get current node completion info
+    const currentNode = entry.cleansing_workflow_nodes?.find(
+      node => node.node_order === entry.current_node_index
+    );
+    
+    let statusText = entry.status?.charAt(0).toUpperCase() + entry.status?.slice(1) || 'Pending';
+    let completionInfo = '';
+    
+    if (entry.status === 'permanently_rejected') {
+      statusText = 'Permanently Rejected';
+    } else if (currentNode && entry.status === 'pending') {
+      const completionCount = currentNode.completion_count || 0;
+      const maxCompletions = currentNode.max_completions || 2;
+      completionInfo = ` (${completionCount}/${maxCompletions})`;
+      
+      if (completionCount >= maxCompletions && !currentNode.can_re_edit) {
+        statusText = 'Limit Reached';
+      }
+    }
     
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[entry.status as keyof typeof statusColors] || statusColors.pending}`}>
-        {entry.status?.charAt(0).toUpperCase() + entry.status?.slice(1) || 'Pending'}
-      </span>
+      <div className="flex flex-col items-start">
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[entry.status as keyof typeof statusColors] || statusColors.pending}`}>
+          {statusText}
+        </span>
+        {completionInfo && (
+          <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Completions{completionInfo}
+          </span>
+        )}
+      </div>
     );
   };
 
@@ -2017,8 +2058,8 @@ const CleansingPage: React.FC = () => {
 
                   {/* Second row - Workflow action buttons */}
                   <div className="flex justify-end space-x-3">
-                    {/* Workflow Action Buttons */}
-                    {selectedCleansingEntry.status === 'pending' && (
+                    {/* Workflow Action Buttons - show for pending entries and rejected entries where user has permissions */}
+                    {(selectedCleansingEntry.status === 'pending' || selectedCleansingEntry.status === 'rejected') && (
                       <>
                         {canUserEditEntry(selectedCleansingEntry) && (
                           <Button 
@@ -2035,6 +2076,18 @@ const CleansingPage: React.FC = () => {
                         
                         {canUserApproveEntry(selectedCleansingEntry) && (
                           <>
+                            {/* Back to previous node button (only if not first node) */}
+                            {selectedCleansingEntry.current_node_index > 0 && (
+                              <Button 
+                                variant="outline"
+                                leftIcon={<RiArrowLeftLine />}
+                                onClick={() => handleWorkflowAction('back')}
+                                className="text-orange-600 border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                              >
+                                Send Back
+                              </Button>
+                            )}
+                            
                             <Button 
                               variant="outline"
                               leftIcon={<RiCloseLine />}
