@@ -1532,25 +1532,28 @@ const FormsPage: React.FC = () => {
   // Add formsList state
   const [formsList, setFormsList] = useState([
     {
-      id: 1,
-      title: 'Site Inspection Form',
+      id: '1',
+      name: 'Site Inspection Form',
       description: 'Form for site safety inspections',
-      fieldsCount: 12,
-      pages: [{ id: 'page_1', fields: [] }]
+      form_structure: { pages: [{ id: 'page_1', fields: [] }] },
+      created_at: new Date().toISOString(),
+      fieldsCount: 12
     },
     {
-      id: 2,
-      title: 'Incident Report',
+      id: '2',
+      name: 'Incident Report',
       description: 'Document safety incidents on site',
-      fieldsCount: 18,
-      pages: [{ id: 'page_1', fields: [] }, { id: 'page_2', fields: [] }]
+      form_structure: { pages: [{ id: 'page_1', fields: [] }, { id: 'page_2', fields: [] }] },
+      created_at: new Date().toISOString(),
+      fieldsCount: 18
     },
     {
-      id: 3,
-      title: 'Equipment Checklist',
+      id: '3',
+      name: 'Equipment Checklist',
       description: 'Verify equipment status before use',
-      fieldsCount: 8,
-      pages: [{ id: 'page_1', fields: [] }]
+      form_structure: { pages: [{ id: 'page_1', fields: [] }] },
+      created_at: new Date().toISOString(),
+      fieldsCount: 8
     }
   ]);
   
@@ -1858,40 +1861,24 @@ const FormsPage: React.FC = () => {
   
   // Handle loading template data when a template is selected
   const handleTemplateSelection = (templateId: number) => {
-    const selectedTemplate = formsList.find(form => form.id === templateId);
-    if (selectedTemplate && selectedTemplate.pages) {
-      setFormPages(selectedTemplate.pages);
-      setFormName(selectedTemplate.title);
-      setFormDescription(selectedTemplate.description);
-      setCurrentPageIndex(0);
+    const selectedForm = formsList.find(form => form.id === templateId.toString());
+    if (selectedForm) {
+      setFormPages(selectedForm.form_structure?.pages || [{ id: 'page_1', fields: [] }]);
     }
   };
   
   // Handle form creation flow completion
   const handleSaveForm = (formData: any) => {
-    console.log('Form saved:', formData);
-    
-    // Create a new form object
+    // Handle form save logic
     const newForm = {
-      id: formsList.length + 1,
-      title: formData.templateName || formName,
-      description: formData.formDescription || formDescription,
-      fieldsCount: formData.formPages ? 
-        formData.formPages.reduce((count: number, page: any) => count + page.fields.length, 0) : 
-        formPages.reduce((count, page) => count + page.fields.length, 0),
-      pages: formData.formPages || formPages
+      id: (formsList.length + 1).toString(),
+      name: formData.templateName || 'New Form',
+      description: formData.formDescription || '',
+      form_structure: { pages: formData.formPages || [{ id: 'page_1', fields: [] }] },
+      created_at: new Date().toISOString(),
+      fieldsCount: formData.formPages?.reduce((count: number, page: any) => count + page.fields.length, 0) || 0
     };
-    
-    // Add to forms list
     setFormsList([...formsList, newForm]);
-    
-    // Reset form state
-    setFormName('');
-    setFormDescription('');
-    setFormPages([{ id: '1', fields: [] }]);
-    setCurrentPageIndex(0);
-    setSelectedField(null);
-    setShowCreateForm(false);
   };
   
   const handleCreateForm = () => {
@@ -2392,11 +2379,12 @@ const FormsPage: React.FC = () => {
   const handleSiteDiarySave = (siteDiaryData: any) => {
     // Create a new form object with Site Diary data
     const newForm = {
-      id: formsList.length + 1,
-      title: 'Site Diary',
+      id: (formsList.length + 1).toString(),
+      name: 'Site Diary',
       description: 'Daily site progress and activity documentation',
-      fieldsCount: Object.keys(siteDiaryData).length,
-      pages: formsList[0].pages // Use the existing form's pages structure
+      form_structure: { pages: formsList[0]?.form_structure?.pages || [{ id: 'page_1', fields: [] }] },
+      created_at: new Date().toISOString(),
+      fieldsCount: Object.keys(siteDiaryData).length
     };
     
     // Add to forms list
@@ -2414,11 +2402,12 @@ const FormsPage: React.FC = () => {
   const handleSafetyInspectionSave = (safetyData: any) => {
     // Create a new form object with Safety Inspection data
     const newForm = {
-      id: formsList.length + 1,
-      title: 'Safety Inspection Checklist',
+      id: (formsList.length + 1).toString(),
+      name: 'Safety Inspection Checklist',
       description: 'Weekly site safety inspection documentation',
-      fieldsCount: Object.keys(safetyData).length,
-      pages: formsList[1].pages // Use the existing form's pages structure
+      form_structure: { pages: formsList[1]?.form_structure?.pages || [{ id: 'page_1', fields: [] }] },
+      created_at: new Date().toISOString(),
+      fieldsCount: Object.keys(safetyData).length
     };
     
     // Add to forms list
@@ -2436,11 +2425,12 @@ const FormsPage: React.FC = () => {
   const handleDailyCleaningInspectionSave = (cleaningData: any) => {
     // Create a new form object with Daily Cleaning Inspection data
     const newForm = {
-      id: formsList.length + 1,
-      title: 'Daily Cleaning Inspection Checklist',
+      id: (formsList.length + 1).toString(),
+      name: 'Daily Cleaning Inspection Checklist',
       description: 'Daily cleaning inspection documentation',
-      fieldsCount: Object.keys(cleaningData).length,
-      pages: formsList[0].pages // Use the existing form's pages structure
+      form_structure: { pages: formsList[0]?.form_structure?.pages || [{ id: 'page_1', fields: [] }] },
+      created_at: new Date().toISOString(),
+      fieldsCount: Object.keys(cleaningData).length
     };
     
     // Add to forms list
@@ -2458,11 +2448,12 @@ const FormsPage: React.FC = () => {
   const handleMonthlyReturnSave = (monthlyReturnData: any) => {
     // Create a new form object with Monthly Return data
     const newForm = {
-      id: formsList.length + 1,
-      title: 'Monthly Return of Site Labour Deployment and Wage Rates',
+      id: (formsList.length + 1).toString(),
+      name: 'Monthly Return of Site Labour Deployment and Wage Rates',
       description: 'Monthly tracking of construction site labour deployment and wage rates',
-      fieldsCount: Object.keys(monthlyReturnData).length,
-      pages: formsList[0].pages // Use the existing form's pages structure
+      form_structure: { pages: formsList[0]?.form_structure?.pages || [{ id: 'page_1', fields: [] }] },
+      created_at: new Date().toISOString(),
+      fieldsCount: Object.keys(monthlyReturnData).length
     };
     
     // Add to forms list
@@ -2480,11 +2471,12 @@ const FormsPage: React.FC = () => {
   const handleInspectionCheckSave = (inspectionCheckData: any) => {
     // Create a new form object with Inspection Check data
     const newForm = {
-      id: formsList.length + 1,
-      title: 'Request for Inspection Check Form',
+      id: (formsList.length + 1).toString(),
+      name: 'Request for Inspection Check Form',
       description: 'Form for requesting inspection of construction works',
-      fieldsCount: Object.keys(inspectionCheckData).length,
-      pages: formsList[0].pages // Use the existing form's pages structure
+      form_structure: { pages: formsList[0]?.form_structure?.pages || [{ id: 'page_1', fields: [] }] },
+      created_at: new Date().toISOString(),
+      fieldsCount: Object.keys(inspectionCheckData).length
     };
     
     // Add to forms list
@@ -2502,11 +2494,12 @@ const FormsPage: React.FC = () => {
   const handleSurveyCheckSave = (surveyCheckData: any) => {
     // Create a new form object with Survey Check data
     const newForm = {
-      id: formsList.length + 1,
-      title: 'Request for Survey Check Form',
+      id: (formsList.length + 1).toString(),
+      name: 'Request for Survey Check Form',
       description: 'Form for requesting survey check of construction works',
-      fieldsCount: Object.keys(surveyCheckData).length,
-      pages: formsList[0].pages // Use the existing form's pages structure
+      form_structure: { pages: formsList[0]?.form_structure?.pages || [{ id: 'page_1', fields: [] }] },
+      created_at: new Date().toISOString(),
+      fieldsCount: Object.keys(surveyCheckData).length
     };
     
     // Add to forms list
@@ -2637,7 +2630,7 @@ const FormsPage: React.FC = () => {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold mb-1">{form.title}</h3>
+                  <h3 className="text-lg font-semibold mb-1">{form.name}</h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">{form.description}</p>
                 </div>
                 <div className="text-ai-blue dark:text-ai-blue-light">
@@ -2649,7 +2642,7 @@ const FormsPage: React.FC = () => {
                 <div className="text-sm text-gray-500">
                   <span>{form.fieldsCount} fields</span>
                   <span className="mx-2">•</span>
-                  <span>{form.pages.length} pages</span>
+                  <span>{form.form_structure?.pages?.length || 0} pages</span>
                 </div>
                 <Button variant="ghost" size="sm">
                   Open
@@ -2676,11 +2669,12 @@ const FormsPage: React.FC = () => {
                 onSave={(formData) => {
                   // Handle form save logic
                   const newForm = {
-                    id: formsList.length + 1,
-                    title: formData.templateName || 'New Form',
+                    id: (formsList.length + 1).toString(),
+                    name: formData.templateName || 'New Form',
                     description: formData.formDescription || '',
-                    fieldsCount: formData.formPages?.reduce((count: number, page: any) => count + page.fields.length, 0) || 0,
-                    pages: formData.formPages || [{ id: 'page_1', fields: [] }]
+                    form_structure: { pages: formData.formPages || [{ id: 'page_1', fields: [] }] },
+                    created_at: new Date().toISOString(),
+                    fieldsCount: formData.formPages?.reduce((count: number, page: any) => count + page.fields.length, 0) || 0
                   };
                   setFormsList([...formsList, newForm]);
                   setFormFlowOpen(false);

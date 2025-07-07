@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -18,6 +18,7 @@ import {
   RiCloseLine,
   RiPrinterLine
 } from 'react-icons/ri';
+import { generatePrefixedFormNumber, FORM_PREFIXES } from '../../utils/formUtils';
 
 interface SafetyInspectionChecklistTemplateProps {
   onClose: () => void;
@@ -38,6 +39,9 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
 }) => {
   const [currentPage, setCurrentPage] = useState<1 | 2 | 3 | 4>(1);
   const [formData, setFormData] = useState({
+    // Auto-generated form number
+    formNumber: initialData?.formNumber || generatePrefixedFormNumber(FORM_PREFIXES.SAFETY),
+    
     // Common header data
     contractNo: initialData?.contractNo || '',
     contractTitle: initialData?.contractTitle || '',
@@ -895,6 +899,17 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                 <h3 className="text-lg font-bold mb-4">Weekly Site Safety Inspection Checklist</h3>
                 
                 <div className="grid grid-cols-2 gap-4 mb-2">
+                  <div className="flex items-center">
+                    <span className="font-semibold mr-2">Form No.:</span>
+                    <input 
+                      type="text" 
+                      className="flex-1 border-b border-gray-400 outline-none bg-gray-100" 
+                      value={formData.formNumber}
+                      readOnly
+                      title="Auto-generated form number"
+                    />
+                  </div>
+                  <div></div>
                   <div className="flex items-center">
                     <span className="font-semibold mr-2">Contract No.:</span>
                     <input 

@@ -22,7 +22,7 @@ import { useAIChat } from '../contexts/AIChatContext';
 import { Button } from '../components/ui/Button';
 
 // Define API URL - adjust the port depending on your actual server setup
-const API_URL = 'https://matrixbim-server.onrender.com/api/dashscope';
+const API_URL = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions';
 
 // Define speech recognition interface for TypeScript
 interface IWindow extends Window {
@@ -42,7 +42,6 @@ const VoiceCallPage: React.FC = () => {
   const [responses, setResponses] = useState<string[]>([]);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [memoryId, setMemoryId] = useState<string | null>(null);
   const [hasApiError, setHasApiError] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [listening, setListening] = useState(false);
@@ -120,31 +119,6 @@ const VoiceCallPage: React.FC = () => {
     }
   }, [responses]);
 
-  // Initialize memory ID on component mount
-  useEffect(() => {
-    const createMemory = async () => {
-      try {
-        console.log('Attempting to create memory session...');
-        const response = await axios.post(`${API_URL}/create-memory`, {}, {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        console.log('Create memory response:', response.data);
-        if (response.data && response.data.output && response.data.output.memory_id) {
-          setMemoryId(response.data.output.memory_id);
-          setHasApiError(false);
-        }
-      } catch (error) {
-        console.error('Error creating memory:', error);
-        setHasApiError(true);
-      }
-    };
-
-    createMemory();
-  }, []);
-
   // Set up call timer
   useEffect(() => {
     if (callStatus === 'connected') {
@@ -156,26 +130,53 @@ const VoiceCallPage: React.FC = () => {
       const sendInitialGreeting = async () => {
         try {
           console.log('Sending initial voice call...');
-          const response = await axios.post(`${API_URL}/voice-call`, {
-            prompt: 'Introduce yourself briefly as Matrix AI. Speak in English.',
+          
+          // Prepare the request data for Alibaba Cloud Dashscope API
+          const requestData = {
+            model: "qwen-vl-max-latest",
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: "Introduce yourself briefly as Matrix AI construction assistant. Speak in English."
+                  }
+                ]
+              }
+            ],
+            application_id: "baa26cf5fca64039b42cd0317a6eef00",
             stream: false
-          }, {
+          };
+
+          const response = await fetch(API_URL, {
+            method: 'POST',
             headers: {
+              'Authorization': 'Bearer sk-9ea2cfb0ba3c46d9b4c38049a9b64cdb',
               'Content-Type': 'application/json'
-            }
+            },
+            body: JSON.stringify(requestData)
           });
 
-          console.log('Voice call response:', response.data);
-          // Extract text from the new response format
+          if (!response.ok) {
+            throw new Error(`API responded with ${response.status}: ${response.statusText}`);
+          }
+
+          const responseData = await response.json();
+          console.log('Voice call response:', responseData);
+          
+          // Extract text from the response
           let aiResponse = '';
-          if (response.data && response.data.output && response.data.output.text) {
-            aiResponse = response.data.output.text;
+          if (responseData.choices && responseData.choices[0] && responseData.choices[0].message) {
+            aiResponse = responseData.choices[0].message.content;
           }
           
           if (aiResponse) {
             setResponses(prev => [...prev, aiResponse]);
             speakText(aiResponse);
             setHasApiError(false);
+          } else {
+            throw new Error('No response content received');
           }
         } catch (error) {
           console.error('Error getting AI response:', error);
@@ -341,22 +342,46 @@ const VoiceCallPage: React.FC = () => {
     
     try {
       console.log('Sending voice message:', transcript);
-      // Send to voice API
-      const response = await axios.post(`${API_URL}/voice-call`, {
-        prompt: `${transcript} (Please respond in English)`,
-        stream: false,
-        memory_id: memoryId
-      }, {
+      
+      // Prepare the request data for Alibaba Cloud Dashscope API
+      const requestData = {
+        model: "qwen-vl-max-latest",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `${transcript} (Please respond in English as Matrix AI construction assistant)`
+              }
+            ]
+          }
+        ],
+        application_id: "baa26cf5fca64039b42cd0317a6eef00",
+        stream: false
+      };
+      
+      // Send to Alibaba Cloud API
+      const response = await fetch(API_URL, {
+        method: 'POST',
         headers: {
+          'Authorization': 'Bearer sk-9ea2cfb0ba3c46d9b4c38049a9b64cdb',
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify(requestData)
       });
       
-      console.log('Voice message response:', response.data);
-      // Extract text from the new response format
+      if (!response.ok) {
+        throw new Error(`API responded with ${response.status}: ${response.statusText}`);
+      }
+      
+      const responseData = await response.json();
+      console.log('Voice message response:', responseData);
+      
+      // Extract text from the response
       let aiResponse = '';
-      if (response.data && response.data.output && response.data.output.text) {
-        aiResponse = response.data.output.text;
+      if (responseData.choices && responseData.choices[0] && responseData.choices[0].message) {
+        aiResponse = responseData.choices[0].message.content;
       }
       
       if (aiResponse) {
@@ -367,6 +392,8 @@ const VoiceCallPage: React.FC = () => {
         
         // Also send to chat context for history
         await sendMessage(transcript);
+      } else {
+        throw new Error('No response content received');
       }
     } catch (error) {
       console.error('Error processing voice message:', error);

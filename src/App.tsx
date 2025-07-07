@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { IconContext } from 'react-icons';
@@ -13,6 +13,7 @@ import { Layout } from './components/layout/Layout';
 
 // Components
 import ScrollToTop from './components/ScrollToTop';
+import { PermissionErrorModal } from './components/ui/PermissionErrorModal';
 
 // Pages
 import Login from './pages/auth/Login';
@@ -50,6 +51,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; requiredRoles?: User
   requiredRoles,
 }) => {
   const { isAuthenticated, hasPermission, user } = useAuth();
+  const [showPermissionError, setShowPermissionError] = useState(false);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" />;
@@ -58,11 +60,24 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; requiredRoles?: User
   if (requiredRoles) {
     // Check if user has required role
     if (!hasPermission(requiredRoles)) {
-      // If user is worker or site inspector, redirect to dashboard
-      if (user?.role === 'worker' || user?.role === 'siteInspector') {
-        return <Navigate to="/dashboard" />;
-      }
-      return <Navigate to="/" />;
+      // Show permission error modal instead of redirecting
+      return (
+        <>
+          <PermissionErrorModal
+            isOpen={true}
+            onClose={() => {
+              // Don't automatically redirect, let user choose
+              setShowPermissionError(false);
+            }}
+            title="Access Denied"
+            message="You don't have permission to access this page. Please contact your administrator if you believe this is an error."
+            requiredRole={requiredRoles.join(' or ')}
+            userRole={user?.role}
+          />
+          {/* Show the current page content behind the modal but keep it accessible */}
+          {children}
+        </>
+      );
     }
   }
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { RiCalendarLine, RiUserLine, RiFileTextLine, RiDownload2Line, RiAddLine, RiFilePdf2Line, RiCheckLine } from 'react-icons/ri';
+import { generatePrefixedFormNumber } from '../../utils/formUtils';
 
 interface MonthlyReturnTemplateProps {
   onClose: () => void;
@@ -26,6 +27,7 @@ interface WorkerEntry {
 
 // Form data interface
 interface FormData {
+  formNumber: string;
   dept: string;
   day: string;
   month: string;
@@ -259,16 +261,12 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
   onSave,
   initialData
 }) => {
-  // Add pagination state
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  // We have exactly 2 pages: items 1-17 on page 1 and items 18-45 on page 2
-  const totalPages = 2;
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages] = useState(10);
   
-  // Split workers into pages with plenty of capacity
-  const workersPerPage = 45;
-  
-  // Remove pagination state since we only need one page
+  // Form data
   const [formData, setFormData] = useState<FormData>({
+    formNumber: generatePrefixedFormNumber('LB'), // Auto-generate form number for Labour
     dept: initialData?.dept || '',
     day: initialData?.day || '',
     month: initialData?.month || '',
@@ -278,7 +276,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
     contractor: initialData?.contractor || '',
     isNominatedSubcontractor: initialData?.isNominatedSubcontractor || false,
     worksCode: initialData?.worksCode || '',
-    workers: initialData?.workers || initialWorkerData
+    workers: initialData?.workers || JSON.parse(JSON.stringify(initialWorkerData))
   });
   
   // Get current page workers
@@ -618,6 +616,10 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
 
           <div class="info-row">
             <div class="info-item">
+              <div class="info-label">Form Number:</div>
+              <div class="info-value">${formData.formNumber}</div>
+            </div>
+            <div class="info-item">
               <div class="info-label">Dept/Div:</div>
               <div class="info-value">${formData.dept}</div>
             </div>
@@ -806,8 +808,20 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
           </div>
           
           {/* Form header section */}
-          <div className="grid grid-cols-3 mb-4 text-sm">
-              <div className="flex items-center">
+          <div className="grid grid-cols-4 mb-4 text-sm">
+            <div className="flex items-center">
+              <label className="font-semibold">Form Number:</label>
+              <div className="mx-2 border-b border-gray-400 flex-1">
+                <input 
+                  type="text" 
+                  className="w-full border-none outline-none bg-gray-100 text-black cursor-not-allowed"
+                  value={formData.formNumber}
+                  readOnly
+                  title="Auto-generated form number"
+                />
+              </div>
+            </div>
+            <div className="flex items-center">
               <label className="font-semibold">Dept/Div:</label>
               <div className="mx-2 border-b border-gray-400 flex-1">
                 <input 
@@ -818,27 +832,27 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
                 />
               </div>
             </div>
-              <div className="flex items-center">
+            <div className="flex items-center">
               <label className="font-semibold">Month/Year:</label>
               <div className="mx-2 flex items-center">
-                  <input 
+                <input 
                   type="text" 
                   className="w-12 border-none outline-none bg-transparent text-center border-b border-gray-400"
-                    value={formData.month}
-                    onChange={(e) => handleInputChange('month', e.target.value)}
+                  value={formData.month}
+                  onChange={(e) => handleInputChange('month', e.target.value)}
                   placeholder="MM"
-                  />
+                />
                 <span className="mx-1">/</span>
-                  <input 
+                <input 
                   type="text" 
                   className="w-16 border-none outline-none bg-transparent text-center border-b border-gray-400"
-                    value={formData.year}
-                    onChange={(e) => handleInputChange('year', e.target.value)}
+                  value={formData.year}
+                  onChange={(e) => handleInputChange('year', e.target.value)}
                   placeholder="YYYY"
-                  />
-                </div>
+                />
               </div>
-              <div className="flex items-center">
+            </div>
+            <div className="flex items-center">
               <label className="font-semibold">Contract No.:</label>
               <div className="mx-2 border-b border-gray-400 flex-1">
                 <input 
@@ -848,9 +862,9 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
                   onChange={(e) => handleInputChange('contractNo', e.target.value)}
                 />
               </div>
-              </div>
             </div>
-            
+          </div>
+          
           <div className="grid grid-cols-1 mb-4 text-sm">
               <div className="flex items-center">
               <label className="font-semibold">Contract Title:</label>

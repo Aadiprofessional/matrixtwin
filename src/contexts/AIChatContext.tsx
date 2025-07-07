@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, ReactNode, useRef, useCallback, useEffect } from 'react';
-import axios from 'axios';
 
 interface Message {
   id: string;
@@ -7,6 +6,7 @@ interface Message {
   sender: 'user' | 'ai';
   timestamp: Date;
   imageUrl?: string; // Optional image URL for messages with images
+  isStreaming?: boolean; // Flag to indicate if message is still streaming
 }
 
 interface ChatSession {
@@ -20,7 +20,6 @@ interface ChatSession {
 interface AIChatContextType {
   currentChat: ChatSession;
   chatHistory: ChatSession[];
-  isLoading: boolean;
   sendMessage: (content: string, projectId?: number | null, imageBase64?: string) => Promise<void>;
   clearMessages: () => void;
   startNewChat: () => void;
@@ -85,7 +84,6 @@ const loadChatHistory = (): ChatSession[] => {
 export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
   const [chatHistory, setChatHistory] = useState<ChatSession[]>(loadChatHistory);
   const [currentChatId, setCurrentChatId] = useState<string>(chatHistory[0].id);
-  const [isLoading, setIsLoading] = useState(false);
   const currentSessionRef = useRef<string>(currentChatId);
 
   // Keep the ref updated with the current chat ID
@@ -117,6 +115,26 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     });
   }, []);
 
+  // Update existing message content (for streaming)
+  const updateMessageContent = useCallback((messageId: string, newContent: string, isComplete: boolean = false) => {
+    setChatHistory(prevHistory => {
+      return prevHistory.map(chat => {
+        if (chat.id === currentSessionRef.current) {
+          return {
+            ...chat,
+            messages: chat.messages.map(msg => 
+              msg.id === messageId 
+                ? { ...msg, content: newContent, isStreaming: !isComplete }
+                : msg
+            ),
+            lastUpdatedAt: new Date()
+          };
+        }
+        return chat;
+      });
+    });
+  }, []);
+
   // Update chat title based on first user message
   const updateChatTitle = useCallback((chatId: string, messageText: string) => {
     setChatHistory(prevHistory => {
@@ -139,10 +157,7 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
 
   // Send a message in the current chat
   const sendMessage = async (messageText: string, projectId: number | null = null, imageBase64?: string) => {
-    if ((!messageText.trim() && !imageBase64) || isLoading) return;
-    
-    // Start loading state before sending
-    setIsLoading(true);
+    if ((!messageText.trim() && !imageBase64)) return;
     
     // Create user message
     const userMessage: Message = {
@@ -159,227 +174,126 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     // Update the chat title if needed
     updateChatTitle(currentChatId, messageText || "Image analysis");
     
+    // Create AI message placeholder ID
+    const aiMessageId = (Date.now() + 1).toString();
+    
     try {
-      // Define API URL based on environment
-      const API_URL = 'https://matrixbim-server.onrender.com/api/dashscope';
+      // Prepare the message content for the API
+      let promptText = messageText || "Please analyze this image in detail for my construction project.";
       
-      let aiResponseText = '';
-      let reasoningText = '';
-      
+      // If there's an image, include it in the prompt
       if (imageBase64) {
-        // For image analysis, use the image-analysis endpoint and QVQ model
-        const apiEndpoint = `${API_URL}/image-analysis`;
-        
-        const requestData = {
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image_url",
-                  image_url: { 
-                    url: imageBase64.startsWith('data:') 
-                      ? imageBase64 
-                      : `data:image/jpeg;base64,${imageBase64}` 
-                  }
-                },
-                {
-                  type: "text",
-                  text: messageText || "Please analyze this image in detail for my construction project."
-                }
-              ]
-            }
-          ],
-          stream: true
-        };
-        
-        // Create a new EventSource using POST method with a polyfill approach
-        const controller = new AbortController();
-        
-        // First, make a POST request to start the server-sent events stream
-        return new Promise<void>((resolve, reject) => {
-          fetch(apiEndpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestData),
-            signal: controller.signal
-          })
-          .then(response => {
-            if (!response.ok) {
-              throw new Error(`Server responded with ${response.status}`);
-            }
+        promptText = `${promptText}\n\nImage: ${imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`}`;
+      }
+
+      // Prepare the request data for the new Dashscope API with streaming
+      const requestData = {
+        input: {
+          prompt: promptText
+        },
+        parameters: {
+          incremental_output: true
+        },
+        debug: {}
+      };
+
+      // Create AI message placeholder
+      const aiMessage: Message = {
+        id: aiMessageId,
+        content: "",
+        sender: 'ai',
+        timestamp: new Date(),
+        isStreaming: true
+      };
+      
+      // Add the placeholder AI message
+      updateChatWithMessage(aiMessage);
+      
+      // Make the streaming request to the new Dashscope API
+      const response = await fetch('https://dashscope.aliyuncs.com/api/v1/apps/33b3f866ff054f2eb98d17c174239fc8/completion', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer sk-6b53808e778c4e11a9928d6416ae7e3e',
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+          'X-DashScope-SSE': 'enable'
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (!response.ok) {
+        throw new Error(`API responded with ${response.status}: ${response.statusText}`);
+      }
+
+      // Handle streaming response
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulatedContent = '';
+
+      const processStream = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
             
-            const reader = response.body!.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
+            if (done) {
+              // Mark the message as complete
+              updateMessageContent(aiMessageId, accumulatedContent, true);
+              break;
+            }
+
+            // Decode the chunk
+            buffer += decoder.decode(value, { stream: true });
             
-            function processChunk({ done, value }: ReadableStreamReadResult<Uint8Array>) {
-              if (done) {
-                // Create AI response message if we have content
-                if (aiResponseText) {
-                  const aiMessage: Message = {
-                    id: (Date.now() + 1).toString(),
-                    content: aiResponseText,
-                    sender: 'ai',
-                    timestamp: new Date()
-                  };
-                  
-                  // Add AI response
-                  updateChatWithMessage(aiMessage);
-                  
-                  // Save reasoning in global state or session storage for later reference
-                  if (reasoningText) {
-                    // Store the reasoning for the UI to access
-                    window.sessionStorage.setItem(`reasoning-${aiMessage.id}`, reasoningText);
-                  }
-                }
+            // Process complete lines
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+            for (const line of lines) {
+              if (line.trim() === '') continue;
+              
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6).trim();
                 
-                setIsLoading(false);
-                resolve();
-                return;
-              }
-              
-              // Decode the incoming chunk and add it to our buffer
-              buffer += decoder.decode(value, { stream: true });
-              
-              // Process complete SSE messages
-              const lines = buffer.split('\n\n');
-              buffer = lines.pop() || ''; // Keep the last incomplete chunk in the buffer
-              
-              // Process each complete SSE message
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  try {
-                    const data = JSON.parse(line.substring(6));
-                    
-                    // Handle reasoning content
-                    if (data.reasoning) {
-                      reasoningText += data.reasoning;
+                if (data === '[DONE]') {
+                  updateMessageContent(aiMessageId, accumulatedContent, true);
+                  return;
+                }
+
+                try {
+                  const parsed = JSON.parse(data);
+                  
+                  // Handle the response format from your API - accumulate content properly
+                  if (parsed.output && parsed.output.text) {
+                    // If it's incremental, append the new content
+                    if (parsed.output.text.startsWith(accumulatedContent)) {
+                      accumulatedContent = parsed.output.text;
+                    } else {
+                      // If it's a new chunk, append it
+                      accumulatedContent += parsed.output.text;
                     }
-                    
-                    // Handle actual response content
-                    if (data.content) {
-                      aiResponseText += data.content;
-                    }
-                    
-                    // Handle stream end
-                    if (data.done) {
-                      // Create AI response message
-                      const aiMessage: Message = {
-                        id: (Date.now() + 1).toString(),
-                        content: aiResponseText || "I've analyzed the image but couldn't generate a detailed response.",
-                        sender: 'ai',
-                        timestamp: new Date()
-                      };
-                      
-                      // Add AI response
-                      updateChatWithMessage(aiMessage);
-                      
-                      // Save reasoning in global state or session storage for later reference
-                      if (reasoningText) {
-                        // Store the reasoning for the UI to access
-                        window.sessionStorage.setItem(`reasoning-${aiMessage.id}`, reasoningText);
-                      }
-                      
-                      // Clean up and resolve
-                      controller.abort();
-                      setIsLoading(false);
-                      resolve();
-                      return;
-                    }
-                  } catch (error) {
-                    console.error('Error parsing QVQ stream:', error);
+                    // Update the message content in real-time
+                    updateMessageContent(aiMessageId, accumulatedContent, false);
                   }
+                } catch (parseError) {
+                  console.error('Error parsing streaming data:', parseError);
                 }
               }
-              
-              // Continue reading chunks
-              reader.read().then(processChunk).catch(error => {
-                console.error('Error reading stream:', error);
-                reject(error);
-              });
-            }
-            
-            // Start reading the stream
-            reader.read().then(processChunk).catch(reject);
-          })
-          .catch(error => {
-            console.error('Error sending image analysis request:', error);
-            // Add error message if we don't have any content yet
-            if (!aiResponseText) {
-              const errorMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                content: "I'm sorry, there was an error processing the image. Please try again.",
-                sender: 'ai',
-                timestamp: new Date()
-              };
-              updateChatWithMessage(errorMessage);
-            }
-            
-            setIsLoading(false);
-            reject(error);
-          });
-        });
-      } else {
-        // For regular text message, use the voice-call endpoint
-        // Create combined prompt with project context
-        const combinedPrompt = `
-          CONTEXT: ${projectId ? `Project ID: ${projectId}` : 'No specific project selected.'}
-          
-          USER QUERY: ${messageText}
-          
-          Please provide a helpful, concise, and informative response in English based on the construction project data. You are Matrix AI construction assistant.
-        `;
-        
-        const requestData = {
-          prompt: combinedPrompt,
-          stream: false
-        };
-        
-        // Make API call to get AI response
-        const response = await axios.post(
-          `${API_URL}/voice-call`,
-          requestData,
-          {
-            headers: {
-              'Content-Type': 'application/json'
             }
           }
-        );
-        
-        // Extract text from the response based on DashScope API format
-        if (response.data && response.data.output && response.data.output.text) {
-          aiResponseText = response.data.output.text;
+        } catch (streamError) {
+          console.error('Error processing stream:', streamError);
+          updateMessageContent(aiMessageId, accumulatedContent || "I'm sorry, there was an error processing your request. Please try again.", true);
         }
-        
-        // Format and add AI response
-        const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          content: aiResponseText || "I'm sorry, I couldn't process that request. Please try again.",
-          sender: 'ai',
-          timestamp: new Date()
-        };
-        
-        // Add AI response
-        updateChatWithMessage(aiMessage);
-      }
+      };
+
+      await processStream();
+      
     } catch (error) {
       console.error('Error getting AI response:', error);
       
-      // Add error message
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: "I'm sorry, there was an error processing your request. Please try again later.",
-        sender: 'ai',
-        timestamp: new Date()
-      };
-      
-      // Add error message
-      updateChatWithMessage(errorMessage);
-    } finally {
-      setIsLoading(false);
+      // Update the AI message with error content
+      updateMessageContent(aiMessageId, "I'm sorry, there was an error processing your request. Please try again later.", true);
     }
   };
 
@@ -415,7 +329,6 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
       value={{
         currentChat,
         chatHistory,
-        isLoading,
         sendMessage,
         clearMessages,
         startNewChat,

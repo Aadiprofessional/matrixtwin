@@ -17,6 +17,7 @@ import {
   RiCamera2Line,
   RiTimeLine
 } from 'react-icons/ri';
+import { generatePrefixedFormNumber } from '../../utils/formUtils';
 
 interface DailyCleaningInspectionTemplateProps {
   onClose: () => void;
@@ -51,6 +52,7 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
   
   // Form data
   const [formData, setFormData] = useState({
+    formNumber: generatePrefixedFormNumber('CL'), // Auto-generate form number for Cleansing
     contractNo: '',
     contractTitle: '',
     location: '',
@@ -463,12 +465,13 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
                 <table className="w-full border-collapse">
                   <tbody>
                     <tr>
-                      <td className="border border-gray-800 p-2 w-1/6 font-semibold">Contract No:</td>
+                      <td className="border border-gray-800 p-2 w-1/6 font-semibold">Form Number:</td>
                       <td className="border border-gray-800 p-2 w-1/3">
                         <input 
-                          className="w-full bg-white text-black border border-gray-300 rounded p-2"
-                          value={formData.contractNo}
-                          onChange={(e) => handleInputChange('contractNo', e.target.value)}
+                          className="w-full bg-gray-100 text-black border border-gray-300 rounded p-2 cursor-not-allowed"
+                          value={formData.formNumber}
+                          readOnly
+                          title="Auto-generated form number"
                         />
                       </td>
                       <td className="border border-gray-800 p-2 w-1/6 font-semibold">Inspection No.檢查編號:</td>
@@ -481,16 +484,16 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
                       </td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-800 p-2 font-semibold">Contract Title:</td>
-                      <td className="border border-gray-800 p-2">
+                      <td className="border border-gray-800 p-2 w-1/6 font-semibold">Contract No:</td>
+                      <td className="border border-gray-800 p-2 w-1/3">
                         <input 
                           className="w-full bg-white text-black border border-gray-300 rounded p-2"
-                          value={formData.contractTitle}
-                          onChange={(e) => handleInputChange('contractTitle', e.target.value)}
+                          value={formData.contractNo}
+                          onChange={(e) => handleInputChange('contractNo', e.target.value)}
                         />
                       </td>
-                      <td className="border border-gray-800 p-2 font-semibold">Inspection Date檢查日期:</td>
-                      <td className="border border-gray-800 p-2">
+                      <td className="border border-gray-800 p-2 w-1/6 font-semibold">Inspection Date檢查日期:</td>
+                      <td className="border border-gray-800 p-2 w-1/3">
                         <div className="flex items-center">
                           <input 
                             type="date"
@@ -505,12 +508,12 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
                       </td>
                     </tr>
                     <tr>
-                      <td className="border border-gray-800 p-2 font-semibold">Location:</td>
+                      <td className="border border-gray-800 p-2 font-semibold">Contract Title:</td>
                       <td className="border border-gray-800 p-2">
                         <input 
                           className="w-full bg-white text-black border border-gray-300 rounded p-2"
-                          value={formData.location}
-                          onChange={(e) => handleInputChange('location', e.target.value)}
+                          value={formData.contractTitle}
+                          onChange={(e) => handleInputChange('contractTitle', e.target.value)}
                         />
                       </td>
                       <td className="border border-gray-800 p-2 font-semibold">Time時間:</td>

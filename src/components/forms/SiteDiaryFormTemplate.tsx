@@ -16,6 +16,7 @@ import {
   RiFilePdf2Line,
   RiCheckLine
 } from 'react-icons/ri';
+import { generatePrefixedFormNumber } from '../../utils/formUtils';
 
 interface SiteDiaryFormTemplateProps {
   onClose: () => void;
@@ -36,13 +37,17 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
 }) => {
   const [currentPage, setCurrentPage] = useState<1 | 2>(1);
   const [formData, setFormData] = useState({
+    formNumber: generatePrefixedFormNumber('DY'),
+    date: initialData?.date || '',
+    time: initialData?.time || '',
+    weather: initialData?.weather || '',
+    contractor: initialData?.contractor || '',
+    location: initialData?.location || '',
     // Page 1 data
     contractNo: '',
-    date: '',
     day: '',
     contractDate: '',
     clientDepartment: '',
-    contractor: '',
     weatherAM: '',
     weatherPM: '',
     rainfall: '',
@@ -374,6 +379,10 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
             <table style="margin-bottom: 10px; border: none;">
               <tr>
                 <td style="border: none; width: 33%;">
+                  <div class="form-field">
+                    <span class="form-label">Form Number:</span>
+                    ${formData.formNumber}
+                  </div>
                   <div class="form-field">
                     <span class="form-label">Contract No.:</span>
                     ${formData.contractNo}
@@ -883,6 +892,18 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
               <div className="grid grid-cols-3 border-b border-gray-800">
                 {/* Left column - basic info */}
                 <div className="border-r border-gray-800 p-2 space-y-1">
+                  <div className="flex">
+                    <div className="w-32 font-semibold">Form Number:</div>
+                    <div className="flex-1 border-b border-gray-400">
+                      <input 
+                        type="text" 
+                        className="w-full border-none outline-none bg-gray-100 text-black cursor-not-allowed" 
+                        value={formData.formNumber}
+                        readOnly
+                        title="Auto-generated form number"
+                      />
+                    </div>
+                  </div>
                   <div className="flex">
                     <div className="w-32 font-semibold">Contract No.:</div>
                     <div className="flex-1 border-b border-gray-400">

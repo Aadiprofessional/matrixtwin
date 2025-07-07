@@ -15,9 +15,12 @@ import {
   RiFileUserLine,
   RiSearchLine,
   RiCloseLine,
-  RiTeamLine
+  RiTeamLine,
+  RiLoader4Line
 } from 'react-icons/ri';
 import ProcessFlowBuilder from './ProcessFlowBuilder';
+import { useAuth } from '../../contexts/AuthContext';
+import { useProjects } from '../../contexts/ProjectContext';
 
 // Context for sharing form state between steps
 const FormEditorContext = createContext<any>(null);
@@ -35,7 +38,22 @@ interface User {
   id: string;
   name: string;
   role: string;
+  email: string;
   avatar?: string;
+}
+
+// Define ProcessNode interface for workflow
+interface ProcessNode {
+  id: string;
+  type: 'start' | 'node' | 'end';
+  name: string;
+  executor?: string;
+  executorId?: string;
+  ccRecipients?: User[];
+  editAccess?: boolean;
+  expireTime?: string;
+  expireDuration?: number | null;
+  settings: Record<string, any>;
 }
 
 // People selector modal component
@@ -44,26 +62,17 @@ const PeopleSelectorModal: React.FC<{
   onClose: () => void;
   onSelect: (user: User) => void;
   title: string;
-}> = ({ isOpen, onClose, onSelect, title }) => {
+  users: User[];
+  loading: boolean;
+}> = ({ isOpen, onClose, onSelect, title, users, loading }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Mock users data
-  const users: User[] = [
-    { id: '1', name: 'John Smith', role: 'Project Manager', avatar: 'JS' },
-    { id: '2', name: 'Maria Garcia', role: 'Safety Officer', avatar: 'MG' },
-    { id: '3', name: 'Alex Johnson', role: 'Site Manager', avatar: 'AJ' },
-    { id: '4', name: 'Sarah Williams', role: 'Construction Manager', avatar: 'SW' },
-    { id: '5', name: 'Robert Lee', role: 'Engineer', avatar: 'RL' },
-    { id: '6', name: 'Emma Wilson', role: 'Architect', avatar: 'EW' },
-    { id: '7', name: 'Michael Brown', role: 'Safety Inspector', avatar: 'MB' },
-    { id: '8', name: 'David Taylor', role: 'Contractor', avatar: 'DT' }
-  ];
   
   // Filter users based on search
   const filteredUsers = searchQuery 
     ? users.filter(user => 
         user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        user.role.toLowerCase().includes(searchQuery.toLowerCase())
+        user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : users;
   
@@ -100,7 +109,7 @@ const PeopleSelectorModal: React.FC<{
             <RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by name or role..."
+              placeholder="Search by name, role, or email..."
               className="w-full pl-10 pr-4 py-2 border border-dark-600 rounded-md bg-dark-700 text-white"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -109,7 +118,12 @@ const PeopleSelectorModal: React.FC<{
         </div>
         
         <div className="overflow-y-auto max-h-[400px] p-2">
-          {filteredUsers.length > 0 ? (
+          {loading ? (
+            <div className="p-4 text-center text-gray-400">
+              <RiLoader4Line className="animate-spin text-2xl mx-auto mb-2" />
+              Loading users...
+            </div>
+          ) : filteredUsers.length > 0 ? (
             <div className="grid grid-cols-1 gap-2">
               {filteredUsers.map(user => (
                 <div 
@@ -121,17 +135,20 @@ const PeopleSelectorModal: React.FC<{
                   }}
                 >
                   {user.avatar ? (
-                    <div className="w-10 h-10 rounded-full bg-ai-blue/20 text-ai-blue flex items-center justify-center font-medium mr-3">
-                      {user.avatar}
-                    </div>
+                    <img 
+                      src={user.avatar} 
+                      alt={user.name}
+                      className="w-10 h-10 rounded-full mr-3"
+                    />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-dark-700 flex items-center justify-center mr-3">
-                      <RiUserLine className="text-gray-400" />
+                    <div className="w-10 h-10 rounded-full bg-ai-blue/20 text-ai-blue flex items-center justify-center font-medium mr-3">
+                      {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                     </div>
                   )}
-                  <div>
+                  <div className="flex-grow">
                     <div className="font-medium text-white">{user.name}</div>
                     <div className="text-sm text-gray-400">{user.role}</div>
+                    <div className="text-xs text-gray-500">{user.email}</div>
                   </div>
                 </div>
               ))}
@@ -148,26 +165,27 @@ const PeopleSelectorModal: React.FC<{
 };
 
 interface FormTemplate {
-  id: number;
-  title: string;
+  id: string;
+  name: string;
   description: string;
-  fieldsCount: number;
-  // In a real app, this would contain actual template data
-  pages?: any[]; // Add pages property
+  form_structure: any;
+  created_at: string;
+  fieldsCount?: number;
+  pages?: any[];
 }
 
 interface FormCreationFlowProps {
   onClose: () => void;
   onSave: (formData: any) => void;
   existingForms: FormTemplate[];
-  formEditor?: React.ReactNode; // Pass in the existing form editor component
-  onTemplateSelect?: (templateId: number) => void; // Add this new prop
-  onSiteDiarySelect?: () => void; // Add prop for Site Diary template selection
-  onSafetyInspectionSelect?: () => void; // Add prop for Safety Inspection template selection
-  onDailyCleaningInspectionSelect?: () => void; // Add prop for Daily Cleaning Inspection template selection
-  onMonthlyReturnSelect?: () => void; // Add prop for Monthly Return template selection
-  onInspectionCheckSelect?: () => void; // Add prop for Inspection Check template selection
-  onSurveyCheckSelect?: () => void; // Add prop for Survey Check template selection
+  formEditor?: React.ReactNode;
+  onTemplateSelect?: (templateId: number) => void;
+  onSiteDiarySelect?: () => void;
+  onSafetyInspectionSelect?: () => void;
+  onDailyCleaningInspectionSelect?: () => void;
+  onMonthlyReturnSelect?: () => void;
+  onInspectionCheckSelect?: () => void;
+  onSurveyCheckSelect?: () => void;
 }
 
 const FormCreationFlow: React.FC<FormCreationFlowProps> = ({ 
@@ -183,18 +201,28 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
   onInspectionCheckSelect,
   onSurveyCheckSelect
 }) => {
+  const { user } = useAuth();
+  const { selectedProject } = useProjects();
+  
   // State for tracking current step
   const [currentStep, setCurrentStep] = useState<number>(1);
   
   // Template step state
   const [templateName, setTemplateName] = useState<string>('');
   const [useExistingForm, setUseExistingForm] = useState<boolean>(false);
-  const [selectedFormId, setSelectedFormId] = useState<number | null>(null);
+  const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
   
   // Form step state (will be populated if using existing form)
   const [formPages, setFormPages] = useState<any[]>([{ id: '1', fields: [] }]);
   const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
   const [formDescription, setFormDescription] = useState<string>('');
+  
+  // API state
+  const [users, setUsers] = useState<User[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [customFormTemplates, setCustomFormTemplates] = useState<FormTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [saving, setSaving] = useState(false);
   
   // People selector modal state
   const [showPeopleSelector, setShowPeopleSelector] = useState(false);
@@ -202,29 +230,89 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
   const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
   
   // Process step state
-  const [processNodes, setProcessNodes] = useState<any[]>([
-    { id: 'start', type: 'start', name: 'Start', settings: { allowCreator: true, allowStakeholder: false } },
-    { id: 'node1', type: 'node', name: 'New node1', executor: '', settings: { allowCreator: false, allowStakeholder: false, cc: [] } },
-    { id: 'node2', type: 'node', name: 'New node2', executor: '', settings: { allowCreator: false, allowStakeholder: false, cc: [] } },
-    { id: 'end', type: 'end', name: 'End', settings: {} }
+  const [processNodes, setProcessNodes] = useState<ProcessNode[]>([
+    { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
+    { id: 'node1', type: 'node', name: 'Review & Approval', executor: '', executorId: '', editAccess: true, ccRecipients: [], settings: {} },
+    { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
   ]);
-  const [selectedNode, setSelectedNode] = useState<any>(processNodes[0]);
+  const [selectedNode, setSelectedNode] = useState<ProcessNode | null>(processNodes[1]);
+
+  // Fetch users on component mount
+  useEffect(() => {
+    if (user?.id) {
+      fetchUsers();
+      fetchCustomFormTemplates();
+    }
+  }, [user?.id]);
+
+  // Fetch users from API
+  const fetchUsers = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setLoadingUsers(true);
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${user?.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Handle the response structure - data should be an array of users
+        if (Array.isArray(data)) {
+          setUsers(data);
+        } else if (data.users && Array.isArray(data.users)) {
+          setUsers(data.users);
+        } else {
+          console.log('Unexpected users API response structure:', data);
+          setUsers([]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  // Fetch custom form templates from API
+  const fetchCustomFormTemplates = async () => {
+    if (!selectedProject?.id) return;
+    
+    try {
+      setLoadingTemplates(true);
+      const response = await fetch(`https://matrixbim-server.onrender.com/api/custom-forms/templates?projectId=${selectedProject.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const templates = await response.json();
+        setCustomFormTemplates(templates || []);
+      }
+    } catch (error) {
+      console.error('Error fetching custom form templates:', error);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
   
   // Function to add a new node
   const addNewNode = () => {
-    // Create a new node ID
     const newNodeId = `node${processNodes.length}`;
-    
-    // Create the new node
-    const newNode = {
+    const newNode: ProcessNode = {
       id: newNodeId,
       type: 'node',
       name: `New node${processNodes.length}`,
       executor: '',
-      settings: { allowCreator: false, allowStakeholder: false, cc: [] }
+      executorId: '',
+      editAccess: true,
+      ccRecipients: [],
+      settings: {}
     };
     
-    // Insert the new node before the end node
     const endNodeIndex = processNodes.findIndex(node => node.type === 'end');
     if (endNodeIndex !== -1) {
       const updatedNodes = [...processNodes];
@@ -244,7 +332,11 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
   const handleUserSelection = (selectedUser: User) => {
     if (peopleModalType === 'executor') {
       if (selectedNode) {
-        const updatedNode = { ...selectedNode, executor: selectedUser.name };
+        const updatedNode = { 
+          ...selectedNode, 
+          executor: selectedUser.name,
+          executorId: selectedUser.id
+        };
         const updatedNodes = processNodes.map(node => 
           node.id === selectedNode.id ? updatedNode : node
         );
@@ -252,19 +344,13 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
         setSelectedNode(updatedNode);
       }
     } else if (peopleModalType === 'cc') {
-      // Update the nodes cc list
       if (selectedNode) {
-        const currentCcs = selectedNode.settings.cc || [];
-        // Check if user is already in the CC list
+        const currentCcs = selectedNode.ccRecipients || [];
         if (!currentCcs.some((cc: User) => cc.id === selectedUser.id)) {
-          const updatedSettings = { 
-            ...selectedNode.settings,
-            cc: [...currentCcs, selectedUser]
-          };
-          
+          const updatedCcs = [...currentCcs, selectedUser];
           const updatedNode = { 
             ...selectedNode, 
-            settings: updatedSettings
+            ccRecipients: updatedCcs
           };
           
           const updatedNodes = processNodes.map(node => 
@@ -273,7 +359,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
           
           setProcessNodes(updatedNodes);
           setSelectedNode(updatedNode);
-          setSelectedCcs([...currentCcs, selectedUser]);
+          setSelectedCcs(updatedCcs);
         }
       }
     }
@@ -282,17 +368,12 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
   // Function to remove a CC
   const removeUserFromCc = (userId: string) => {
     if (selectedNode) {
-      const currentCcs = selectedNode.settings.cc || [];
+      const currentCcs = selectedNode.ccRecipients || [];
       const updatedCcs = currentCcs.filter((cc: User) => cc.id !== userId);
-      
-      const updatedSettings = { 
-        ...selectedNode.settings,
-        cc: updatedCcs
-      };
       
       const updatedNode = { 
         ...selectedNode, 
-        settings: updatedSettings
+        ccRecipients: updatedCcs
       };
       
       const updatedNodes = processNodes.map(node => 
@@ -315,24 +396,32 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
   useEffect(() => {
     // If a form is selected, load its data
     if (selectedFormId && useExistingForm) {
-      const selectedForm = existingForms.find(form => form.id === selectedFormId);
+      const selectedForm = customFormTemplates.find(form => form.id === selectedFormId);
       if (selectedForm) {
-        setTemplateName(selectedForm.title);
+        setTemplateName(selectedForm.name);
         setFormDescription(selectedForm.description);
-        // In a real app, you would load the form pages here
         
-        // Call the onTemplateSelect callback if provided
+        // Load form structure if available
+        if (selectedForm.form_structure && selectedForm.form_structure.pages) {
+          setFormPages(selectedForm.form_structure.pages);
+        }
+        
+        // Load workflow if available
+        if (selectedForm.form_structure && selectedForm.form_structure.workflow) {
+          setProcessNodes(selectedForm.form_structure.workflow);
+        }
+        
         if (onTemplateSelect) {
-          onTemplateSelect(selectedFormId);
+          onTemplateSelect(parseInt(selectedFormId));
         }
       }
     }
-  }, [selectedFormId, useExistingForm, existingForms, onTemplateSelect]);
+  }, [selectedFormId, useExistingForm, customFormTemplates, onTemplateSelect]);
   
   // Update selected CCs when selectedNode changes
   useEffect(() => {
-    if (selectedNode && selectedNode.settings && selectedNode.settings.cc) {
-      setSelectedCcs(selectedNode.settings.cc);
+    if (selectedNode && selectedNode.ccRecipients) {
+      setSelectedCcs(selectedNode.ccRecipients);
     } else {
       setSelectedCcs([]);
     }
@@ -343,13 +432,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
       setCurrentStep(currentStep + 1);
     } else {
       // Finalize and save
-      const formData = {
-        templateName,
-        formDescription,
-        formPages,
-        processNodes
-      };
-      onSave(formData);
+      handleFinalSave();
     }
   };
   
@@ -358,6 +441,72 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
       setCurrentStep(currentStep - 1);
     } else {
       onClose();
+    }
+  };
+
+  // Final save function that creates the custom form template
+  const handleFinalSave = async () => {
+    if (!user?.id || !selectedProject?.id) {
+      alert('User or project not found');
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      // Prepare process nodes with proper structure for backend
+      const processNodesForBackend = processNodes.map(node => ({
+        ...node,
+        executorId: node.executorId,
+        executorName: node.executor,
+        ccRecipients: node.ccRecipients || [],
+        editAccess: node.editAccess !== false
+      }));
+
+      const templateData = {
+        name: templateName,
+        description: formDescription,
+        formStructure: formPages,
+        processNodes: processNodesForBackend,
+        projectId: selectedProject.id
+      };
+
+      console.log('Creating custom form template:', templateData);
+
+      const response = await fetch('https://matrixbim-server.onrender.com/api/custom-forms/templates/create', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(templateData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Custom form template created successfully:', result);
+        
+        // Call the onSave callback with the form data
+        const formData = {
+          templateName,
+          formDescription,
+          formPages,
+          processNodes: processNodesForBackend
+        };
+        onSave(formData);
+        
+        alert('Custom form template created successfully!');
+        onClose();
+      } else {
+        const error = await response.json();
+        console.error('Failed to create custom form template:', error);
+        alert(`Failed to create custom form template: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error creating custom form template:', error);
+      alert('Failed to create custom form template. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
   
@@ -516,36 +665,82 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
             </div>
           </div>
           
-          <div className="text-gray-400 text-sm mt-4 border-t border-dark-600 pt-4">
-            Or use an existing form as a starting point:
-          </div>
+          {/* Custom form templates section */}
+          {customFormTemplates.length > 0 && (
+            <>
+              <div className="text-gray-400 text-sm mt-4 border-t border-dark-600 pt-4">
+                Or use an existing custom form as a starting point:
+              </div>
+              
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {loadingTemplates ? (
+                  <div className="p-4 text-center text-gray-400">
+                    <RiLoader4Line className="animate-spin text-2xl mx-auto mb-2" />
+                    Loading templates...
+                  </div>
+                ) : (
+                  customFormTemplates.map(form => (
+                    <Card 
+                      key={form.id} 
+                      variant="ai-dark" 
+                      className={`border ${selectedFormId === form.id ? 'border-ai-blue' : 'border-dark-600 hover:border-ai-blue/50'} transition-colors cursor-pointer`}
+                      onClick={() => {
+                        setSelectedFormId(form.id);
+                        setUseExistingForm(true);
+                      }}
+                    >
+                      <div className="p-3 flex justify-between items-center">
+                        <div>
+                          <h4 className="font-medium text-white">{form.name}</h4>
+                          <p className="text-xs text-gray-400">{form.description}</p>
+                          <p className="text-xs text-gray-500">Created: {new Date(form.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <div className="w-5 h-5 rounded-full border border-gray-500 flex items-center justify-center">
+                          {selectedFormId === form.id && <div className="w-3 h-3 rounded-full bg-ai-blue"></div>}
+                        </div>
+                      </div>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </>
+          )}
           
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {existingForms.map(form => (
-              <Card 
-                key={form.id} 
-                variant="ai-dark" 
-                className={`border ${selectedFormId === form.id ? 'border-ai-blue' : 'border-dark-600 hover:border-ai-blue/50'} transition-colors cursor-pointer`}
-                onClick={() => {
-                  setSelectedFormId(form.id);
-                  setUseExistingForm(true);
-                  if (onTemplateSelect) {
-                    onTemplateSelect(form.id);
-                  }
-                }}
-              >
-                <div className="p-3 flex justify-between items-center">
-                  <div>
-                    <h4 className="font-medium text-white">{form.title}</h4>
-                    <p className="text-xs text-gray-400">{form.fieldsCount} fields</p>
-                  </div>
-                  <div className="w-5 h-5 rounded-full border border-gray-500 flex items-center justify-center">
-                    {selectedFormId === form.id && <div className="w-3 h-3 rounded-full bg-ai-blue"></div>}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+          {/* Existing forms from props */}
+          {existingForms.length > 0 && (
+            <>
+              <div className="text-gray-400 text-sm mt-4 border-t border-dark-600 pt-4">
+                Or use an existing form as a starting point:
+              </div>
+              
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {existingForms.map(form => (
+                  <Card 
+                    key={form.id} 
+                    variant="ai-dark" 
+                    className={`border ${selectedFormId === form.id.toString() ? 'border-ai-blue' : 'border-dark-600 hover:border-ai-blue/50'} transition-colors cursor-pointer`}
+                    onClick={() => {
+                      setSelectedFormId(form.id.toString());
+                      setUseExistingForm(true);
+                      if (onTemplateSelect) {
+                        onTemplateSelect(typeof form.id === 'string' ? parseInt(form.id) : form.id);
+                      }
+                    }}
+                  >
+                    <div className="p-3 flex justify-between items-center">
+                      <div>
+                        <h4 className="font-medium text-white">{form.name}</h4>
+                        <p className="text-xs text-gray-400">{form.fieldsCount || 0} fields</p>
+                      </div>
+                      <div className="w-5 h-5 rounded-full border border-gray-500 flex items-center justify-center">
+                        {selectedFormId === form.id.toString() && <div className="w-3 h-3 rounded-full bg-ai-blue"></div>}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -577,7 +772,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
           </h2>
           <p className="text-gray-400">
             {useExistingForm 
-              ? `Customize the selected form "${existingForms.find(f => f.id === selectedFormId)?.title || ''}"` 
+              ? `Customize the selected form "${customFormTemplates.find(f => f.id === selectedFormId)?.name || existingForms.find(f => f.id.toString() === selectedFormId)?.name || 'Selected Form'}"` 
               : "Configure your form by adding fields and sections."}
           </p>
         </div>
@@ -627,7 +822,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
               <ProcessFlowBuilder 
                 nodes={processNodes}
                 onSelectNode={setSelectedNode}
-                selectedNodeId={selectedNode?.id}
+                selectedNodeId={selectedNode?.id || null}
               />
             </div>
           </div>
@@ -770,8 +965,17 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
                     <label className="flex items-center space-x-2">
                       <input 
                         type="checkbox" 
-                        checked={selectedNode?.settings?.allowCreator || false} 
-                        onChange={() => {}}
+                        checked={selectedNode?.editAccess !== false} 
+                        onChange={(e) => {
+                          if (selectedNode) {
+                            const updatedNode = { ...selectedNode, editAccess: e.target.checked };
+                            const updatedNodes = processNodes.map(node => 
+                              node.id === selectedNode.id ? updatedNode : node
+                            );
+                            setProcessNodes(updatedNodes);
+                            setSelectedNode(updatedNode);
+                          }
+                        }}
                         className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
                       />
                       <span className="text-sm">Allow creator</span>
@@ -780,7 +984,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
                     <label className="flex items-center space-x-2">
                       <input 
                         type="checkbox" 
-                        checked={selectedNode?.settings?.allowStakeholder || false} 
+                        checked={false} 
                         onChange={() => {}}
                         className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
                       />
@@ -901,6 +1105,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
           variant="ai-secondary" 
           onClick={handleBack}
           leftIcon={<RiArrowLeftLine />}
+          disabled={saving}
         >
           {currentStep === 1 ? 'Cancel' : 'Back'}
         </Button>
@@ -909,10 +1114,10 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
           variant="ai-gradient" 
           onClick={handleNext}
           rightIcon={currentStep === 3 ? <RiCheckLine /> : <RiArrowRightLine />}
-          disabled={!canProceed()}
+          disabled={!canProceed() || saving}
           glowing
         >
-          {currentStep === 3 ? 'Save' : 'Next'}
+          {saving ? 'Saving...' : (currentStep === 3 ? 'Save' : 'Next')}
         </Button>
       </div>
 
@@ -924,6 +1129,8 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
             onClose={() => setShowPeopleSelector(false)}
             onSelect={handleUserSelection}
             title={peopleModalType === 'executor' ? 'Select Executor' : 'Add People to CC'}
+            users={users}
+            loading={loadingUsers}
           />
         )}
       </AnimatePresence>

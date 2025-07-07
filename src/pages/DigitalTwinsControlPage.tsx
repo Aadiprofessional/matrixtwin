@@ -19,6 +19,7 @@ import {
 } from 'react-icons/ri';
 import { Link } from 'react-router-dom';
 import PageHeader from '../components/common/PageHeader';
+import SmartLockDashboard from '../components/SmartLockDashboard';
 
 // Types for systems and zones
 interface SystemStatus {
@@ -349,60 +350,53 @@ const DigitalTwinsControlPage: React.FC = () => {
         )}
         
         {activeTab === 'schedule' && (
-          <div className="bg-dark-800/60 border border-dark-700 rounded-xl p-4" style={baseStyle}>
-            <div className="overflow-x-auto" style={baseStyle}>
-              <table className="min-w-full divide-y divide-dark-600" style={baseStyle}>
-                <thead style={baseStyle}>
-                  <tr style={baseStyle}>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider" style={baseStyle}>System</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider" style={baseStyle}>Action</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider" style={baseStyle}>Time</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider" style={baseStyle}>Zone</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider" style={baseStyle}>Recurring</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider" style={baseStyle}>Status</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider" style={baseStyle}>Toggle</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-dark-700" style={baseStyle}>
-                  {scheduledTasksState.map((task) => (
-                    <tr key={task.id} style={baseStyle}>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-white" style={baseStyle}>{task.system}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-white" style={baseStyle}>{task.action}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-white flex items-center" style={baseStyle}>
-                        <RiHistoryLine className="mr-1 text-gray-400" />
-                        {task.time}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-white" style={baseStyle}>{task.zone}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-white" style={baseStyle}>{task.recurring}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm" style={baseStyle}>
-                        <span className={`px-2 py-1 text-xs rounded-full ${task.enabled ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`} style={baseStyle}>
-                          {task.enabled ? 'Enabled' : 'Disabled'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium" style={baseStyle}>
-                        <button 
-                          onClick={() => handleTaskToggle(task.id)}
-                          className={`w-10 h-5 flex items-center rounded-full p-1 ${task.enabled ? 'bg-ai-blue' : 'bg-dark-600'}`}
-                          style={baseStyle}
-                        >
-                          <span 
-                            className={`bg-white w-4 h-4 rounded-full shadow-md transform ${task.enabled ? 'translate-x-5' : ''}`} 
-                            style={baseStyle}
-                          />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex justify-end mt-4" style={baseStyle}>
-              <button className="bg-ai-blue text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600" style={baseStyle}>
-                Add New Schedule
-              </button>
+          <div className="space-y-4" style={baseStyle}>
+            <h2 className="text-xl font-semibold text-white mb-4" style={baseStyle}>Scheduled Tasks</h2>
+            <div className="space-y-3" style={baseStyle}>
+              {scheduledTasksState.map(task => (
+                <div 
+                  key={task.id}
+                  className="bg-dark-800/60 border border-dark-700 rounded-xl p-4 flex items-center justify-between"
+                  style={baseStyle}
+                >
+                  <div className="flex items-center" style={baseStyle}>
+                    <div className="text-ai-blue text-xl mr-3" style={baseStyle}>
+                      <RiHistoryLine />
+                    </div>
+                    <div style={baseStyle}>
+                      <h3 className="font-medium text-white" style={baseStyle}>{task.system} - {task.action}</h3>
+                      <p className="text-sm text-gray-400" style={baseStyle}>
+                        {task.time} • {task.zone} • {task.recurring}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3" style={baseStyle}>
+                    <span className={`text-sm ${task.enabled ? 'text-green-400' : 'text-gray-400'}`} style={baseStyle}>
+                      {task.enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                    <button
+                      onClick={() => handleTaskToggle(task.id)}
+                      className={`w-12 h-6 rounded-full transition-colors ${
+                        task.enabled ? 'bg-ai-blue' : 'bg-gray-600'
+                      }`}
+                      style={baseStyle}
+                    >
+                      <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                        task.enabled ? 'translate-x-6' : 'translate-x-0.5'
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
+      </div>
+      
+      {/* Smart Lock Dashboard Section */}
+      <div className="mt-8" style={baseStyle}>
+        <h2 className="text-xl font-semibold text-white mb-4" style={baseStyle}>Smart Lock Control</h2>
+        <SmartLockDashboard />
       </div>
     </div>
   );

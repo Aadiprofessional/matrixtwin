@@ -65,17 +65,13 @@ const API_BASE_URL = 'http://localhost:3333/api/bimface';
 const FILE_API_BASE_URL = 'http://localhost:3333/api/bimface-file';
 
 // Map of fileId to known working tokens
-const WORKING_TOKENS: Record<number, string> = {
-  10000922004991: 'c5241ec28c8c44cda45540d769f71f62',  // Original token
-  10000922012333: 'c46764a5660b4cadb828df71b120cfc9',  // Token from API response
-  10000922013572: '9ce4e9caf1fc46e9b064a40e5632c50a'   // Token from API response
-};
+
 
 // Get a BIMFACE API token using client credentials
 export const generateToken = async (): Promise<BimfaceToken> => {
   try {
-    const clientId = 'rHue4iORWkUqAAee4Maj5oAOv8byfRiN';
-    const clientSecret = 'S76cdgQlT1pZg14EvYzPAHRjERsX8qVU';
+    const clientId = 'P9v85Mw7uk1bmKTnDpDVucorielyQOHX';
+    const clientSecret = 'E06BiIPhayMEnWl5k1PLzlBEaK5c34BL';
     
     const requestData = 'grant_type=client_credentials';
     const auth = btoa(`${clientId}:${clientSecret}`);

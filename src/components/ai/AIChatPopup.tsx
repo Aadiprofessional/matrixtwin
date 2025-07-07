@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion';
 import { RiFullscreenLine, RiSendPlaneFill, RiAddLine, RiPhoneLine } from 'react-icons/ri';
 import { useNavigate } from 'react-router-dom';
 import { useAIChat } from '../../contexts/AIChatContext';
+import { Button } from '../../components/ui/Button';
 
 interface AIChatPopupProps {
   isOpen: boolean;
@@ -10,7 +11,7 @@ interface AIChatPopupProps {
 }
 
 export const AIChatPopup: React.FC<AIChatPopupProps> = ({ isOpen, onClose }) => {
-  const { currentChat, isLoading, sendMessage, startNewChat } = useAIChat();
+  const { currentChat, sendMessage, startNewChat } = useAIChat();
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -44,22 +45,31 @@ export const AIChatPopup: React.FC<AIChatPopupProps> = ({ isOpen, onClose }) => 
     navigate('/voice-call');
   };
   
-  // Auto-scroll to bottom when messages change
+  // Scroll to bottom when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentChat.messages]);
 
-  // Auto-scroll to bottom when loading state changes
+  // Close popup when pressing Escape
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [isLoading]);
-  
-  // Auto-scroll when popup opens
-  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    
     if (isOpen) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
     }
-  }, [isOpen]);
+  }, [isOpen, onClose]);
+
+  // Auto-scroll effect when new messages arrive and not loading
+  useEffect(() => {
+    if (currentChat.messages.length > 0) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  }, [currentChat.messages]);
 
   return (
     <AnimatePresence>
@@ -106,7 +116,9 @@ export const AIChatPopup: React.FC<AIChatPopupProps> = ({ isOpen, onClose }) => 
                   className={`rounded-2xl py-2 px-3 max-w-[85%] text-xs ${
                     message.sender === 'user' 
                       ? 'bg-ai-blue text-white rounded-tr-none' 
-                      : 'bg-dark-800 text-gray-100 rounded-tl-none'
+                      : message.isStreaming
+                        ? 'bg-dark-800 text-gray-100 rounded-tl-none border border-ai-blue/30'
+                        : 'bg-dark-800 text-gray-100 rounded-tl-none'
                   }`}
                 >
                   {message.imageUrl && (
@@ -118,17 +130,40 @@ export const AIChatPopup: React.FC<AIChatPopupProps> = ({ isOpen, onClose }) => 
                       />
                     </div>
                   )}
-                  {message.content}
+                  <div className="flex items-start">
+                    <div className="flex-1">
+                      {message.content}
+                      {message.isStreaming && message.content === '' && (
+                        <div className="flex items-center text-ai-blue">
+                          <div className="flex space-x-1">
+                            <div className="w-1 h-1 bg-ai-blue rounded-full animate-typing-dots" style={{ animationDelay: '0ms' }} />
+                            <div className="w-1 h-1 bg-ai-purple rounded-full animate-typing-dots" style={{ animationDelay: '200ms' }} />
+                            <div className="w-1 h-1 bg-ai-teal rounded-full animate-typing-dots" style={{ animationDelay: '400ms' }} />
+                          </div>
+                          <span className="ml-2 text-xs">Thinking...</span>
+                        </div>
+                      )}
+                    </div>
+                    {message.isStreaming && message.content !== '' && (
+                      <div className="ml-2 flex items-center">
+                        <div className="w-1 h-1 bg-gradient-to-r from-ai-blue to-ai-purple rounded-full animate-streaming-pulse" />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-dark-800 text-white rounded-2xl rounded-tl-none py-2 px-4">
-                  <div className="flex space-x-1">
-                    <span className="w-2 h-2 bg-gray-400 rounded-full opacity-75"></span>
-                    <span className="w-2 h-2 bg-gray-400 rounded-full opacity-75"></span>
-                    <span className="w-2 h-2 bg-gray-400 rounded-full opacity-75"></span>
+            {/* Loading indicator - only show when last message is streaming */}
+            {currentChat.messages.length > 0 && 
+             currentChat.messages[currentChat.messages.length - 1]?.isStreaming && (
+              <div className="flex justify-start mb-4">
+                <div className="bg-gray-100 dark:bg-dark-700 rounded-2xl px-4 py-3 max-w-[80%]">
+                  <div className="flex items-center space-x-2">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -146,19 +181,15 @@ export const AIChatPopup: React.FC<AIChatPopupProps> = ({ isOpen, onClose }) => 
                 placeholder="Ask something..."
                 className="flex-1 bg-dark-800 border border-dark-700 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-ai-blue resize-none text-xs"
                 rows={1}
-                disabled={isLoading}
               />
-              <button
-                onClick={handleSend}
-                disabled={isLoading || !inputValue.trim()}
-                className={`p-2 rounded-lg ${
-                  isLoading || !inputValue.trim() 
-                    ? 'bg-dark-700 text-gray-500' 
-                    : 'bg-ai-blue text-white hover:bg-ai-blue-600'
-                } transition-colors`}
+              <Button
+                type="submit"
+                variant="ai"
+                size="sm"
+                disabled={!inputValue.trim()}
               >
                 <RiSendPlaneFill className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
           </div>
         </div>

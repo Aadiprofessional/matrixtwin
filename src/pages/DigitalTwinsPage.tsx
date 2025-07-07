@@ -362,7 +362,7 @@ const DigitalTwinsPage: React.FC = () => {
     },
     {
       title: 'Smart Control',
-      description: 'Control building systems remotely through digital twin interface',
+      description: 'Control building systems and smart locks remotely through digital twin interface',
       icon: <RiFlashlightLine className="text-3xl" />,
       link: '/digital-twins/control',
       gradient: 'from-orange-500 to-amber-400',

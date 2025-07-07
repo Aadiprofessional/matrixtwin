@@ -29,7 +29,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     const checkAuth = () => {
-      // Check for token
+      // Check for token first
       const token = localStorage.getItem('token');
       if (!token) {
         setIsAuthenticated(false);
@@ -41,15 +41,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const storedUser = localStorage.getItem('user') || sessionStorage.getItem('user');
       const isAuthenticatedFlag = localStorage.getItem('isAuthenticated') || sessionStorage.getItem('isAuthenticated');
 
-      if (storedUser && isAuthenticatedFlag) {
-        const userData = JSON.parse(storedUser);
-        setUser(userData);
-        setIsAuthenticated(true);
+      // Also check the auth.user key that might be set by the login function
+      const authUser = localStorage.getItem('auth.user');
+
+      if ((storedUser || authUser) && (isAuthenticatedFlag || token)) {
+        let userData;
+        try {
+          userData = JSON.parse(storedUser || authUser || '{}');
+          setUser(userData);
+          setIsAuthenticated(true);
+          console.log('Authentication restored from localStorage:', userData.email);
+        } catch (error) {
+          console.error('Error parsing stored user data:', error);
+          // Clear corrupted data
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('isAuthenticated');
+          localStorage.removeItem('auth.user');
+          localStorage.removeItem('auth.session');
+          sessionStorage.removeItem('user');
+          sessionStorage.removeItem('isAuthenticated');
+          setIsAuthenticated(false);
+          setUser(null);
+        }
       } else {
         // If no user data found, clear everything
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('isAuthenticated');
+        localStorage.removeItem('auth.user');
+        localStorage.removeItem('auth.session');
         sessionStorage.removeItem('user');
         sessionStorage.removeItem('isAuthenticated');
         setIsAuthenticated(false);
@@ -68,6 +89,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('isAuthenticated');
+      localStorage.removeItem('auth.user');
+      localStorage.removeItem('auth.session');
       sessionStorage.removeItem('user');
       sessionStorage.removeItem('isAuthenticated');
       sessionStorage.removeItem('login_success');
@@ -124,7 +147,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setUser(userData);
         setIsAuthenticated(true);
         
-        // Save to localStorage
+        // Save to localStorage using consistent keys
+        localStorage.setItem('token', data.session?.access_token || 'dummy-token');
+        localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('auth.user', JSON.stringify(userData));
         localStorage.setItem('auth.session', JSON.stringify(data.session));
         
@@ -171,6 +197,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         setUser(defaultUser);
         setIsAuthenticated(true);
+        localStorage.setItem('token', data.session?.access_token || 'dummy-token');
+        localStorage.setItem('user', JSON.stringify(defaultUser));
+        localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('auth.user', JSON.stringify(defaultUser));
         localStorage.setItem('auth.session', JSON.stringify(data.session));
       } else if (!userData) {
@@ -185,6 +214,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         setUser(defaultUser);
         setIsAuthenticated(true);
+        localStorage.setItem('token', data.session?.access_token || 'dummy-token');
+        localStorage.setItem('user', JSON.stringify(defaultUser));
+        localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('auth.user', JSON.stringify(defaultUser));
         localStorage.setItem('auth.session', JSON.stringify(data.session));
       } else {
@@ -209,6 +241,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         setUser(userData);
         setIsAuthenticated(true);
+        localStorage.setItem('token', data.session?.access_token || 'dummy-token');
+        localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('auth.user', JSON.stringify(userData));
         localStorage.setItem('auth.session', JSON.stringify(data.session));
       }

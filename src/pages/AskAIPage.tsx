@@ -33,8 +33,8 @@ const AskAIPage: React.FC = () => {
   const { 
     currentChat, 
     chatHistory, 
-    isLoading: isLoadingResponse, 
     sendMessage,
+    clearMessages,
     startNewChat,
     switchToChat
   } = useAIChat();
@@ -58,7 +58,7 @@ const AskAIPage: React.FC = () => {
   };
 
   const handleSendMessage = async (messageText: string = input) => {
-    if ((!messageText.trim() && !uploadedImage) || isLoadingResponse) return;
+    if ((!messageText.trim() && !uploadedImage)) return;
     setInput('');
     setUploadError(null);
     
@@ -394,7 +394,9 @@ const AskAIPage: React.FC = () => {
                         <div className={`h-10 w-10 rounded-full flex-shrink-0 flex items-center justify-center mx-3 ${
                           message.sender === 'user' 
                             ? 'bg-primary-500/10 text-primary-500 border border-primary-500/30' 
-                            : 'bg-gradient-to-r from-ai-blue to-ai-purple text-white'
+                            : message.isStreaming 
+                              ? 'bg-gradient-to-r from-ai-blue to-ai-purple text-white animate-streaming-pulse animate-streaming-glow' 
+                              : 'bg-gradient-to-r from-ai-blue to-ai-purple text-white'
                         }`}>
                           <IconContext.Provider value={{ className: "text-lg" }}>
                             {message.sender === 'user' ? <RiUserLine /> : <RiRobot2Line />}
@@ -428,10 +430,19 @@ const AskAIPage: React.FC = () => {
                             {message.sender === 'user' 
                               ? message.content 
                               : formatMessage(message.content)}
+                            {message.isStreaming && message.content === '' && (
+                              <div className="flex items-center text-ai-blue">
+                                <div className="flex space-x-1">
+                                  <div className="w-2 h-2 bg-ai-blue rounded-full animate-typing-dots" style={{ animationDelay: '0ms' }} />
+                                  <div className="w-2 h-2 bg-ai-purple rounded-full animate-typing-dots" style={{ animationDelay: '200ms' }} />
+                                  <div className="w-2 h-2 bg-ai-teal rounded-full animate-typing-dots" style={{ animationDelay: '400ms' }} />
+                                </div>
+                              </div>
+                            )}
                           </div>
                           
                           {/* Update the reasoning toggle button */}
-                          {message.sender === 'ai' && messageReasoning && (
+                          {message.sender === 'ai' && messageReasoning && !message.isStreaming && (
                             <div className="mt-2">
                               <button 
                                 onClick={() => toggleReasoning(message.id)}
@@ -453,26 +464,6 @@ const AskAIPage: React.FC = () => {
                     </div>
                   );
                 })}
-                
-                {(isLoadingResponse || isImageAnalyzing) && (
-                  <div className="flex justify-start">
-                    <div className="flex items-start max-w-[85%]">
-                      <div className="h-10 w-10 rounded-full flex-shrink-0 flex items-center justify-center mx-3 bg-gradient-to-r from-ai-blue to-ai-purple text-white">
-                        <IconContext.Provider value={{ className: "text-lg" }}>
-                          <RiRobot2Line />
-                        </IconContext.Provider>
-                      </div>
-                      
-                      <div className="rounded-2xl px-5 py-4 bg-secondary-50/30 dark:bg-dark-800/80 backdrop-blur-md border border-white/10 shadow-lg">
-                        <div className="flex space-x-2">
-                          <div className="w-2 h-2 bg-ai-blue rounded-full opacity-75" />
-                          <div className="w-2 h-2 bg-ai-purple rounded-full opacity-75" />
-                          <div className="w-2 h-2 bg-ai-teal rounded-full opacity-75" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
                 
                 <div ref={messagesEndRef} />
               </div>
@@ -531,10 +522,9 @@ const AskAIPage: React.FC = () => {
                     className="bg-secondary-50/30 dark:bg-dark-800/50 backdrop-blur-md border border-secondary-200/50 dark:border-dark-700/50 rounded-full pl-12 pr-4 py-3 w-full focus:border-ai-blue/50 focus:ring-1 focus:ring-ai-blue/50 transition-all duration-300 group-hover:border-ai-blue/30"
                     leftIcon={
                       <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-ai-blue">
-                        {isLoadingResponse ? <RiLoader4Line className="w-5 h-5 animate-spin" /> : <RiSearchLine className="w-5 h-5" />}
+                        <RiSearchLine className="w-5 h-5" />
                       </div>
                     }
-                    disabled={isLoadingResponse}
                   />
                 </div>
                 
@@ -552,7 +542,7 @@ const AskAIPage: React.FC = () => {
                   variant="outline"
                   onClick={triggerImageUpload}
                   className="rounded-full h-12 w-12 flex items-center justify-center border border-secondary-200/50 dark:border-dark-700/50 hover:border-ai-blue/50 hover:bg-ai-blue/10 transition-all duration-300"
-                  disabled={isLoadingResponse || isImageAnalyzing}
+                  disabled={isImageAnalyzing}
                 >
                   <RiImageAddLine className="text-xl text-ai-blue" />
                 </Button>
@@ -561,7 +551,7 @@ const AskAIPage: React.FC = () => {
                   type="submit"
                   variant="ai"
                   className="rounded-full px-5 py-3 bg-gradient-to-r from-ai-blue to-ai-purple hover:from-ai-blue hover:to-ai-teal transition-all duration-500 shadow-md hover:shadow-ai-glow"
-                  disabled={(!input.trim() && !uploadedImage) || isLoadingResponse || isImageAnalyzing}
+                  disabled={(!input.trim() && !uploadedImage) || isImageAnalyzing}
                   rightIcon={<RiSendPlaneLine />}
                 >
                   {t('askAI.send', 'Send')}

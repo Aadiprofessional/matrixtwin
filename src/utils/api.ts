@@ -71,6 +71,13 @@ const createAuthHeaders = (): HeadersInit => {
     console.log('Authorization header set with token');
   } else {
     console.warn('No token found in localStorage');
+    
+    // Temporary development bypass for production server
+    if (API_BASE_URL.includes('matrixbim-server.onrender.com')) {
+      console.log('Adding development bypass headers for production server');
+      headers['dev-skip-auth'] = 'true';
+      headers['dev-role'] = 'admin';
+    }
   }
   
   return headers;

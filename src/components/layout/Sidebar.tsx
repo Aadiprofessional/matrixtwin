@@ -210,7 +210,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
       label: 'nav.dashboard'
     },
     { 
-      to: '/digital-twins/iot-dashboard', 
+      to: '/digital-twins/viewer', 
       icon: (
         <div><IconWrapper icon="RiBuilding4Line" className="text-xl" /></div>
       ), 

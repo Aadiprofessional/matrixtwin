@@ -1,0 +1,9689 @@
+HHD-ONLINE-API
+HHD Attachment download
+Type to search
+API Reference
+1. Device Info Interface List
+2. Device Data Interface List
+4. Device Command Interface Collection
+6. Error code list
+Version	Update Time	Status	Author	Description
+1.0.1
+
+2023-11-01 10:30
+
+found
+
+Durant
+
+HHD Interface document
+
+1.0.2
+
+2024-04-08 10:30
+
+edit
+
+Durant
+
+New error code
+
+1. Device Info Interface List
+1.1. Query basic device information
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDevice/queryDeviceDetail
+
+Type: POST
+
+Author: WQ
+
+Content-Type: application/json
+
+Description: Query basic device information
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+false
+
+Device coding
+
+Request-body:
+
+{
+  "deviceCode": "838065611507"
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─deviceCode
+
+string
+
+Device coding
+
+-
+
+└─name
+
+string
+
+Device name
+
+-
+
+└─sim
+
+string
+
+sim card number
+
+-
+
+└─aesKey
+
+string
+
+Bluetooth aes encryption key
+
+-
+
+└─iccId
+
+string
+
+icc id
+
+-
+
+└─blueMac
+
+string
+
+Bluetooth mac
+
+-
+
+└─bluePwd
+
+string
+
+Bluetooth operation password
+
+-
+
+└─deviceStatus
+
+string
+
+Device status 1: The device is online. 0: The device is offline
+
+-
+
+└─parentId
+
+string
+
+Female lock id
+
+-
+
+└─deviceType
+
+int32
+
+Lock type 1= female lock 2= child lock
+
+-
+
+└─description
+
+string
+
+Description
+
+-
+
+└─createTime
+
+string
+
+Creation time
+
+-
+
+└─online
+
+int32
+
+Device online status 1= Online 0= Offline
+
+-
+
+└─encryptionType
+
+int32
+
+Encryption type: 0= no encryption, 1=AES encryption, 2=RSA encryption, 3=SM2 encryption, 4=SM3 encryption
+
+-
+
+└─encryptionPassword
+
+string
+
+Encryption cipher
+
+-
+
+└─lastOnlineTime
+
+string
+
+Last online time of the device
+
+-
+
+└─mcuVersion
+
+string
+
+MCU firmware version number
+
+-
+
+└─blueProtocol
+
+string
+
+agreement
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {
+    "deviceCode": "838065611507",
+    "name": "Device A",
+    "sim": "21321321",
+    "aesKey": "1234567890123456",
+    "iccId": "222211",
+    "blueMac": "fefgkkzfffzz",
+    "bluePwd": "12341234",
+    "deviceStatus": "1",
+    "parentId": "838065611507",
+    "deviceType": 0,
+    "description": "***",
+    "createTime": "2023-11-03 11:11:11",
+    "online": 1,
+    "encryptionType": 0,
+    "encryptionPassword": "",
+    "lastOnlineTime": "1699002692386",
+    "mcuVersion": "G310-V**",
+    "blueProtocol": "blue**"
+  }
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDevice/queryDeviceDetail --data '{
+  "deviceCode": "838065611507"
+}'
+1.2. Query the device column TAB page
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDevice/page
+
+Type: POST
+
+Author: WQ
+
+Content-Type: application/json
+
+Description: Query the device column TAB page
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+curPage
+
+int64
+
+true
+
+Current page number
+
+pageSize
+
+int64
+
+true
+
+Displays the number of records per page
+
+name
+
+string
+
+false
+
+Device name
+
+deviceCode
+
+string
+
+false
+
+Device coding
+
+companyId
+
+int64
+
+false
+
+Affiliated company
+
+online
+
+int32
+
+false
+
+Device online status 1= Online 0= Offline
+
+Request-body:
+
+{
+  "curPage": 1,
+  "pageSize": 1,
+  "name": "Device A",
+  "deviceCode": "838065611507",
+  "companyId": 22222,
+  "online": 0
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+array
+
+Return data body
+
+-
+
+└─deviceCode
+
+string
+
+Device coding
+
+-
+
+└─name
+
+string
+
+Device name
+
+-
+
+└─sim
+
+string
+
+sim card number
+
+-
+
+└─aesKey
+
+string
+
+Bluetooth aes encryption key
+
+-
+
+└─iccId
+
+string
+
+icc id
+
+-
+
+└─blueMac
+
+string
+
+Bluetooth mac
+
+-
+
+└─bluePwd
+
+string
+
+Bluetooth operation password
+
+-
+
+└─deviceStatus
+
+string
+
+Device status 1: The device is online. 0: The device is offline
+
+-
+
+└─parentId
+
+string
+
+Female lock id
+
+-
+
+└─deviceType
+
+int32
+
+Lock type 1= female lock 2= child lock
+
+-
+
+└─description
+
+string
+
+Description
+
+-
+
+└─createTime
+
+string
+
+Creation time
+
+-
+
+└─online
+
+int32
+
+Device online status 1= Online 0= Offline
+
+-
+
+└─encryptionType
+
+int32
+
+Encryption type: 0= no encryption, 1=AES encryption, 2=RSA encryption, 3=SM2 encryption, 4=SM3 encryption
+
+-
+
+└─encryptionPassword
+
+string
+
+Encryption cipher
+
+-
+
+└─lastOnlineTime
+
+string
+
+Last online time of the device
+
+-
+
+└─mcuVersion
+
+string
+
+MCU firmware version number
+
+-
+
+└─blueProtocol
+
+string
+
+agreement
+
+-
+
+pageInfo
+
+object
+
+No comments found.
+
+-
+
+└─totalCount
+
+int32
+
+Total records
+
+-
+
+└─pageSize
+
+int32
+
+Records per page
+
+-
+
+└─totalPage
+
+int32
+
+Total pages
+
+-
+
+└─curPage
+
+int32
+
+Current page count
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": [
+    {
+      "deviceCode": "838065611507",
+      "name": "Device A",
+      "sim": "21321321",
+      "aesKey": "1234567890123456",
+      "iccId": "222211",
+      "blueMac": "fefgkkzfffzz",
+      "bluePwd": "12341234",
+      "deviceStatus": "1",
+      "parentId": "838065611507",
+      "deviceType": 0,
+      "description": "***",
+      "createTime": "2023-11-03 11:11:11",
+      "online": 1,
+      "encryptionType": 0,
+      "encryptionPassword": "",
+      "lastOnlineTime": "1699002692386",
+      "mcuVersion": "G310-V**",
+      "blueProtocol": "blue**"
+    }
+  ],
+  "pageInfo": {
+    "totalCount": 1,
+    "pageSize": 1,
+    "totalPage": 1,
+    "curPage": 1
+  }
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDevice/page --data '{
+  "curPage": 1,
+  "pageSize": 1,
+  "name": "Device A",
+  "deviceCode": "838065611507",
+  "companyId": 22222,
+  "online": 0
+}'
+2. Device Data Interface List
+2.1. Obtain the latest data based on the device ID
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceData/getNewDataByDeviceCodes
+
+Type: POST
+
+Author: WQ
+
+Content-Type: application/json
+
+Description: Obtain the latest data based on the device ID
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCodes
+
+array
+
+true
+
+multipleDevice coding,[array of string]
+
+Request-body:
+
+[
+  ""
+]
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+array
+
+Return data body
+
+-
+
+└─deviceCode
+
+string
+
+Device coding
+
+-
+
+└─DeviceNewVos
+
+array
+
+Device data information
+
+-
+
+     └─key
+
+string
+
+identifier
+
+-
+
+     └─name
+
+string
+
+name
+
+-
+
+     └─value
+
+object
+
+Corresponding value
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": [
+    {
+      "deviceCode": "838065611507",
+      "DeviceNewVos": [
+        {
+          "key": "para_0x17",
+          "name": "Positioning accuracy",
+          "value": {
+            "object": "any object"
+          }
+        }
+      ]
+    }
+  ]
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceData/getNewDataByDeviceCodes --data '[
+  ""
+]'
+2.2. Query historical data
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceData/getHistoryData
+
+Type: POST
+
+Author: WQ
+
+Content-Type: application/json
+
+Description: Query historical data
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+curPage
+
+int64
+
+true
+
+Current page number
+
+pageSize
+
+int64
+
+true
+
+Displays the number of records per page
+
+deviceCodes
+
+array
+
+true
+
+Device coding
+
+dataType
+
+int32
+
+false
+
+Device data type 0: common data 1 Command response data
+
+gpsStartTime
+
+int64
+
+false
+
+Fixed start time
+
+gpsEndTime
+
+int64
+
+false
+
+Positioning end time
+
+Request-body:
+
+{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCodes": [
+    "198065617508"
+  ],
+  "dataType": 0,
+  "gpsStartTime": 1693775892000,
+  "gpsEndTime": 1693775892000
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─searchCount
+
+boolean
+
+Perform count query [Default: true]
+
+-
+
+└─pages
+
+int64
+
+Current pageTotal pages
+
+-
+
+└─hitCount
+
+boolean
+
+Whether the count cache is matched
+
+3.3.1
+
+└─records
+
+array
+
+Page record list
+
+-
+
+     └─deviceCode
+
+string
+
+Device coding
+
+-
+
+     └─deviceName
+
+string
+
+Device name
+
+-
+
+     └─attributes
+
+string
+
+Additional attribute(See Table 7 for details)
+
+-
+
+     └─battery
+
+int32
+
+Electric quantity
+
+-
+
+     └─deviceStatus
+
+string
+
+Device status (Details Table 5 describes the device status)
+
+-
+
+     └─deviceWarning
+
+string
+
+Equipment alarm (See Table 4 of the device alarm instructions for details)
+
+-
+
+     └─direction
+
+int32
+
+direction
+
+-
+
+     └─lat
+
+string
+
+latitude
+
+-
+
+     └─lng
+
+string
+
+longitude
+
+-
+
+     └─time
+
+int64
+
+Positioning time
+
+-
+
+     └─location
+
+string
+
+0= gps positioning 1= Base station positioning 2= wifi positioning 3= Bluetooth positioning
+
+-
+
+     └─speed
+
+float
+
+speed
+
+-
+
+     └─wifiMac
+
+string
+
+wifi Mac
+
+-
+
+     └─hisMethod
+
+int32
+
+Data status (0= real-time 1= supplementary report)
+
+-
+
+     └─protocolTypeEncode
+
+string
+
+Device data return type
+
+-
+
+     └─eventType
+
+string
+
+event Type (0 Normal 1 Alarm)
+
+-
+
+     └─event_0x0000
+
+string
+
+Shackle closed event See --> Table 8 for details
+
+-
+
+     └─event_0x0001
+
+string
+
+Shackle opened event See --> Table 8 for details
+
+-
+
+     └─event_0x0002
+
+string
+
+Close shackle auto sealing event See --> Table 8 for details
+
+-
+
+     └─event_0x0003
+
+string
+
+IC Card sealing success event See --> Table 8 for details
+
+-
+
+     └─event_0x0004
+
+string
+
+IC Card unsealing success event See --> Table 8 for details
+
+-
+
+     └─event_0x0005
+
+string
+
+BLE sealing success event See --> Table 8 for details
+
+-
+
+     └─event_0x0006
+
+string
+
+BLE unsealing success event See --> Table 8 for details
+
+-
+
+     └─event_0x0007
+
+string
+
+Platform sealing success event See --> Table 8 for details
+
+-
+
+     └─event_0x0008
+
+string
+
+Platform unsealing success event See --> Table 8 for details
+
+-
+
+     └─event_0x0009
+
+string
+
+SMS sealing success event See --> Table 8 for details
+
+-
+
+     └─event_0x000A
+
+string
+
+SMS unsealing success event See --> Table 8 for details
+
+-
+
+     └─event_0x000B
+
+string
+
+Non-registered card seal failure event See --> Table 8 for details
+
+-
+
+     └─event_0x000C
+
+string
+
+Non-registered card unsealing failure event See --> Table 8 for details
+
+-
+
+     └─event_0x000D
+
+string
+
+Out-of-area card sealing failed event See --> Table 8 for details
+
+-
+
+     └─event_0x000E
+
+string
+
+区域外刷卡解封失败event See --> Table 8 for details
+
+-
+
+     └─event_0x000F
+
+string
+
+Shackle opened in sealed state See --> Table 8 for details
+
+-
+
+     └─event_0x0010
+
+string
+
+Shell was disassembled See --> Table 8 for details
+
+-
+
+     └─event_0x0011
+
+string
+
+Shackle inner wire been cut See --> Table 8 for details
+
+-
+
+     └─event_0x0012
+
+string
+
+Low battery into sleep and off-line See --> Table 8 for details
+
+-
+
+     └─event_0x0090
+
+string
+
+Firmware version reporting event See --> Table 8 for details
+
+-
+
+└─total
+
+int64
+
+Total number of rows that meet the condition
+
+-
+
+└─size
+
+int64
+
+Gets the number of displays per page
+
+-
+
+└─current
+
+int64
+
+Current page，Default 1
+
+-
+
+
+Response-example:
+
+{"returnCode":0,"returnMsg":"","data":{"searchCount":true,"pages":0,"hitCount":true,"records":[{"deviceCode":"838065611507","deviceName":"deviceA","attributes":"""","battery":98,"deviceStatus":"","deviceWarning":"","direction":0,"lat":"","lng":"","time":0,"location":"","speed":0.0,"wifiMac":"","hisMethod":0,"protocolTypeEncode":"","eventType":"","event_0x0000":"","event_0x0001":"","event_0x0002":"","event_0x0003":"","event_0x0004":"","event_0x0005":"","event_0x0006":"","event_0x0007":"","event_0x0008":"","event_0x0009":"","event_0x000A":"","event_0x000B":"","event_0x000C":"","event_0x000D":"","event_0x000E":"","event_0x000F":"","event_0x0010":"","event_0x0011":"","event_0x0012":"","event_0x0090":""}],"total":0,"size":0,"current":0}}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceData/getHistoryData --data '{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCodes": [
+    "198065617508"
+  ],
+  "dataType": 0,
+  "gpsStartTime": 1693775892000,
+  "gpsEndTime": 1693775892000
+}'
+2.3. Query track data
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceData/getTrackList
+
+Type: POST
+
+Author: WQ
+
+Content-Type: application/json
+
+Description: Query track data
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+curPage
+
+int64
+
+true
+
+Current page number
+
+pageSize
+
+int64
+
+true
+
+Displays the number of records per page
+
+deviceCode
+
+string
+
+true
+
+Device coding
+
+startTime
+
+int64
+
+true
+
+Start time
+
+endTime
+
+int64
+
+true
+
+End time
+
+isPage
+
+boolean
+
+false
+
+Paging or not
+
+Request-body:
+
+{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCode": "838065611507",
+  "startTime": 1700010192000,
+  "endTime": 1700096592000,
+  "isPage": true
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+array
+
+Return data body
+
+-
+
+└─deviceStatus
+
+string
+
+Device status 1: The device is online. 0: The device is offline
+
+-
+
+└─time
+
+int64
+
+Device GPS positioning time
+
+-
+
+└─deviceCode
+
+string
+
+Device coding
+
+-
+
+└─deviceName
+
+string
+
+Device name
+
+-
+
+└─lat
+
+string
+
+latitude
+
+-
+
+└─lng
+
+string
+
+longitude
+
+-
+
+└─direction
+
+int32
+
+Direction 0-359, true north is 0, clockwise
+
+-
+
+└─speed
+
+float
+
+speed
+
+-
+
+└─elevation
+
+int32
+
+altitude
+
+-
+
+└─protocolTypeEncode
+
+string
+
+Device push data type 0200 real-time data, 0210 supplementary data
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": [
+    {
+      "deviceStatus": "1",
+      "time": 1693775892000,
+      "deviceCode": "838065611507",
+      "deviceName": "Device A",
+      "lat": "22.13223",
+      "lng": "123.121212",
+      "direction": 0,
+      "speed": 11.2,
+      "elevation": 110,
+      "protocolTypeEncode": "0200"
+    }
+  ]
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceData/getTrackList --data '{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCode": "838065611507",
+  "startTime": 1700010192000,
+  "endTime": 1700096592000,
+  "isPage": true
+}'
+2.4. Query event data
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceData/getEventList
+
+Type: POST
+
+Author: WQ
+
+Content-Type: application/json
+
+Description: Query event data
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+curPage
+
+int64
+
+true
+
+Current page number
+
+pageSize
+
+int64
+
+true
+
+Displays the number of records per page
+
+deviceCodes
+
+array
+
+false
+
+multipleDevice coding
+
+startTime
+
+int64
+
+false
+
+Start time
+
+endTime
+
+int64
+
+false
+
+End time
+
+eventName
+
+string
+
+false
+
+Fuzzy matching of unblocking events is applied
+
+eventId
+
+string
+
+false
+
+Device event id
+
+eventType
+
+int32
+
+false
+
+Event type (0 Common event 1 Alarm event 2 Solution event)
+
+protocolTypeEncode
+
+string
+
+false
+
+Device push data type t0200 real-time data, t0210 supplementary data
+
+Request-body:
+
+{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCodes": [
+    "198065617508"
+  ],
+  "startTime": 1698293567000,
+  "endTime": 1698293587000,
+  "eventName": "Low power threshold alarm",
+  "eventId": "event_0x0017",
+  "eventType": 0,
+  "protocolTypeEncode": "t0200"
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+array
+
+Return data body
+
+-
+
+└─deviceName
+
+string
+
+Device name
+
+-
+
+└─createTime
+
+string
+
+Timestamp time when the database was entered
+
+-
+
+└─deviceCode
+
+string
+
+Device coding
+
+-
+
+└─upTime
+
+int64
+
+Reporting time
+
+-
+
+└─gpsTime
+
+int64
+
+Positioning time
+
+-
+
+└─eventType
+
+int32
+
+Device data type 0= Normal event 1= Alarm event 2= Unlocking
+
+-
+
+└─eventId
+
+string
+
+Device data event ID See attached Table 8
+
+-
+
+└─eventName
+
+string
+
+Device data event name
+
+-
+
+└─deviceStatus
+
+string
+
+Device status 1: The device is online. 0: The device is offline
+
+-
+
+└─battery
+
+float
+
+Electric quantity
+
+-
+
+└─lat
+
+string
+
+latitude
+
+-
+
+└─lng
+
+string
+
+longitude
+
+-
+
+└─icCard
+
+string
+
+Swipe the card number
+
+-
+
+└─protocolTypeEncode
+
+string
+
+Device push data type 0200 real-time data, 0210 supplementary data
+
+-
+
+pageInfo
+
+object
+
+No comments found.
+
+-
+
+└─totalCount
+
+int32
+
+Total records
+
+-
+
+└─pageSize
+
+int32
+
+Records per page
+
+-
+
+└─totalPage
+
+int32
+
+Total pages
+
+-
+
+└─curPage
+
+int32
+
+Current page count
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": [
+    {
+      "deviceName": "Device A",
+      "createTime": "yyyy-MM-dd HH:mm:ss",
+      "deviceCode": "838065611507",
+      "upTime": 1693775892000,
+      "gpsTime": 1693775892000,
+      "eventType": 0,
+      "eventId": "event_0x0017",
+      "eventName": "Low power threshold alarm",
+      "deviceStatus": "1",
+      "battery": 99,
+      "lat": "11.2223",
+      "lng": "112.2223",
+      "icCard": "672328",
+      "protocolTypeEncode": "0200"
+    }
+  ],
+  "pageInfo": {
+    "totalCount": 1,
+    "pageSize": 1,
+    "totalPage": 1,
+    "curPage": 1
+  }
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceData/getEventList --data '{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCodes": [
+    "198065617508"
+  ],
+  "startTime": 1698293567000,
+  "endTime": 1698293587000,
+  "eventName": "Low power threshold alarm",
+  "eventId": "event_0x0017",
+  "eventType": 0,
+  "protocolTypeEncode": "t0200"
+}'
+3. V2 Device Data Interface List
+3.1. Obtain the latest data based on the device ID
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceDataV2/getNewDataByDeviceCodes
+
+Type: POST
+
+Author: WQ
+
+Content-Type: application/json
+
+Description: Obtain the latest data based on the device ID
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCodes
+
+array
+
+true
+
+multipleDevice coding,[array of string]
+
+Request-body:
+
+[
+  ""
+]
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+array
+
+Return data body
+
+-
+
+└─deviceCode
+
+string
+
+Device coding
+
+-
+
+└─DeviceNewVos
+
+object
+
+Device data information
+
+-
+
+     └─events
+
+array
+
+event
+
+-
+
+          └─map
+
+map
+
+No comments found.
+
+-
+
+               └─any object
+
+object
+
+any object.
+
+-
+
+     └─properties
+
+map
+
+Stats
+
+-
+
+          └─any object
+
+object
+
+any object.
+
+-
+
+     └─services
+
+map
+
+service
+
+-
+
+          └─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": [
+    {
+      "deviceCode": "838065611507",
+      "DeviceNewVos": {
+        "events": [
+          {
+            "map": {
+              "mapKey": {}
+            }
+          }
+        ],
+        "properties": {
+          "mapKey": {}
+        },
+        "services": {
+          "mapKey": {}
+        }
+      }
+    }
+  ]
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceDataV2/getNewDataByDeviceCodes --data '[
+  ""
+]'
+3.2. Query historical data
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceDataV2/getHistoryData
+
+Type: POST
+
+Author: WQ
+
+Content-Type: application/json
+
+Description: Query historical data
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+curPage
+
+int64
+
+true
+
+Current page number
+
+pageSize
+
+int64
+
+true
+
+Displays the number of records per page
+
+deviceCodes
+
+array
+
+true
+
+Device coding
+
+dataType
+
+int32
+
+false
+
+Device data type 0: common data 1 Command response data
+
+gpsStartTime
+
+int64
+
+false
+
+Fixed start time
+
+gpsEndTime
+
+int64
+
+false
+
+Positioning end time
+
+Request-body:
+
+{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCodes": [
+    "198065617508"
+  ],
+  "dataType": 0,
+  "gpsStartTime": 1693775892000,
+  "gpsEndTime": 1693775892000
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─header
+
+map
+
+Request header
+
+-
+
+└─body
+
+object
+
+Data body
+
+-
+
+     └─pages
+
+int64
+
+Current pageTotal pages
+
+-
+
+     └─records
+
+array
+
+Query data list
+
+-
+
+          └─createTime
+
+string
+
+Timestamp time when the database was entered
+
+-
+
+          └─deviceCode
+
+string
+
+Device coding
+
+-
+
+          └─data
+
+string
+
+Device data -json format
+
+-
+
+          └─dataType
+
+int32
+
+Device data type 0= Location data None event 1= Location data event 2= Response data except 0200
+
+-
+
+          └─upTime
+
+int64
+
+Reporting time
+
+-
+
+          └─gpsTime
+
+int64
+
+Positioning time
+
+-
+
+          └─companyId
+
+int64
+
+Id of the company primary key
+
+-
+
+          └─hex
+
+string
+
+hex
+
+-
+
+          └─protocolTypeEncode
+
+string
+
+Device push data type
+
+-
+
+          └─deviceName
+
+string
+
+No comments found.
+
+-
+
+          └─productName
+
+string
+
+No comments found.
+
+-
+
+     └─total
+
+int64
+
+totality
+
+-
+
+     └─size
+
+int64
+
+Number of entries per page, default 10
+
+-
+
+     └─current
+
+int64
+
+Current page
+
+-
+
+     └─orders
+
+array
+
+Sort field information
+
+-
+
+          └─column
+
+string
+
+The field that needs to be sorted
+
+-
+
+          └─asc
+
+boolean
+
+The value is in positive order. The default value is true
+
+-
+
+     └─optimizeCountSql
+
+boolean
+
+Automatically optimize COUNT SQL
+
+-
+
+     └─searchCount
+
+boolean
+
+Whether to query count
+
+-
+
+     └─hitCount
+
+boolean
+
+Whether the count cache is matched
+
+-
+
+
+Response-example:
+
+{"returnCode":0,"returnMsg":"","data":{"header":{"mapKey":},"body":{"pages":0,"records":[{"createTime":"yyyy-MM-dd HH:mm:ss","deviceCode":"","data":"","dataType":0,"upTime":0,"gpsTime":0,"companyId":0,"hex":"","protocolTypeEncode":"","deviceName":"","productName":""}],"total":0,"size":0,"current":0,"orders":[{"column":"","asc":true}],"optimizeCountSql":true,"searchCount":true,"hitCount":true}}}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceDataV2/getHistoryData --data '{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCodes": [
+    "198065617508"
+  ],
+  "dataType": 0,
+  "gpsStartTime": 1693775892000,
+  "gpsEndTime": 1693775892000
+}'
+3.3. Query track data
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceDataV2/getTrackList
+
+Type: POST
+
+Author: WQ
+
+Content-Type: application/json
+
+Description: Query track data
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+curPage
+
+int64
+
+true
+
+Current page number
+
+pageSize
+
+int64
+
+true
+
+Displays the number of records per page
+
+deviceCode
+
+string
+
+true
+
+Device coding
+
+startTime
+
+int64
+
+true
+
+Start time
+
+endTime
+
+int64
+
+true
+
+End time
+
+isPage
+
+boolean
+
+false
+
+Paging or not
+
+Request-body:
+
+{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCode": "838065611507",
+  "startTime": 1700010192000,
+  "endTime": 1700096592000,
+  "isPage": true
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+array
+
+Return data body
+
+-
+
+└─deviceStatus
+
+string
+
+Device status 1: The device is online. 0: The device is offline
+
+-
+
+└─time
+
+int64
+
+Device GPS positioning time
+
+-
+
+└─deviceCode
+
+string
+
+Device coding
+
+-
+
+└─deviceName
+
+string
+
+Device name
+
+-
+
+└─lat
+
+string
+
+latitude
+
+-
+
+└─lng
+
+string
+
+longitude
+
+-
+
+└─direction
+
+int32
+
+Direction 0-359, true north is 0, clockwise
+
+-
+
+└─speed
+
+float
+
+speed
+
+-
+
+└─elevation
+
+int32
+
+altitude
+
+-
+
+└─protocolTypeEncode
+
+string
+
+Device push data type 0200 real-time data, 0210 supplementary data
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": [
+    {
+      "deviceStatus": "1",
+      "time": 1693775892000,
+      "deviceCode": "838065611507",
+      "deviceName": "Device A",
+      "lat": "22.13223",
+      "lng": "123.121212",
+      "direction": 0,
+      "speed": 11.2,
+      "elevation": 110,
+      "protocolTypeEncode": "0200"
+    }
+  ]
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceDataV2/getTrackList --data '{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCode": "838065611507",
+  "startTime": 1700010192000,
+  "endTime": 1700096592000,
+  "isPage": true
+}'
+3.4. Query event data
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceDataV2/getEventList
+
+Type: POST
+
+Author: WQ
+
+Content-Type: application/json
+
+Description: Query event data
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+curPage
+
+int64
+
+true
+
+Current page number
+
+pageSize
+
+int64
+
+true
+
+Displays the number of records per page
+
+deviceCodes
+
+array
+
+false
+
+multipleDevice coding
+
+startTime
+
+int64
+
+false
+
+Start time
+
+endTime
+
+int64
+
+false
+
+End time
+
+eventName
+
+string
+
+false
+
+Fuzzy matching of unblocking events is applied
+
+eventId
+
+string
+
+false
+
+Device event id
+
+eventType
+
+int32
+
+false
+
+Event type (0 Common event 1 Alarm event 2 Solution event)
+
+protocolTypeEncode
+
+string
+
+false
+
+Device push data type t0200 real-time data, t0210 supplementary data
+
+Request-body:
+
+{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCodes": [
+    "198065617508"
+  ],
+  "startTime": 1698293567000,
+  "endTime": 1698293587000,
+  "eventName": "Low power threshold alarm",
+  "eventId": "event_0x0017",
+  "eventType": 0,
+  "protocolTypeEncode": "t0200"
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+array
+
+Return data body
+
+-
+
+└─deviceName
+
+string
+
+Device name
+
+-
+
+└─createTime
+
+string
+
+Timestamp time when the database was entered
+
+-
+
+└─deviceCode
+
+string
+
+Device coding
+
+-
+
+└─upTime
+
+int64
+
+Reporting time
+
+-
+
+└─gpsTime
+
+int64
+
+Positioning time
+
+-
+
+└─eventType
+
+int32
+
+Device data type 0= Normal event 1= Alarm event 2= Unlocking
+
+-
+
+└─eventId
+
+string
+
+Device data event ID See attached Table 8
+
+-
+
+└─eventName
+
+string
+
+Device data event name
+
+-
+
+└─deviceStatus
+
+string
+
+Device status 1: The device is online. 0: The device is offline
+
+-
+
+└─battery
+
+float
+
+Electric quantity
+
+-
+
+└─lat
+
+string
+
+latitude
+
+-
+
+└─lng
+
+string
+
+longitude
+
+-
+
+└─icCard
+
+string
+
+Swipe the card number
+
+-
+
+└─protocolTypeEncode
+
+string
+
+Device push data type 0200 real-time data, 0210 supplementary data
+
+-
+
+pageInfo
+
+object
+
+No comments found.
+
+-
+
+└─totalCount
+
+int32
+
+Total records
+
+-
+
+└─pageSize
+
+int32
+
+Records per page
+
+-
+
+└─totalPage
+
+int32
+
+Total pages
+
+-
+
+└─curPage
+
+int32
+
+Current page count
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": [
+    {
+      "deviceName": "Device A",
+      "createTime": "yyyy-MM-dd HH:mm:ss",
+      "deviceCode": "838065611507",
+      "upTime": 1693775892000,
+      "gpsTime": 1693775892000,
+      "eventType": 0,
+      "eventId": "event_0x0017",
+      "eventName": "Low power threshold alarm",
+      "deviceStatus": "1",
+      "battery": 99,
+      "lat": "11.2223",
+      "lng": "112.2223",
+      "icCard": "672328",
+      "protocolTypeEncode": "0200"
+    }
+  ],
+  "pageInfo": {
+    "totalCount": 1,
+    "pageSize": 1,
+    "totalPage": 1,
+    "curPage": 1
+  }
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceDataV2/getEventList --data '{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCodes": [
+    "198065617508"
+  ],
+  "startTime": 1698293567000,
+  "endTime": 1698293587000,
+  "eventName": "Low power threshold alarm",
+  "eventId": "event_0x0017",
+  "eventType": 0,
+  "protocolTypeEncode": "t0200"
+}'
+4. Device Command Interface Collection
+4.1. Writes device function parameters
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/setDeviceParameter
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Writes device function parameters
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device coding
+
+list
+
+array
+
+true
+
+Command content(See Table 10 for details)
+
+└─key
+
+string
+
+false
+
+identifier See Table 10
+
+└─value
+
+string
+
+false
+
+Corresponding value The example is the mailing address
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "list": [
+    {
+      "key": "para_0x03",
+      "value": "dev.hhdlink.online"
+    }
+  ]
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/setDeviceParameter --data '{
+  "deviceCode": "838065611507",
+  "list": [
+    {
+      "key": "para_0x03",
+      "value": "dev.hhdlink.online"
+    }
+  ]
+}'
+4.2. Read device function parameters
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDeviceParameter
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Read device function parameters
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device coding
+
+keyList
+
+array
+
+true
+
+Read command content(See Table 10 for details)
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "keyList": [
+    ""
+  ]
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDeviceParameter --data '{
+  "deviceCode": "838065611507",
+  "keyList": [
+    ""
+  ]
+}'
+4.3. Write the device NFC card
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/setDeviceNfcCard
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Write the device NFC card
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device coding
+
+icCards
+
+array
+
+true
+
+ic Card number
+
+type
+
+string
+
+false
+
+Equipment type(0 Old and new,haiHong)
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "icCards": [
+    ""
+  ],
+  "type": ""
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/setDeviceNfcCard --data '{
+  "deviceCode": "838065611507",
+  "icCards": [
+    ""
+  ],
+  "type": ""
+}'
+4.4. Read the NFC card of the device
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDeviceNfcCard/{deviceCode}
+
+Type: GET
+
+Author: chenyq
+
+Content-Type: application/x-www-form-urlencoded;charset=UTF-8
+
+Description: Read the NFC card of the device
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Path-parameters:
+
+
+Parameter	Value	Type	Required	Description
+
+deviceCode
+
+
+string
+
+true
+
+Equipment number
+
+Query-parameters:
+
+
+Parameter	Value	Type	Required	Description
+
+blockNum
+
+0
+
+int32
+
+false
+
+Block number 0-9
+
+
+type
+
+0
+
+string
+
+false
+
+No comments found.
+
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X GET -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDeviceNfcCard/{deviceCode}?blockNum=0&type=0
+4.5. Clear the NFC card of the device
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/delDeviceNfcCard/{deviceCode}
+
+Type: GET
+
+Author: chenyq
+
+Content-Type: application/x-www-form-urlencoded;charset=UTF-8
+
+Description: Clear the NFC card of the device
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Path-parameters:
+
+
+Parameter	Value	Type	Required	Description
+
+deviceCode
+
+
+string
+
+true
+
+Equipment number
+
+Query-parameters:
+
+
+Parameter	Value	Type	Required	Description
+
+blockNum
+
+0
+
+int32
+
+false
+
+No comments found.
+
+
+type
+
+0
+
+string
+
+false
+
+No comments found.
+
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X GET -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/delDeviceNfcCard/{deviceCode}?blockNum=0&type=0
+4.6. The device applies the unblocking instruction
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/sealAndUnsealCmd
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: The device applies the unblocking instruction
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+false
+
+Device coding
+
+type
+
+string
+
+false
+
+The type of encapsulation applied(00 Unseal, 01 seal)
+
+userName
+
+string
+
+false
+
+Unseal operator
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "type": "00",
+  "userName": "test"
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/sealAndUnsealCmd --data '{
+  "deviceCode": "838065611507",
+  "type": "00",
+  "userName": "test"
+}'
+4.7. Get the latest electronic fence record list of the equipment
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDeviceFencePage
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Get the latest electronic fence record list of the equipment
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+false
+
+Device coding
+
+sendStatus
+
+int32
+
+false
+
+Sending status 0 = Incomplete 1= completed 2 = stopped
+
+beginTime
+
+string
+
+false
+
+Start time
+
+endTime
+
+string
+
+false
+
+End time
+
+curPage
+
+int64
+
+true
+
+Current page number
+
+pageSize
+
+int64
+
+true
+
+Displays the number of records per page
+
+deviceCodes
+
+array
+
+false
+
+Querying multiple devices,（Non-fuzzy query）
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "sendStatus": 1,
+  "beginTime": "2023-11-11 11:11:11",
+  "endTime": "2023-11-11 12:11:11",
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCodes": [
+    ""
+  ]
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+array
+
+Return data body
+
+-
+
+└─id
+
+int64
+
+Primary key id
+
+-
+
+└─deviceCode
+
+string
+
+Equipment number
+
+-
+
+└─sendStatus
+
+int32
+
+Sending status 0 = Incomplete 1= completed 2 = Stopped 3 = Sending
+
+-
+
+└─circFenceTotals
+
+int32
+
+Number of circular fences
+
+-
+
+└─polyFenceTotals
+
+int32
+
+Polygon number
+
+-
+
+└─ruleTotals
+
+int32
+
+Rule number
+
+-
+
+└─sendTotals
+
+int32
+
+Number of sent
+
+-
+
+└─cmdContent
+
+string
+
+Send content
+
+-
+
+└─createTime
+
+string
+
+Creation time
+
+-
+
+└─updateTime
+
+string
+
+edit time
+
+-
+
+pageInfo
+
+object
+
+No comments found.
+
+-
+
+└─totalCount
+
+int32
+
+Total records
+
+-
+
+└─pageSize
+
+int32
+
+Records per page
+
+-
+
+└─totalPage
+
+int32
+
+Total pages
+
+-
+
+└─curPage
+
+int32
+
+Current page count
+
+-
+
+
+Response-example:
+
+{"returnCode":0,"returnMsg":"","data":[{"id":213213213213213123,"deviceCode":"838065611507","sendStatus":1,"circFenceTotals":2,"polyFenceTotals":2,"ruleTotals":2,"sendTotals":1,"cmdContent":""***"","createTime":""2023-11-11 11:11:11"","updateTime":""2023-11-11 11:11:11""}],"pageInfo":{"totalCount":1,"pageSize":1,"totalPage":1,"curPage":1}}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDeviceFencePage --data '{
+  "deviceCode": "838065611507",
+  "sendStatus": 1,
+  "beginTime": "2023-11-11 11:11:11",
+  "endTime": "2023-11-11 12:11:11",
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCodes": [
+    ""
+  ]
+}'
+4.8. Get a list of device round fences
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDeviceCircleFence
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Get a list of device round fences
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Equipment number
+
+blockNum
+
+int32
+
+true
+
+Circular fence:0-12block，Polygon circumference:0-49block，Fence rules:1-19block
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "blockNum": 0
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDeviceCircleFence --data '{
+  "deviceCode": "838065611507",
+  "blockNum": 0
+}'
+4.9. Gets the device polygon fence list
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDevicePolygonFence
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Gets the device polygon fence list
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Equipment number
+
+blockNum
+
+int32
+
+true
+
+Circular fence:0-12block，Polygon circumference:0-49block，Fence rules:1-19block
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "blockNum": 0
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDevicePolygonFence --data '{
+  "deviceCode": "838065611507",
+  "blockNum": 0
+}'
+4.10. Obtain the device rule list
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDeviceFenceRule
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Obtain the device rule list
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Equipment number
+
+blockNum
+
+int32
+
+true
+
+Circular fence:0-12block，Polygon circumference:0-49block，Fence rules:1-19block
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "blockNum": 0
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDeviceFenceRule --data '{
+  "deviceCode": "838065611507",
+  "blockNum": 0
+}'
+4.11. Clear equipment round fence
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/clearDeviceCircleFence
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Clear equipment round fence
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Equipment number
+
+blockNum
+
+int32
+
+true
+
+Circular fence:0-12block，Polygon circumference:0-49block，Fence rules:1-19block
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "blockNum": 0
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/clearDeviceCircleFence --data '{
+  "deviceCode": "838065611507",
+  "blockNum": 0
+}'
+4.12. Clear equipment polygon fence
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/clearDevicePolygonFence
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Clear equipment polygon fence
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Equipment number
+
+blockNum
+
+int32
+
+true
+
+Circular fence:0-12block，Polygon circumference:0-49block，Fence rules:1-19block
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "blockNum": 0
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/clearDevicePolygonFence --data '{
+  "deviceCode": "838065611507",
+  "blockNum": 0
+}'
+4.13. Emptying device rule
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/clearDeviceFenceRule
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Emptying device rule
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Equipment number
+
+blockNum
+
+int32
+
+true
+
+Circular fence:0-12block，Polygon circumference:0-49block，Fence rules:1-19block
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "blockNum": 0
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/clearDeviceFenceRule --data '{
+  "deviceCode": "838065611507",
+  "blockNum": 0
+}'
+4.14. Stop issuing electronic fence orders in bulk
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/batchStopSendFence
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Stop issuing electronic fence orders in bulk
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+ids
+
+array
+
+false
+
+Electronic fence ID collection
+
+Request-body:
+
+{
+  "ids": [
+    213213213
+  ]
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/batchStopSendFence --data '{
+  "ids": [
+    213213213
+  ]
+}'
+4.15. Batch delete the issue of electronic fence instructions
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/batchDeleteSendFence
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Batch delete the issue of electronic fence instructions
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+ids
+
+array
+
+false
+
+Electronic fence ID
+
+Request-body:
+
+{
+  "ids": [
+    23123213123
+  ]
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/batchDeleteSendFence --data '{
+  "ids": [
+    23123213123
+  ]
+}'
+4.16. Re-issue the electronic fence order
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/reissueSendFence
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Re-issue the electronic fence order
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+id
+
+int64
+
+false
+
+Electronic fence ID
+
+Request-body:
+
+{
+  "id": 234324324213
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/reissueSendFence --data '{
+  "id": 234324324213
+}'
+4.17. Send electronic fence commands in bulk
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/sendFenceBatch
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Send electronic fence commands in bulk
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCodes
+
+array
+
+false
+
+Equipment number set
+
+list
+
+array
+
+false
+
+Fence rules set
+
+└─fenceType
+
+int32
+
+false
+
+Type of fence 0= circle 1= polygon
+
+└─radius
+
+int32
+
+false
+
+Radius of fence, unit m
+
+└─circlePoints
+
+object
+
+false
+
+Circular fence point latitude and longitude data
+
+     └─lng
+
+string
+
+false
+
+longitude
+
+     └─lat
+
+string
+
+false
+
+latitude
+
+└─polygonPoints
+
+array
+
+false
+
+Polygonal fence point latitude and longitude data
+
+     └─lng
+
+string
+
+false
+
+longitude
+
+     └─lat
+
+string
+
+false
+
+latitude
+
+└─ruleTotals
+
+int32
+
+false
+
+Rules totality
+
+└─cmdContent
+
+array
+
+false
+
+Apply unblocking rules
+
+     └─cmdType
+
+string
+
+false
+
+Rule type------>See Table 15
+
+     └─content
+
+string
+
+false
+
+Rule content
+
+     └─stTime
+
+string
+
+false
+
+Start time
+
+     └─endTime
+
+string
+
+false
+
+End time
+
+     └─endDate
+
+string
+
+false
+
+End date
+
+Request-body:
+
+{
+  "deviceCodes": [
+    "838065611507"
+  ],
+  "list": [
+    {
+      "fenceType": 0,
+      "radius": 100,
+      "circlePoints": {
+        "lng": "22.2323",
+        "lat": "23.123"
+      },
+      "polygonPoints": [
+        {
+          "lng": "22.2323",
+          "lat": "23.123"
+        }
+      ],
+      "ruleTotals": 1,
+      "cmdContent": [
+        {
+          "cmdType": "cmd1",
+          "content": "4WDDDDPP",
+          "stTime": "09:00",
+          "endTime": "10:00",
+          "endDate": "2023-11-11 11:11:11"
+        }
+      ]
+    }
+  ]
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/sendFenceBatch --data '{
+  "deviceCodes": [
+    "838065611507"
+  ],
+  "list": [
+    {
+      "fenceType": 0,
+      "radius": 100,
+      "circlePoints": {
+        "lng": "22.2323",
+        "lat": "23.123"
+      },
+      "polygonPoints": [
+        {
+          "lng": "22.2323",
+          "lat": "23.123"
+        }
+      ],
+      "ruleTotals": 1,
+      "cmdContent": [
+        {
+          "cmdType": "cmd1",
+          "content": "4WDDDDPP",
+          "stTime": "09:00",
+          "endTime": "10:00",
+          "endDate": "2023-11-11 11:11:11"
+        }
+      ]
+    }
+  ]
+}'
+4.18. Send reservation commands in batches
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/batchSendReserve
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Send reservation commands in batches
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCodes
+
+array
+
+false
+
+Equipment number
+
+cmdType
+
+string
+
+false
+
+Instruction type Values 784: Function Parameter 532:NFC write
+
+cmdContentList
+
+array
+
+false
+
+send Instruction content
+
+└─cmdId
+
+string
+
+false
+
+Instruction identifier(See Table 10 for details)
+
+└─cmdContent
+
+string
+
+false
+
+Instruction value
+
+└─deviceCode
+
+string
+
+false
+
+Device coding
+
+expireTime
+
+string
+
+false
+
+Expiration time
+
+Request-body:
+
+{
+  "deviceCodes": [
+    "838065611507"
+  ],
+  "cmdType": "784",
+  "cmdContentList": [
+    {
+      "cmdId": "para_0x08",
+      "cmdContent": "111",
+      "deviceCode": "838065611507"
+    }
+  ],
+  "expireTime": "2023-11-11 11:11:11"
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/batchSendReserve --data '{
+  "deviceCodes": [
+    "838065611507"
+  ],
+  "cmdType": "784",
+  "cmdContentList": [
+    {
+      "cmdId": "para_0x08",
+      "cmdContent": "111",
+      "deviceCode": "838065611507"
+    }
+  ],
+  "expireTime": "2023-11-11 11:11:11"
+}'
+4.19. Send NFC reservation commands in batches
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/batchSendNfcReserve
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Send NFC reservation commands in batches
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCodes
+
+array
+
+false
+
+Equipment number
+
+cmdNfcContent
+
+object
+
+false
+
+send NFCInstruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+nfcType
+
+int32
+
+false
+
+Type of sending NFC 0 NFC 1 NFC_HAIHONG
+
+expireTime
+
+string
+
+false
+
+Expiration time
+
+Request-body:
+
+{
+  "deviceCodes": [
+    "838065611507"
+  ],
+  "cmdNfcContent": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "nfcType": 0,
+  "expireTime": "2023-11-11 11:11:11"
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/batchSendNfcReserve --data '{
+  "deviceCodes": [
+    "838065611507"
+  ],
+  "cmdNfcContent": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "nfcType": 0,
+  "expireTime": "2023-11-11 11:11:11"
+}'
+4.20. Send reservation command
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/sendReserve
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Send reservation command
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+false
+
+Equipment number
+
+cmdType
+
+int32
+
+false
+
+Instruction type Values 784: Function Parameter 532:NFC write
+
+cmdContentList
+
+array
+
+false
+
+send Instruction content
+
+└─cmdId
+
+string
+
+false
+
+Instruction identifier(See Table 10 for details)
+
+└─cmdContent
+
+string
+
+false
+
+Instruction value
+
+└─deviceCode
+
+string
+
+false
+
+Device coding
+
+expireTime
+
+string
+
+false
+
+Expiration time
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "cmdType": 784,
+  "cmdContentList": [
+    {
+      "cmdId": "para_0x08",
+      "cmdContent": "111",
+      "deviceCode": "838065611507"
+    }
+  ],
+  "expireTime": "yyyy-MM-dd HH:mm:ss"
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/sendReserve --data '{
+  "deviceCode": "838065611507",
+  "cmdType": 784,
+  "cmdContentList": [
+    {
+      "cmdId": "para_0x08",
+      "cmdContent": "111",
+      "deviceCode": "838065611507"
+    }
+  ],
+  "expireTime": "yyyy-MM-dd HH:mm:ss"
+}'
+4.21. Obtain the device dynamic password
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDynamicPassword/{deviceCode}
+
+Type: GET
+
+Author: chenyq
+
+Content-Type: application/x-www-form-urlencoded;charset=UTF-8
+
+Description: Obtain the device dynamic password
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Path-parameters:
+
+
+Parameter	Value	Type	Required	Description
+
+deviceCode
+
+
+string
+
+true
+
+Equipment number
+
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X GET -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getDynamicPassword/{deviceCode}
+4.22. Gets a list of device instruction records
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getCmdLogRecord
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Gets a list of device instruction records
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+curPage
+
+int64
+
+true
+
+Current page number
+
+pageSize
+
+int64
+
+true
+
+Displays the number of records per page
+
+deviceCode
+
+string
+
+false
+
+Equipment number
+
+cmdContent
+
+string
+
+false
+
+Instruction content
+
+cmdType
+
+int32
+
+false
+
+0= real-time 1= reservation 2= electronic fence
+
+status
+
+int32
+
+false
+
+Command status 0= Sending 1= Failed to deliver the device 2= succeeded in delivering the device 3= The device responded successfully
+
+beginTime
+
+string
+
+false
+
+No comments found.
+
+endTime
+
+string
+
+false
+
+No comments found.
+
+isCancel
+
+string
+
+false
+
+Default full check (0 unrevoked 1 revoked)
+
+deviceCodes
+
+array
+
+false
+
+Querying multiple devices,（Non-fuzzy query）
+
+Request-body:
+
+{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCode": "",
+  "cmdContent": "",
+  "cmdType": 0,
+  "status": 0,
+  "beginTime": "yyyy-MM-dd HH:mm:ss",
+  "endTime": "yyyy-MM-dd HH:mm:ss",
+  "isCancel": "",
+  "deviceCodes": [
+    ""
+  ]
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+array
+
+Return data body
+
+-
+
+└─id
+
+int64
+
+Major key
+
+-
+
+└─deviceCode
+
+string
+
+Equipment number
+
+-
+
+└─cmdContent
+
+string
+
+Instruction content
+
+-
+
+└─status
+
+int32
+
+Command status 0= Sending 1= Failed to deliver the device 2= succeeded in delivering the device 3= The device responded successfully
+
+-
+
+└─cmdType
+
+int32
+
+0= real-time 1= reservation 2= electronic fence
+
+-
+
+└─createTime
+
+string
+
+Creation time
+
+-
+
+└─responseContent
+
+string
+
+Response content (JSON format)
+
+-
+
+└─updateTime
+
+string
+
+edit time/ Instruction execution time
+
+-
+
+└─logicDel
+
+int32
+
+Valid/revoked [0- valid/not revoked,1- invalid/revoked]
+
+-
+
+pageInfo
+
+object
+
+No comments found.
+
+-
+
+└─totalCount
+
+int32
+
+Total records
+
+-
+
+└─pageSize
+
+int32
+
+Records per page
+
+-
+
+└─totalPage
+
+int32
+
+Total pages
+
+-
+
+└─curPage
+
+int32
+
+Current page count
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": [
+    {
+      "id": 0,
+      "deviceCode": "",
+      "cmdContent": "",
+      "status": 0,
+      "cmdType": 0,
+      "createTime": "yyyy-MM-dd HH:mm:ss",
+      "responseContent": "",
+      "updateTime": "yyyy-MM-dd HH:mm:ss",
+      "logicDel": 0
+    }
+  ],
+  "pageInfo": {
+    "totalCount": 1,
+    "pageSize": 1,
+    "totalPage": 1,
+    "curPage": 1
+  }
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/getCmdLogRecord --data '{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCode": "",
+  "cmdContent": "",
+  "cmdType": 0,
+  "status": 0,
+  "beginTime": "yyyy-MM-dd HH:mm:ss",
+  "endTime": "yyyy-MM-dd HH:mm:ss",
+  "isCancel": "",
+  "deviceCodes": [
+    ""
+  ]
+}'
+4.23. Undo instruction
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/repealInstruct
+
+Type: POST
+
+Author: chenyq
+
+Content-Type: application/json
+
+Description: Undo instruction
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+id
+
+int64
+
+false
+
+Primary key of the instruction record list
+
+Request-body:
+
+{
+  "id": 234324324
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+int32
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": 0
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmd/repealInstruct --data '{
+  "id": 234324324
+}'
+5. V2Device Command Interface Collection
+5.1. Writes device function parameters
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/setDeviceParameter
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Writes device function parameters
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device unique coding
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/setDeviceParameter --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}'
+5.2. Read device function parameters
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDeviceParameter
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Read device function parameters
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device unique coding
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDeviceParameter --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}'
+5.3. Write the device NFC card
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/setDeviceNfcCard
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Write the device NFC card
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device unique coding
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+type
+
+int32
+
+true
+
+Equipment type(0 Common NFC,1 haiHong) * @mock 0
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "type": 0
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/setDeviceNfcCard --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "type": 0
+}'
+5.4. Read the NFC card of the device
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDeviceNfcCard
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Read the NFC card of the device
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device unique coding
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+type
+
+int32
+
+true
+
+Equipment type(0 Common NFC,1 haiHong) * @mock 0
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "type": 0
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDeviceNfcCard --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "type": 0
+}'
+5.5. Clear the NFC card of the device
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/delDeviceNfcCard
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Clear the NFC card of the device
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device unique coding
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+type
+
+int32
+
+true
+
+Equipment type(0 Common NFC,1 haiHong) * @mock 0
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "type": 0
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/delDeviceNfcCard --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "type": 0
+}'
+5.6. The device applies the unblocking instruction
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/sealAndUnsealCmd
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: The device applies the unblocking instruction
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device unique coding
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/sealAndUnsealCmd --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}'
+5.7. Get the latest electronic fence record list of the equipment
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDeviceFencePage
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Get the latest electronic fence record list of the equipment
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+false
+
+Device coding
+
+sendStatus
+
+int32
+
+false
+
+Sending status 0 = Incomplete 1= completed 2 = stopped
+
+beginTime
+
+string
+
+false
+
+Start time
+
+endTime
+
+string
+
+false
+
+End time
+
+curPage
+
+int64
+
+true
+
+Current page number
+
+pageSize
+
+int64
+
+true
+
+Displays the number of records per page
+
+deviceCodes
+
+array
+
+false
+
+Querying multiple devices,（Non-fuzzy query）
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "sendStatus": 1,
+  "beginTime": "2023-11-11 11:11:11",
+  "endTime": "2023-11-11 12:11:11",
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCodes": [
+    ""
+  ]
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+array
+
+Return data body
+
+-
+
+└─id
+
+int64
+
+Primary key id
+
+-
+
+└─deviceCode
+
+string
+
+Equipment number
+
+-
+
+└─sendStatus
+
+int32
+
+Sending status 0 = Incomplete 1= completed 2 = Stopped 3 = Sending
+
+-
+
+└─circFenceTotals
+
+int32
+
+Number of circular fences
+
+-
+
+└─polyFenceTotals
+
+int32
+
+Polygon number
+
+-
+
+└─ruleTotals
+
+int32
+
+Rule number
+
+-
+
+└─sendTotals
+
+int32
+
+Number of sent
+
+-
+
+└─cmdContent
+
+string
+
+Send content
+
+-
+
+└─createTime
+
+string
+
+Creation time
+
+-
+
+└─updateTime
+
+string
+
+edit time
+
+-
+
+pageInfo
+
+object
+
+No comments found.
+
+-
+
+└─totalCount
+
+int32
+
+Total records
+
+-
+
+└─pageSize
+
+int32
+
+Records per page
+
+-
+
+└─totalPage
+
+int32
+
+Total pages
+
+-
+
+└─curPage
+
+int32
+
+Current page count
+
+-
+
+
+Response-example:
+
+{"returnCode":0,"returnMsg":"","data":[{"id":213213213213213123,"deviceCode":"838065611507","sendStatus":1,"circFenceTotals":2,"polyFenceTotals":2,"ruleTotals":2,"sendTotals":1,"cmdContent":""***"","createTime":""2023-11-11 11:11:11"","updateTime":""2023-11-11 11:11:11""}],"pageInfo":{"totalCount":1,"pageSize":1,"totalPage":1,"curPage":1}}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDeviceFencePage --data '{
+  "deviceCode": "838065611507",
+  "sendStatus": 1,
+  "beginTime": "2023-11-11 11:11:11",
+  "endTime": "2023-11-11 12:11:11",
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCodes": [
+    ""
+  ]
+}'
+5.8. Get a list of device round fences
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDeviceCircleFence
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Get a list of device round fences
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device unique coding
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDeviceCircleFence --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}'
+5.9. Gets the device polygon fence list
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDevicePolygonFence
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Gets the device polygon fence list
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device unique coding
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDevicePolygonFence --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}'
+5.10. Obtain the device rule list
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDeviceFenceRule
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Obtain the device rule list
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device unique coding
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDeviceFenceRule --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}'
+5.11. Clear equipment round fence
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/clearDeviceCircleFence
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Clear equipment round fence
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device unique coding
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/clearDeviceCircleFence --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}'
+5.12. Clear equipment polygon fence
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/clearDevicePolygonFence
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Clear equipment polygon fence
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device unique coding
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/clearDevicePolygonFence --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}'
+5.13. Emptying device rule
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/clearDeviceFenceRule
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Emptying device rule
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Device unique coding
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+object
+
+Return data body
+
+-
+
+└─any object
+
+object
+
+any object.
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": {}
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/clearDeviceFenceRule --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  }
+}'
+5.14. Stop issuing electronic fence orders in bulk
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/batchStopSendFence
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Stop issuing electronic fence orders in bulk
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+ids
+
+array
+
+false
+
+Electronic fence ID collection
+
+Request-body:
+
+{
+  "ids": [
+    213213213
+  ]
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/batchStopSendFence --data '{
+  "ids": [
+    213213213
+  ]
+}'
+5.15. Batch delete the issue of electronic fence instructions
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/batchDeleteSendFence
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Batch delete the issue of electronic fence instructions
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+ids
+
+array
+
+false
+
+Electronic fence ID
+
+Request-body:
+
+{
+  "ids": [
+    23123213123
+  ]
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/batchDeleteSendFence --data '{
+  "ids": [
+    23123213123
+  ]
+}'
+5.16. Re-issue the electronic fence order
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/reissueSendFence
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Re-issue the electronic fence order
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+id
+
+int64
+
+false
+
+Electronic fence ID
+
+Request-body:
+
+{
+  "id": 234324324213
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/reissueSendFence --data '{
+  "id": 234324324213
+}'
+5.17. Send electronic fence commands in bulk
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/sendFenceBatch
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Send electronic fence commands in bulk
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCodes
+
+array
+
+false
+
+Equipment number set
+
+list
+
+array
+
+false
+
+Fence rules set
+
+└─fenceType
+
+int32
+
+false
+
+Type of fence 0= circle 1= polygon
+
+└─radius
+
+int32
+
+false
+
+Radius of fence, unit m
+
+└─circlePoints
+
+object
+
+false
+
+Circular fence point latitude and longitude data
+
+     └─lng
+
+string
+
+false
+
+longitude
+
+     └─lat
+
+string
+
+false
+
+latitude
+
+└─polygonPoints
+
+array
+
+false
+
+Polygonal fence point latitude and longitude data
+
+     └─lng
+
+string
+
+false
+
+longitude
+
+     └─lat
+
+string
+
+false
+
+latitude
+
+└─ruleTotals
+
+int32
+
+false
+
+Rules totality
+
+└─cmdContent
+
+array
+
+false
+
+Apply unblocking rules
+
+     └─cmdType
+
+string
+
+false
+
+Rule type------>See Table 15
+
+     └─content
+
+string
+
+false
+
+Rule content
+
+     └─stTime
+
+string
+
+false
+
+Start time
+
+     └─endTime
+
+string
+
+false
+
+End time
+
+     └─endDate
+
+string
+
+false
+
+End date
+
+Request-body:
+
+{
+  "deviceCodes": [
+    "838065611507"
+  ],
+  "list": [
+    {
+      "fenceType": 0,
+      "radius": 100,
+      "circlePoints": {
+        "lng": "22.2323",
+        "lat": "23.123"
+      },
+      "polygonPoints": [
+        {
+          "lng": "22.2323",
+          "lat": "23.123"
+        }
+      ],
+      "ruleTotals": 1,
+      "cmdContent": [
+        {
+          "cmdType": "cmd1",
+          "content": "4WDDDDPP",
+          "stTime": "09:00",
+          "endTime": "10:00",
+          "endDate": "2023-11-11 11:11:11"
+        }
+      ]
+    }
+  ]
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/sendFenceBatch --data '{
+  "deviceCodes": [
+    "838065611507"
+  ],
+  "list": [
+    {
+      "fenceType": 0,
+      "radius": 100,
+      "circlePoints": {
+        "lng": "22.2323",
+        "lat": "23.123"
+      },
+      "polygonPoints": [
+        {
+          "lng": "22.2323",
+          "lat": "23.123"
+        }
+      ],
+      "ruleTotals": 1,
+      "cmdContent": [
+        {
+          "cmdType": "cmd1",
+          "content": "4WDDDDPP",
+          "stTime": "09:00",
+          "endTime": "10:00",
+          "endDate": "2023-11-11 11:11:11"
+        }
+      ]
+    }
+  ]
+}'
+5.18. Send reservation commands in batches
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/batchSendReserve
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Send reservation commands in batches
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCodes
+
+array
+
+true
+
+Equipment number set
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+expireTime
+
+string
+
+false
+
+Expiration time
+
+parameterType
+
+enum
+
+false
+
+Parameter types correspond to different parameters
+
+Request-body:
+
+{
+  "deviceCodes": [
+    "838065611507"
+  ],
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "expireTime": "yyyy-MM-dd HH:mm:ss",
+  "parameterType": "PARAMETER_SETTINGS"
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/batchSendReserve --data '{
+  "deviceCodes": [
+    "838065611507"
+  ],
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "expireTime": "yyyy-MM-dd HH:mm:ss",
+  "parameterType": "PARAMETER_SETTINGS"
+}'
+5.19. Send NFC reservation commands in batches
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/batchSendNfcReserve
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Send NFC reservation commands in batches
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCodes
+
+array
+
+false
+
+Equipment number
+
+cmdNfcContent
+
+object
+
+false
+
+send NFCInstruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+nfcType
+
+int32
+
+false
+
+Type of sending NFC 0 NFC 1 NFC_HAIHONG
+
+expireTime
+
+string
+
+false
+
+Expiration time
+
+Request-body:
+
+{
+  "deviceCodes": [
+    "838065611507"
+  ],
+  "cmdNfcContent": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "nfcType": 0,
+  "expireTime": "2023-11-11 11:11:11"
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/batchSendNfcReserve --data '{
+  "deviceCodes": [
+    "838065611507"
+  ],
+  "cmdNfcContent": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "nfcType": 0,
+  "expireTime": "2023-11-11 11:11:11"
+}'
+5.20. Send reservation command
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/sendReserve
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Send reservation command
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+deviceCode
+
+string
+
+true
+
+Equipment number
+
+parameter
+
+object
+
+true
+
+send Instruction content
+
+└─map
+
+map
+
+false
+
+No comments found.
+
+     └─any object
+
+object
+
+false
+
+any object.
+
+expireTime
+
+string
+
+true
+
+Expiration time
+
+parameterType
+
+enum
+
+false
+
+Parameter types correspond to different parameters
+
+Request-body:
+
+{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "expireTime": "yyyy-MM-dd HH:mm:ss",
+  "parameterType": "PARAMETER_SETTINGS"
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/sendReserve --data '{
+  "deviceCode": "838065611507",
+  "parameter": {
+    "map": {
+      "mapKey": {}
+    }
+  },
+  "expireTime": "yyyy-MM-dd HH:mm:ss",
+  "parameterType": "PARAMETER_SETTINGS"
+}'
+5.21. Obtain the device dynamic password
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDynamicPassword/{deviceCode}
+
+Type: GET
+
+Author: wenjing
+
+Content-Type: application/x-www-form-urlencoded;charset=UTF-8
+
+Description: Obtain the device dynamic password
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Path-parameters:
+
+
+Parameter	Value	Type	Required	Description
+
+deviceCode
+
+
+string
+
+true
+
+Equipment number
+
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+string
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": ""
+}
+Curl-example:
+
+curl -X GET -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getDynamicPassword/{deviceCode}
+5.22. Get a list of reservation instructions
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getCmdLogRecord
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Get a list of reservation instructions
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+curPage
+
+int64
+
+true
+
+Current page number
+
+pageSize
+
+int64
+
+true
+
+Displays the number of records per page
+
+deviceCode
+
+string
+
+false
+
+Equipment number
+
+cmdContent
+
+string
+
+false
+
+Instruction content
+
+cmdType
+
+int32
+
+false
+
+0= real-time 1= reservation 2= electronic fence
+
+status
+
+int32
+
+false
+
+Command status 0= Sending 1= Failed to deliver the device 2= succeeded in delivering the device 3= The device responded successfully
+
+beginTime
+
+string
+
+false
+
+No comments found.
+
+endTime
+
+string
+
+false
+
+No comments found.
+
+isCancel
+
+string
+
+false
+
+Default full check (0 unrevoked 1 revoked)
+
+deviceCodes
+
+array
+
+false
+
+Querying multiple devices,（Non-fuzzy query）
+
+Request-body:
+
+{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCode": "",
+  "cmdContent": "",
+  "cmdType": 0,
+  "status": 0,
+  "beginTime": "yyyy-MM-dd HH:mm:ss",
+  "endTime": "yyyy-MM-dd HH:mm:ss",
+  "isCancel": "",
+  "deviceCodes": [
+    ""
+  ]
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+array
+
+Return data body
+
+-
+
+└─id
+
+int64
+
+Major key
+
+-
+
+└─deviceCode
+
+string
+
+Equipment number
+
+-
+
+└─cmdContent
+
+string
+
+Instruction content
+
+-
+
+└─status
+
+int32
+
+Command status 0= Sending 1= Failed to deliver the device 2= succeeded in delivering the device 3= The device responded successfully
+
+-
+
+└─cmdType
+
+int32
+
+0= real-time 1= reservation 2= electronic fence
+
+-
+
+└─createTime
+
+string
+
+Creation time
+
+-
+
+└─responseContent
+
+string
+
+Response content (JSON format)
+
+-
+
+└─updateTime
+
+string
+
+edit time/ Instruction execution time
+
+-
+
+└─logicDel
+
+int32
+
+Valid/revoked [0- valid/not revoked,1- invalid/revoked]
+
+-
+
+pageInfo
+
+object
+
+No comments found.
+
+-
+
+└─totalCount
+
+int32
+
+Total records
+
+-
+
+└─pageSize
+
+int32
+
+Records per page
+
+-
+
+└─totalPage
+
+int32
+
+Total pages
+
+-
+
+└─curPage
+
+int32
+
+Current page count
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": [
+    {
+      "id": 0,
+      "deviceCode": "",
+      "cmdContent": "",
+      "status": 0,
+      "cmdType": 0,
+      "createTime": "yyyy-MM-dd HH:mm:ss",
+      "responseContent": "",
+      "updateTime": "yyyy-MM-dd HH:mm:ss",
+      "logicDel": 0
+    }
+  ],
+  "pageInfo": {
+    "totalCount": 1,
+    "pageSize": 1,
+    "totalPage": 1,
+    "curPage": 1
+  }
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/getCmdLogRecord --data '{
+  "curPage": 1,
+  "pageSize": 1,
+  "deviceCode": "",
+  "cmdContent": "",
+  "cmdType": 0,
+  "status": 0,
+  "beginTime": "yyyy-MM-dd HH:mm:ss",
+  "endTime": "yyyy-MM-dd HH:mm:ss",
+  "isCancel": "",
+  "deviceCodes": [
+    ""
+  ]
+}'
+5.23. Cancel reservation instruction
+URL: http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/repealInstruct
+
+Type: POST
+
+Author: wenjing
+
+Content-Type: application/json
+
+Description: Cancel reservation instruction
+
+Request-headers:
+
+
+Header	Value	Type	Required	Description
+
+accessKeyId
+
+your company accessKeyId
+
+string
+
+true
+
+accessKeyId
+
+
+accessSecret
+
+your company accessSecret
+
+string
+
+true
+
+accessSecret
+
+Body-parameters:
+
+Parameter	Type	Required	Description
+id
+
+int64
+
+false
+
+Primary key of the instruction record list
+
+Request-body:
+
+{
+  "id": 234324324
+}
+Response-fields:
+
+Field	Type	Description	Since
+returnCode
+
+int32
+
+Return coding
+
+-
+
+returnMsg
+
+string
+
+return message
+
+-
+
+data
+
+int32
+
+Return data body
+
+-
+
+
+Response-example:
+
+{
+  "returnCode": 0,
+  "returnMsg": "",
+  "data": 0
+}
+Curl-example:
+
+curl -X POST -H 'Content-Type: application/json' -H 'accessKeyId:your company accessKeyId' -H 'accessSecret:your company accessSecret' -i http://api.hhdlink.top/hhdApi/public/api/iotDeviceSendCmdV2/repealInstruct --data '{
+  "id": 234324324
+}'
+6. Error code list
+Error code	Description
+8004
+
+iot.device.deviceCommandExecuteFailed
+
+8007
+
+public.api.ApiError
+
+202
+
+login.password.error
+
+8001
+
+iot.device.deviceNotExist
+
+405
+
+login.username.expire
+
+8002
+
+iot.device.deviceNotOnline
+
+8003
+
+iot.device.deviceNotRespond
+
+200
+
+success
+
+201
+
+token.expire
+
+0
+
+unknown.error
+
+203
+
+user.not.exist
+
+8005
+
+iot.device.CommandParameterCannotNull
+
+500
+
+system.error
+
+208
+
+illegal.user
+
+8006
+
+iot.device.CommandParameterConversionError
+
+Generated by smart-doc at 2024-08-01 15:30:51Suggestions,contact,support and error reporting on Gitee or Github

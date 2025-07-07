@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
@@ -44,7 +44,13 @@ import {
   RiZoomOutLine,
   RiScreenshotLine,
   RiEyeLine,
-  RiEyeOffLine
+  RiEyeOffLine,
+  RiSettings4Line,
+  RiSearchLine,
+  RiMoreLine,
+  RiMapPinLine,
+  RiTimeLine,
+  RiBatteryLine
 } from 'react-icons/ri';
 import { Link } from 'react-router-dom';
 import { 
@@ -73,9 +79,12 @@ import {
 import PageHeader from '../components/common/PageHeader';
 import StatusIndicator, { SensorStatus } from '../components/ui/StatusIndicator';
 import SensorIcon, { SensorType } from '../components/ui/SensorIcon';
+import StatCard from '../components/ui/StatCard';
+import TabNavigation from '../components/ui/TabNavigation';
 import { getAllModels, ModelRecord } from '../utils/supabaseModelsApi';
 import { getFreshViewToken } from '../utils/bimfaceTokenApi';
 import { useAuth } from '../contexts/AuthContext';
+import SmartLockDashboard from '../components/SmartLockDashboard';
 
 // Register Chart.js components
 ChartJS.register(
@@ -411,6 +420,7 @@ const IoTDashboardPage: React.FC = () => {
   const viewerRef = useRef<any>(null);
   const appRef = useRef<any>(null);
   const skyBoxManagerRef = useRef<any>(null);
+  const isInitializingRef = useRef<boolean>(false); // Add flag to prevent duplicate initialization
   const [skyBoxEnabled, setSkyBoxEnabled] = useState<boolean>(true);
   const [showAnalytics, setShowAnalytics] = useState(true);
   const [showControls, setShowControls] = useState(true);
@@ -465,6 +475,9 @@ const IoTDashboardPage: React.FC = () => {
   // Clean up function to remove the viewer
   const cleanupViewer = () => {
     try {
+      // Reset initialization flag
+      isInitializingRef.current = false;
+      
       if (skyBoxManagerRef.current) {
         // Clean up SkyBox if it exists
         skyBoxManagerRef.current = null;
@@ -472,19 +485,35 @@ const IoTDashboardPage: React.FC = () => {
       
       if (appRef.current) {
         console.log("Cleaning up previous viewer instance");
+        // Properly dispose of the application
+        try {
+          appRef.current.destroy?.();
+        } catch (e) {
+          console.warn("Error destroying app:", e);
+        }
         appRef.current = null;
       }
+      
       if (viewerRef.current) {
+        try {
+          viewerRef.current.destroy?.();
+        } catch (e) {
+          console.warn("Error destroying viewer:", e);
+        }
         viewerRef.current = null;
       }
       
-      // Remove any BIMFACE scripts that might have been added
-      const bimfaceScripts = document.querySelectorAll('script[src*="bimface"]');
-      bimfaceScripts.forEach(script => {
-        if (script.parentNode) {
-          script.parentNode.removeChild(script);
-        }
-      });
+      // Clear the container content
+      if (modelContainerRef.current) {
+        modelContainerRef.current.innerHTML = '';
+      }
+      
+      // Remove any existing BIMFACE container with static ID
+      const existingContainer = document.getElementById('bimfaceContainer');
+      if (existingContainer && existingContainer.parentNode) {
+        existingContainer.parentNode.removeChild(existingContainer);
+      }
+      
     } catch (e) {
       console.error("Error during cleanup:", e);
     }
@@ -541,6 +570,7 @@ const IoTDashboardPage: React.FC = () => {
 
   // Initialize the viewer when a valid model is available
   useEffect(() => {
+    // Only initialize if we have models, container, and want to show 3D model
     if (models.length > 0 && modelContainerRef.current && show3DModel) {
       const firstModel = models[0];
       
@@ -549,20 +579,20 @@ const IoTDashboardPage: React.FC = () => {
         return;
       }
       
-      // Clean up any existing viewer
+      // Prevent duplicate initialization
+      if (isInitializingRef.current) {
+        console.log('Viewer is already initializing, skipping duplicate initialization');
+        return;
+      }
+      
+      // Set initialization flag
+      isInitializingRef.current = true;
+      
+      // Clean up any existing viewer first
       cleanupViewer();
       
-      // Create a container for the viewer
-      const viewerContainer = document.createElement('div');
-      viewerContainer.id = 'bimfaceContainer';
-      viewerContainer.style.width = '100%';
-      viewerContainer.style.height = '100%';
-      
-      // Clear the container and add the viewer container
-      if (modelContainerRef.current) {
-        modelContainerRef.current.innerHTML = '';
-        modelContainerRef.current.appendChild(viewerContainer);
-      }
+      // Check if BIMFACE SDK is already loaded
+      const isSDKLoaded = !!(window as any).BimfaceSDKLoader;
       
       // Get fresh view token and initialize viewer
       const initializeWithFreshToken = async () => {
@@ -570,14 +600,36 @@ const IoTDashboardPage: React.FC = () => {
           console.log(`Getting fresh view token for file ID: ${firstModel.file_id}`);
           const tokenResponse = await getFreshViewToken(firstModel.file_id!);
           
-          // Load the BIMFACE SDK
-          const script = document.createElement('script');
-          script.src = "https://static.bimface.com/api/BimfaceSDKLoader/BimfaceSDKLoader@latest-release.js";
-          script.async = true;
-          script.onload = () => {
+          if (isSDKLoaded) {
+            // SDK already loaded, initialize directly
             initializeViewer(tokenResponse.viewToken);
-          };
-          document.body.appendChild(script);
+          } else {
+            // Load the BIMFACE SDK only if not already loaded
+            const existingScript = document.querySelector('script[src*="BimfaceSDKLoader"]');
+            if (!existingScript) {
+              const script = document.createElement('script');
+              script.src = "https://static.bimface.com/api/BimfaceSDKLoader/BimfaceSDKLoader@latest-release.js";
+              script.async = true;
+              script.onload = () => {
+                initializeViewer(tokenResponse.viewToken);
+              };
+              script.onerror = () => {
+                setModelError('Failed to load BIMFACE SDK');
+                setLoadingModel(false);
+              };
+              document.head.appendChild(script); // Use head instead of body
+            } else {
+              // Script exists but may not be loaded yet
+              const checkSDKLoaded = () => {
+                if ((window as any).BimfaceSDKLoader) {
+                  initializeViewer(tokenResponse.viewToken);
+                } else {
+                  setTimeout(checkSDKLoaded, 100);
+                }
+              };
+              checkSDKLoaded();
+            }
+          }
         } catch (error) {
           console.error('Error getting fresh view token:', error);
           setModelError(`Failed to get fresh view token: ${error instanceof Error ? error.message : String(error)}`);
@@ -591,12 +643,64 @@ const IoTDashboardPage: React.FC = () => {
     return () => {
       cleanupViewer();
     };
-  }, [models, show3DModel]);
+  }, [models, show3DModel]); // Remove selectedSensor from dependencies to prevent re-initialization
 
   const initializeViewer = (token: string) => {
     try {
       console.log("Initializing BIMFACE Viewer with token:", token);
       
+      // Use a static container ID instead of dynamic one
+      const containerId = 'bimfaceContainer';
+      
+      // Clear the container and create a new viewer container
+      if (modelContainerRef.current) {
+        modelContainerRef.current.innerHTML = '';
+        
+        const viewerContainer = document.createElement('div');
+        viewerContainer.id = containerId;
+        viewerContainer.style.width = '100%';
+        viewerContainer.style.height = '100%';
+        viewerContainer.className = 'w-full h-full bg-dark-950';
+        
+        modelContainerRef.current.appendChild(viewerContainer);
+        
+        // Force a reflow to ensure the element is properly rendered
+        const height = viewerContainer.offsetHeight; // Store the value to avoid ESLint error
+        console.log(`Container height: ${height}px`);
+        
+        // Wait for next frame to ensure DOM is fully updated
+        requestAnimationFrame(() => {
+          // Double-check the element exists in DOM
+          const domElement = document.getElementById(containerId);
+          if (!domElement) {
+            throw new Error(`Failed to create DOM element with ID: ${containerId}`);
+          }
+          
+          // Verify the element is actually attached to the document
+          if (!document.body.contains(domElement)) {
+            throw new Error(`DOM element ${containerId} is not attached to document`);
+          }
+          
+          console.log(`DOM element ${containerId} created and verified`);
+          
+          // Proceed with BIMFACE initialization
+          initializeBIMFACE(token, containerId);
+        });
+      } else {
+        throw new Error('Model container reference is not available');
+      }
+    } catch (e) {
+      console.error("Error initializing viewer:", e);
+      setModelError(`Error initializing BIMFACE viewer: ${e instanceof Error ? e.message : String(e)}`);
+      setLoadingModel(false);
+      
+      // Reset initialization flag on error
+      isInitializingRef.current = false;
+    }
+  };
+
+  const initializeBIMFACE = (token: string, containerId: string) => {
+    try {
       // Follow the exact example from HTML directly
       const options = new (window as any).BimfaceSDKLoaderConfig();
       options.viewToken = token;
@@ -612,79 +716,69 @@ const IoTDashboardPage: React.FC = () => {
           console.log("Model loaded successfully. Metadata:", viewMetaData);
           
           if (viewMetaData.viewType === "3DView") {
-            // Get DOM element
-            const domShow = document.getElementById('bimfaceContainer');
-            if (!domShow) {
-              throw new Error("Target DOM element not found");
-            }
-            
-            // Setup web app config
-            const Glodon = (window as any).Glodon;
-            const webAppConfig = new Glodon.Bimface.Application.WebApplication3DConfig();
-            webAppConfig.domElement = domShow;
-            
-            // Set global unit to millimeters
-            webAppConfig.globalUnit = Glodon.Bimface.Common.Units.LengthUnits.Millimeter;
-            
-            // Create WebApplication
-            const app = new Glodon.Bimface.Application.WebApplication3D(webAppConfig);
-            appRef.current = app;
-            
-            // Add view
-            app.addView(token);
-            
-            // Get viewer
-            const viewer = app.getViewer();
-            viewerRef.current = viewer;
-            
-            // Add event listener for view added
-            viewer.addEventListener(Glodon.Bimface.Viewer.Viewer3DEvent.ViewAdded, function() {
-              console.log("View added successfully!");
-              
-              // Initialize SkyBox after view is added
-              if (skyBoxEnabled) {
-                initializeSkyBox(viewer);
+            // Add a small delay to ensure DOM element is ready
+            setTimeout(() => {
+              // Get DOM element - use the static container ID
+              const domShow = document.getElementById(containerId);
+              if (!domShow) {
+                console.error(`Target DOM element ${containerId} not found. Available elements:`, 
+                  Array.from(document.querySelectorAll('[id*="bimfaceContainer"]')).map(el => el.id));
+                throw new Error(`Target DOM element ${containerId} not found`);
               }
               
-              // Initialize component highlighting for any selected sensor
-              if (selectedSensor) {
-                try {
-                  console.log(`Highlighting sensor ${selectedSensor.id} in the 3D model`);
-                  
-                  // Sample highlighting mechanism - in a real implementation, 
-                  // you would map the sensor location to actual component IDs
-                  const randomComponentId = Math.floor(Math.random() * 1000) + 1;
-                  
-                  viewer.highlightComponentsByObjectData([{
-                    id: randomComponentId,
-                    color: new Glodon.Web.Graphics.Color(255, 99, 71, 0.7) // Tomato color with transparency
-                  }]);
-                  
-                  // Zoom to the highlighted component
-                  viewer.jumpToComponent({
-                    id: randomComponentId,
-                    margin: 1.2
-                  });
-                } catch (e) {
-                  console.error("Error highlighting sensor in model:", e);
+              // Setup web app config
+              const Glodon = (window as any).Glodon;
+              const webAppConfig = new Glodon.Bimface.Application.WebApplication3DConfig();
+              webAppConfig.domElement = domShow;
+              
+              // Set global unit to millimeters
+              webAppConfig.globalUnit = Glodon.Bimface.Common.Units.LengthUnits.Millimeter;
+              
+              // Create WebApplication
+              const app = new Glodon.Bimface.Application.WebApplication3D(webAppConfig);
+              appRef.current = app;
+              
+              // Add view
+              app.addView(token);
+              
+              // Get viewer
+              const viewer = app.getViewer();
+              viewerRef.current = viewer;
+              
+              // Add event listener for view added
+              viewer.addEventListener(Glodon.Bimface.Viewer.Viewer3DEvent.ViewAdded, function() {
+                console.log("View added successfully!");
+                
+                // Initialize SkyBox after view is added
+                if (skyBoxEnabled) {
+                  initializeSkyBox(viewer);
                 }
-              }
-              
-              viewer.render();
-              setLoadingModel(false);
-            });
+                
+                viewer.render();
+                setLoadingModel(false);
+                
+                // Reset initialization flag on success
+                isInitializingRef.current = false;
+              });
+            }, 100); // Small delay to ensure DOM is ready
           }
         },
         function failureCallback(error: any) {
           console.error("Failed to load model:", error);
           setModelError(`Failed to load model: ${error || 'Unknown error'}`);
           setLoadingModel(false);
+          
+          // Reset initialization flag on failure
+          isInitializingRef.current = false;
         }
       );
     } catch (e) {
-      console.error("Error initializing viewer:", e);
-      setModelError(`Error initializing BIMFACE viewer: ${e instanceof Error ? e.message : String(e)}`);
+      console.error("Error in BIMFACE initialization:", e);
+      setModelError(`Error in BIMFACE initialization: ${e instanceof Error ? e.message : String(e)}`);
       setLoadingModel(false);
+      
+      // Reset initialization flag on error
+      isInitializingRef.current = false;
     }
   };
   
@@ -914,10 +1008,10 @@ const IoTDashboardPage: React.FC = () => {
 
   // When a sensor is selected, highlight it in the 3D model
   useEffect(() => {
-    if (selectedSensor) {
+    if (selectedSensor && viewerRef.current) {
       highlightSensorInModel(selectedSensor);
     }
-  }, [selectedSensor]);
+  }, [selectedSensor]); // Separate effect for sensor highlighting to avoid re-initializing viewer
 
   // Navigate to ModelViewerPage with proper data and active overlay
   const navigateToModelViewer = (
@@ -967,655 +1061,374 @@ const IoTDashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="iot-container mx-auto px-4 py-8" style={baseStyle}>
-      {/* Header */}
-      <div className="iot-header mb-6" style={baseStyle}>
-        <div className="iot-header-title flex items-center mb-4" style={baseStyle}>
-          <Link to="/dashboard" className="iot-back-button text-gray-400 hover:text-white mr-4" style={baseStyle}>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      {/* Modern Header */}
+      <motion.div 
+        className="sticky top-0 z-50 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800/50"
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            {/* Left section */}
+            <div className="flex items-center gap-4">
+              <Link 
+                to="/dashboard" 
+                className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors duration-200 group"
+              >
+                <motion.div
+                  whileHover={{ x: -4 }}
+                  transition={{ duration: 0.2 }}
+                >
             <RiArrowGoBackLine className="text-xl" />
+                </motion.div>
+                <span className="text-sm font-medium">Back to Dashboard</span>
           </Link>
-          <RiBuilding4Line className="iot-header-icon text-ai-blue text-3xl mr-3" style={baseStyle} />
-          <h1 className="iot-header-text text-2xl font-bold text-white" style={baseStyle}>
+              
+              <div className="w-px h-6 bg-slate-700"></div>
+              
+              <div className="flex items-center gap-3">
+                <motion.div
+                  animate={{ rotate: [0, 360] }}
+                  transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                  className="p-2 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl shadow-lg"
+                >
+                  <RiBuilding4Line className="text-xl text-white" />
+                </motion.div>
+                <div>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
             Digital Twin Dashboard
           </h1>
-          <button 
-            className={`iot-refresh-button ml-4 text-gray-400 hover:text-white ${refreshing ? 'animate-spin' : ''}`}
+                  <p className="text-sm text-slate-400">
+                    Real-time building intelligence & control
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Right section */}
+            <div className="flex items-center gap-3">
+              <motion.button
             onClick={handleRefresh}
             disabled={refreshing}
-            style={baseStyle}
-          >
-            <RiRefreshLine className="text-xl" />
+                className={`p-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all duration-200 ${
+                  refreshing ? 'animate-spin' : ''
+                }`}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <RiRefreshLine className="text-lg" />
+              </motion.button>
+              
+              <button className="p-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all duration-200">
+                <RiSettings4Line className="text-lg" />
+              </button>
+              
+              <button className="p-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all duration-200">
+                <RiMoreLine className="text-lg" />
           </button>
         </div>
-        <p className="iot-header-description text-gray-400 max-w-3xl" style={baseStyle}>
-          Comprehensive digital representation of your building with integrated IoT sensors, analytics, and smart controls.
-        </p>
       </div>
+        </div>
+      </motion.div>
       
+      {/* Main Content */}
+      <div className="container mx-auto px-6 py-8">
       {/* Tab Navigation */}
-      <div className="flex mb-6 bg-slate-800/50 rounded-xl p-1 border border-slate-700">
-        <button
-          onClick={() => handleTabChange('iot')}
-          className={`flex-1 flex items-center justify-center py-3 px-4 rounded-lg transition-all ${
-            activeTab === 'iot' 
-              ? 'bg-gradient-to-r from-ai-blue/20 to-ai-purple/20 text-white shadow-lg' 
-              : 'text-gray-400 hover:text-white'
-          }`}
+        <motion.div 
+          className="mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
         >
-          <RiSensorLine className={`mr-2 ${activeTab === 'iot' ? 'text-ai-blue' : ''}`} />
-          <span>IoT Sensors</span>
-        </button>
-        <button
-          onClick={() => handleTabChange('analytics')}
-          className={`flex-1 flex items-center justify-center py-3 px-4 rounded-lg transition-all ${
-            activeTab === 'analytics' 
-              ? 'bg-gradient-to-r from-ai-blue/20 to-ai-purple/20 text-white shadow-lg' 
-              : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          <RiBarChartBoxLine className={`mr-2 ${activeTab === 'analytics' ? 'text-ai-blue' : ''}`} />
-          <span>Building Analytics</span>
-        </button>
-        <button
-          onClick={() => handleTabChange('controls')}
-          className={`flex-1 flex items-center justify-center py-3 px-4 rounded-lg transition-all ${
-            activeTab === 'controls' 
-              ? 'bg-gradient-to-r from-ai-blue/20 to-ai-purple/20 text-white shadow-lg' 
-              : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          <RiRemoteControlLine className={`mr-2 ${activeTab === 'controls' ? 'text-ai-blue' : ''}`} />
-          <span>Smart Controls</span>
-        </button>
-        <button
-          onClick={() => handleTabChange('cctv')}
-          className={`flex-1 flex items-center justify-center py-3 px-4 rounded-lg transition-all ${
-            activeTab === 'cctv' 
-              ? 'bg-gradient-to-r from-ai-blue/20 to-ai-purple/20 text-white shadow-lg' 
-              : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          <RiCameraLine className={`mr-2 ${activeTab === 'cctv' ? 'text-ai-blue' : ''}`} />
-          <span>AI CCTV</span>
-        </button>
-      </div>
-      
-      {/* Quick stats */}
-      {activeTab === 'iot' && (
-        <div className="iot-quick-stats grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="iot-stat-card iot-stat-temp bg-gradient-to-br from-blue-900/40 to-blue-700/20 border border-blue-800/50 rounded-xl p-4">
-            <div className="iot-stat-header flex items-center mb-2">
-              <RiTempHotLine className="iot-stat-icon text-blue-400 text-2xl mr-2" />
-              <h3 className="iot-stat-title text-white font-medium">Temperature</h3>
-            </div>
-            <div className="iot-stat-value-row flex items-end">
-              <span className="iot-stat-value text-3xl font-bold text-white">22.8</span>
-              <span className="iot-stat-unit text-blue-300 ml-1 pb-1">°C</span>
-            </div>
-            <div className="iot-stat-desc text-blue-300 text-sm">Average across all sensors</div>
-          </div>
-          
-          <div className="iot-stat-card iot-stat-humidity bg-gradient-to-br from-green-900/40 to-green-700/20 border border-green-800/50 rounded-xl p-4">
-            <div className="iot-stat-header flex items-center mb-2">
-              <RiWaterFlashLine className="iot-stat-icon text-green-400 text-2xl mr-2" />
-              <h3 className="iot-stat-title text-white font-medium">Humidity</h3>
-            </div>
-            <div className="iot-stat-value-row flex items-end">
-              <span className="iot-stat-value text-3xl font-bold text-white">45</span>
-              <span className="iot-stat-unit text-green-300 ml-1 pb-1">%</span>
-            </div>
-            <div className="iot-stat-desc text-green-300 text-sm">Average across all sensors</div>
-          </div>
-          
-          <div className="iot-stat-card iot-stat-energy bg-gradient-to-br from-yellow-900/40 to-yellow-700/20 border border-yellow-800/50 rounded-xl p-4">
-            <div className="iot-stat-header flex items-center mb-2">
-              <RiLightbulbLine className="iot-stat-icon text-yellow-400 text-2xl mr-2" />
-              <h3 className="iot-stat-title text-white font-medium">Energy</h3>
-            </div>
-            <div className="iot-stat-value-row flex items-end">
-              <span className="iot-stat-value text-3xl font-bold text-white">142.5</span>
-              <span className="iot-stat-unit text-yellow-300 ml-1 pb-1">kWh</span>
-            </div>
-            <div className="iot-stat-desc text-yellow-300 text-sm">Today's consumption</div>
-          </div>
-          
-          <div className="iot-stat-card iot-stat-occupancy bg-gradient-to-br from-purple-900/40 to-purple-700/20 border border-purple-800/50 rounded-xl p-4">
-            <div className="iot-stat-header flex items-center mb-2">
-              <RiUserLocationLine className="iot-stat-icon text-purple-400 text-2xl mr-2" />
-              <h3 className="iot-stat-title text-white font-medium">Occupancy</h3>
-            </div>
-            <div className="iot-stat-value-row flex items-end">
-              <span className="iot-stat-value text-3xl font-bold text-white">18</span>
-              <span className="iot-stat-unit text-purple-300 ml-1 pb-1">people</span>
-            </div>
-            <div className="iot-stat-desc text-purple-300 text-sm">Current building occupancy</div>
-          </div>
-        </div>
-      )}
+          <TabNavigation
+            tabs={[
+              {
+                id: 'iot',
+                label: 'IoT Sensors',
+                icon: RiSensorLine,
+                badge: sensors.filter(s => s.status === 'critical' || s.status === 'warning').length || undefined
+              },
+              {
+                id: 'analytics',
+                label: 'Building Analytics',
+                icon: RiBarChartBoxLine
+              },
+              {
+                id: 'controls',
+                label: 'Smart Controls',
+                icon: RiRemoteControlLine
+              },
+              {
+                id: 'cctv',
+                label: 'AI CCTV',
+                icon: RiCameraLine,
+                badge: cctvCameras.reduce((total, cam) => total + cam.alerts.length, 0) || undefined
+              }
+            ]}
+            activeTab={activeTab}
+            onTabChange={(tab) => handleTabChange(tab as 'iot' | 'analytics' | 'controls' | 'cctv')}
+            variant="pills"
+            size="md"
+          />
+        </motion.div>
 
-      {activeTab === 'analytics' && (
-        <div className="analytics-quick-stats grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="stat-card bg-gradient-to-br from-indigo-900/40 to-indigo-700/20 border border-indigo-800/50 rounded-xl p-4">
-            <div className="stat-header flex items-center mb-2">
-              <RiBarChartBoxLine className="stat-icon text-indigo-400 text-2xl mr-2" />
-              <h3 className="stat-title text-white font-medium">Energy Usage</h3>
-            </div>
-            <div className="stat-value-row flex items-end">
-              <span className="stat-value text-3xl font-bold text-white">142.5</span>
-              <span className="stat-unit text-indigo-300 ml-1 pb-1">kWh</span>
-            </div>
-            <div className="stat-desc text-indigo-300 text-sm">Today's consumption</div>
-          </div>
-          
-          <div className="stat-card bg-gradient-to-br from-purple-900/40 to-purple-700/20 border border-purple-800/50 rounded-xl p-4">
-            <div className="stat-header flex items-center mb-2">
-              <RiUserLocationLine className="stat-icon text-purple-400 text-2xl mr-2" />
-              <h3 className="stat-title text-white font-medium">Peak Occupancy</h3>
-            </div>
-            <div className="stat-value-row flex items-end">
-              <span className="stat-value text-3xl font-bold text-white">24</span>
-              <span className="stat-unit text-purple-300 ml-1 pb-1">people</span>
-            </div>
-            <div className="stat-desc text-purple-300 text-sm">At 11:30 AM today</div>
-          </div>
-          
-          <div className="stat-card bg-gradient-to-br from-cyan-900/40 to-cyan-700/20 border border-cyan-800/50 rounded-xl p-4">
-            <div className="stat-header flex items-center mb-2">
-              <RiThermometerLine className="stat-icon text-cyan-400 text-2xl mr-2" />
-              <h3 className="stat-title text-white font-medium">HVAC Efficiency</h3>
-            </div>
-            <div className="stat-value-row flex items-end">
-              <span className="stat-value text-3xl font-bold text-white">92</span>
-              <span className="stat-unit text-cyan-300 ml-1 pb-1">%</span>
-            </div>
-            <div className="stat-desc text-cyan-300 text-sm">System performance</div>
-          </div>
-          
-          <div className="stat-card bg-gradient-to-br from-amber-900/40 to-amber-700/20 border border-amber-800/50 rounded-xl p-4">
-            <div className="stat-header flex items-center mb-2">
-              <RiLightbulbLine className="stat-icon text-amber-400 text-2xl mr-2" />
-              <h3 className="stat-title text-white font-medium">Lighting Usage</h3>
-            </div>
-            <div className="stat-value-row flex items-end">
-              <span className="stat-value text-3xl font-bold text-white">35.2</span>
-              <span className="stat-unit text-amber-300 ml-1 pb-1">kWh</span>
-            </div>
-            <div className="stat-desc text-amber-300 text-sm">Today's consumption</div>
-          </div>
-        </div>
-      )}
+        {/* Main Content Area - Completely Restructured */}
+        <div className="dashboard-grid">
+          {/* Hero Stats Cards */}
+          <motion.div 
+            className="stats-overview grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+          >
+            <StatCard
+              title="Active Sensors"
+              value={sensors.filter(s => s.status === 'online').length}
+              unit={`of ${sensors.length}`}
+              trend={{ value: 2, label: 'from last week', isPositive: true }}
+              color="emerald"
+              icon={RiSensorLine}
+              size="md"
+            />
+            <StatCard
+              title="System Health"
+              value="94.2%"
+              trend={{ value: 1.2, label: 'from last month', isPositive: true }}
+              color="blue"
+              icon={RiCheckboxCircleLine}
+              size="md"
+            />
+            <StatCard
+              title="Energy Usage"
+              value="42.7"
+              unit="kWh"
+              trend={{ value: 8.5, label: 'from yesterday', isPositive: false }}
+              color="yellow"
+              icon={RiLightbulbLine}
+              size="md"
+            />
+            <StatCard
+              title="Critical Alerts"
+              value={sensors.filter(s => s.status === 'critical').length}
+              trend={{ value: 50, label: 'from last hour', isPositive: false }}
+              color="red"
+              icon={RiAlarmWarningLine}
+              size="md"
+            />
+          </motion.div>
 
-      {activeTab === 'controls' && (
-        <div className="controls-quick-stats grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="stat-card bg-gradient-to-br from-blue-900/40 to-blue-700/20 border border-blue-800/50 rounded-xl p-4">
-            <div className="stat-header flex items-center justify-between mb-2">
-              <h3 className="stat-title text-white font-medium">HVAC System</h3>
-              <div className={`w-3 h-3 rounded-full ${hvacEnabled ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            </div>
-            <div className="stat-value-row flex items-end">
-              <span className="stat-value text-3xl font-bold text-white">{targetTemp}</span>
-              <span className="stat-unit text-blue-300 ml-1 pb-1">°C</span>
-            </div>
-            <div className="stat-desc text-blue-300 text-sm">Target temperature</div>
-          </div>
-          
-          <div className="stat-card bg-gradient-to-br from-yellow-900/40 to-yellow-700/20 border border-yellow-800/50 rounded-xl p-4">
-            <div className="stat-header flex items-center justify-between mb-2">
-              <h3 className="stat-title text-white font-medium">Lighting</h3>
-              <div className={`w-3 h-3 rounded-full ${lightingEnabled ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            </div>
-            <div className="stat-value-row flex items-end">
-              <span className="stat-value text-3xl font-bold text-white">{lightingLevel}</span>
-              <span className="stat-unit text-yellow-300 ml-1 pb-1">%</span>
-            </div>
-            <div className="stat-desc text-yellow-300 text-sm">Brightness level</div>
-          </div>
-          
-          <div className="stat-card bg-gradient-to-br from-green-900/40 to-green-700/20 border border-green-800/50 rounded-xl p-4">
-            <div className="stat-header flex items-center justify-between mb-2">
-              <h3 className="stat-title text-white font-medium">Security</h3>
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            </div>
-            <div className="stat-value-row flex items-end">
-              <span className="stat-value text-3xl font-bold text-white">Armed</span>
-            </div>
-            <div className="stat-desc text-green-300 text-sm">All doors secure</div>
-          </div>
-          
-          <div className="stat-card bg-gradient-to-br from-red-900/40 to-red-700/20 border border-red-800/50 rounded-xl p-4">
-            <div className="stat-header flex items-center mb-2">
-              <h3 className="stat-title text-white font-medium">Fire Safety</h3>
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            </div>
-            <div className="stat-value-row flex items-end">
-              <span className="stat-value text-3xl font-bold text-white">Normal</span>
-            </div>
-            <div className="stat-desc text-red-300 text-sm">All systems operational</div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'cctv' && (
-        <div className="cctv-quick-stats grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="stat-card bg-gradient-to-br from-red-900/40 to-red-700/20 border border-red-800/50 rounded-xl p-4">
-            <div className="stat-header flex items-center mb-2">
-              <RiCameraLine className="stat-icon text-red-400 text-2xl mr-2" />
-              <h3 className="stat-title text-white font-medium">Active Cameras</h3>
-            </div>
-            <div className="stat-value-row flex items-end">
-              <span className="stat-value text-3xl font-bold text-white">{cctvCameras.filter(cam => cam.status === 'online' || cam.status === 'recording').length}</span>
-              <span className="stat-unit text-red-300 ml-1 pb-1">/ {cctvCameras.length}</span>
-            </div>
-            <div className="stat-desc text-red-300 text-sm">Cameras operational</div>
-          </div>
-          
-          <div className="stat-card bg-gradient-to-br from-orange-900/40 to-orange-700/20 border border-orange-800/50 rounded-xl p-4">
-            <div className="stat-header flex items-center mb-2">
-              <RiRecordCircleLine className="stat-icon text-orange-400 text-2xl mr-2" />
-              <h3 className="stat-title text-white font-medium">Recording</h3>
-            </div>
-            <div className="stat-value-row flex items-end">
-              <span className="stat-value text-3xl font-bold text-white">{cctvCameras.filter(cam => cam.isRecording).length}</span>
-              <span className="stat-unit text-orange-300 ml-1 pb-1">cameras</span>
-            </div>
-            <div className="stat-desc text-orange-300 text-sm">Currently recording</div>
-          </div>
-          
-          <div className="stat-card bg-gradient-to-br from-yellow-900/40 to-yellow-700/20 border border-yellow-800/50 rounded-xl p-4">
-            <div className="stat-header flex items-center mb-2">
-              <RiAlertLine className="stat-icon text-yellow-400 text-2xl mr-2" />
-              <h3 className="stat-title text-white font-medium">Alerts</h3>
-            </div>
-            <div className="stat-value-row flex items-end">
-              <span className="stat-value text-3xl font-bold text-white">{cctvCameras.reduce((total, cam) => total + cam.alerts.length, 0)}</span>
-              <span className="stat-unit text-yellow-300 ml-1 pb-1">today</span>
-            </div>
-            <div className="stat-desc text-yellow-300 text-sm">Security alerts</div>
-          </div>
-          
-          <div className="stat-card bg-gradient-to-br from-green-900/40 to-green-700/20 border border-green-800/50 rounded-xl p-4">
-            <div className="stat-header flex items-center mb-2">
-              <RiEyeLine className="stat-icon text-green-400 text-2xl mr-2" />
-              <h3 className="stat-title text-white font-medium">Coverage</h3>
-            </div>
-            <div className="stat-value-row flex items-end">
-              <span className="stat-value text-3xl font-bold text-white">98</span>
-              <span className="stat-unit text-green-300 ml-1 pb-1">%</span>
-            </div>
-            <div className="stat-desc text-green-300 text-sm">Building coverage</div>
-          </div>
-        </div>
-      )}
-      
-      {/* Main Content Area */}
-      <div className="iot-main-content grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left sidebar - always visible for sensor list */}
-        <div className="iot-sensor-list lg:col-span-1">
-          <div className="iot-sensor-list-header flex items-center justify-between mb-4">
-            <h2 className="iot-section-title text-xl font-bold text-white">
-              {activeTab === 'iot' ? 'Sensors' : activeTab === 'analytics' ? 'Building Zones' : activeTab === 'controls' ? 'Control Zones' : 'CCTV Cameras'}
-            </h2>
-            <div className="iot-controls flex space-x-2">
-              <div className="iot-filter-dropdown relative">
-                <button 
-                  onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  className="iot-filter-btn flex items-center bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-sm"
-                >
-                  <RiFilterLine className="iot-filter-icon mr-1" />
-                  Filter
-                </button>
-                {isFilterOpen && (
-                  <div className="iot-filter-menu absolute right-0 mt-1 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-10 p-2">
-                    {activeTab === 'iot' ? (
-                      <>
-                        <div className="iot-filter-option mb-2">
-                          <label className="iot-filter-label flex items-center text-slate-300 text-sm">
-                            <input
-                              type="checkbox"
-                              className="iot-filter-checkbox mr-2"
-                              checked={showTemperature}
-                              onChange={() => setShowTemperature(!showTemperature)}
-                            />
-                            Temperature
-                          </label>
-                        </div>
-                        <div className="iot-filter-option mb-2">
-                          <label className="iot-filter-label flex items-center text-slate-300 text-sm">
-                            <input
-                              type="checkbox"
-                              className="iot-filter-checkbox mr-2"
-                              checked={showHumidity}
-                              onChange={() => setShowHumidity(!showHumidity)}
-                            />
-                            Humidity
-                          </label>
-                        </div>
-                        <div className="iot-filter-option mb-2">
-                          <label className="iot-filter-label flex items-center text-slate-300 text-sm">
-                            <input
-                              type="checkbox"
-                              className="iot-filter-checkbox mr-2"
-                              checked={showEnergy}
-                              onChange={() => setShowEnergy(!showEnergy)}
-                            />
-                            Energy
-                          </label>
-                        </div>
-                        <div className="iot-filter-option">
-                          <label className="iot-filter-label flex items-center text-slate-300 text-sm">
-                            <input
-                              type="checkbox"
-                              className="iot-filter-checkbox mr-2"
-                              checked={showMotion}
-                              onChange={() => setShowMotion(!showMotion)}
-                            />
-                            Motion
-                          </label>
-                        </div>
-                      </>
-                    ) : activeTab === 'cctv' ? (
-                      <>
-                        <div className="iot-filter-option mb-2">
-                          <label className="iot-filter-label flex items-center text-slate-300 text-sm">
-                            <input
-                              type="checkbox"
-                              className="iot-filter-checkbox mr-2"
-                              checked={true}
-                              onChange={() => {}}
-                            />
-                            Online
-                          </label>
-                        </div>
-                        <div className="iot-filter-option mb-2">
-                          <label className="iot-filter-label flex items-center text-slate-300 text-sm">
-                            <input
-                              type="checkbox"
-                              className="iot-filter-checkbox mr-2"
-                              checked={true}
-                              onChange={() => {}}
-                            />
-                            Recording
-                          </label>
-                        </div>
-                        <div className="iot-filter-option">
-                          <label className="iot-filter-label flex items-center text-slate-300 text-sm">
-                            <input
-                              type="checkbox"
-                              className="iot-filter-checkbox mr-2"
-                              checked={true}
-                              onChange={() => {}}
-                            />
-                            Motion Detection
-                          </label>
-                        </div>
-                      </>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-              <button 
-                onClick={handleRefresh}
-                className="iot-refresh-btn flex items-center bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm"
-              >
-                <RiRefreshLine className="iot-refresh-icon mr-1" />
-                Refresh
-              </button>
-            </div>
-          </div>
-          
-          <div className="iot-sensor-items space-y-3">
-            {activeTab === 'cctv' ? (
-              cctvCameras.map(camera => (
-                <div 
-                  key={camera.id}
-                  className={`iot-sensor-item flex items-center justify-between bg-slate-800/50 border ${
-                    selectedCamera?.id === camera.id ? 'border-indigo-500' : 'border-slate-700'
-                  } rounded-xl p-3 cursor-pointer hover:bg-slate-800 transition-all`}
-                  onClick={() => setSelectedCamera(camera)}
-                >
-                  <div className="iot-sensor-info flex items-center">
-                    <div className={`iot-sensor-icon-wrapper p-2 rounded-lg mr-3 ${
-                      camera.status === 'recording' ? 'bg-red-500/20 text-red-500' :
-                      camera.status === 'online' ? 'bg-green-500/20 text-green-500' :
-                      camera.status === 'maintenance' ? 'bg-yellow-500/20 text-yellow-500' :
-                      'bg-gray-500/20 text-gray-500'
-                    }`}>
-                      <RiCameraLine className="iot-sensor-icon text-xl" />
-                    </div>
-                    <div>
-                      <h3 className="iot-sensor-name text-white font-medium">{camera.name}</h3>
-                      <div className="iot-sensor-location text-slate-400 text-sm">{camera.location}</div>
-                    </div>
-                  </div>
-                  <div className="iot-sensor-status flex flex-col items-end">
-                    <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      camera.status === 'recording' ? 'bg-red-500/20 text-red-400' :
-                      camera.status === 'online' ? 'bg-green-500/20 text-green-400' :
-                      camera.status === 'maintenance' ? 'bg-yellow-500/20 text-yellow-400' :
-                      'bg-gray-500/20 text-gray-400'
-                    }`}>
-                      {camera.status}
-                    </div>
-                    <div className="iot-sensor-last-updated text-slate-400 text-xs mt-1">{camera.lastActivity}</div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              displayedSensors.map(sensor => (
-                <div 
-                  key={sensor.id}
-                  className={`iot-sensor-item flex items-center justify-between bg-slate-800/50 border ${
-                    selectedSensor?.id === sensor.id ? 'border-indigo-500' : 'border-slate-700'
-                  } rounded-xl p-3 cursor-pointer hover:bg-slate-800 transition-all`}
-                  onClick={() => setSelectedSensor(sensor)}
-                >
-                  <div className="iot-sensor-info flex items-center">
-                    <div className={`iot-sensor-icon-wrapper p-2 rounded-lg mr-3 ${getSensorTypeColor(sensor.type)}`}>
-                      <SensorIcon type={sensor.type} className="iot-sensor-icon text-xl" />
-                    </div>
-                    <div>
-                      <h3 className="iot-sensor-name text-white font-medium">{sensor.name}</h3>
-                      <div className="iot-sensor-location text-slate-400 text-sm">{sensor.location}</div>
-                    </div>
-                  </div>
-                  <div className="iot-sensor-status flex flex-col items-end">
-                    <StatusIndicator status={sensor.status} />
-                    <div className="iot-sensor-last-updated text-slate-400 text-xs mt-1">Updated {sensor.lastUpdated}</div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-        
-        {/* Right content area - changes based on active tab */}
-        <div className="iot-chart-section lg:col-span-2">
-          {/* Always show 3D model at the top if available */}
+          {/* 3D Model Section - Full Width Landscape */}
           {models.length > 0 && show3DModel && activeTab !== 'cctv' && (
-            <div className="iot-3d-model-container bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-6 h-72">
-              <div 
-                ref={modelContainerRef} 
-                className="h-full w-full relative"
-              >
-                {loadingModel && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 z-10">
-                    <div className="flex flex-col items-center">
-                      <RiLoader4Line className="text-3xl text-indigo-500 animate-spin mb-2" />
-                      <span className="text-white">Loading 3D model...</span>
-                    </div>
-                  </div>
-                )}
-                
-                {modelError && !loadingModel && (
-                  <div className="h-full flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-red-400 font-medium mb-2">Error loading model</div>
-                      <div className="text-slate-400 text-sm">{modelError}</div>
-                    </div>
-                  </div>
-                )}
-                
-                {!models.length && !modelError && !loadingModel && (
-                  <div className="h-full flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-white font-medium mb-2">3D Building Model</div>
-                      <div className="text-slate-400 text-sm">
-                        No 3D models available. Please upload a model in the Digital Twins section.
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Overlay navigation buttons */}
-          {show3DModel && models.length > 0 && models[0].file_id && activeTab !== 'cctv' && (
-            <div className="overlay-nav-buttons grid grid-cols-4 gap-2 mb-6">
-              <button 
-                onClick={() => navigateToModelViewer('iot', selectedSensor || undefined)}
-                className="flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-3 rounded-lg text-sm"
-              >
-                <RiSensorLine className="mr-1" /> IoT Sensors
-              </button>
-              <button 
-                onClick={() => navigateToModelViewer('analytics', selectedSensor || undefined)}
-                className="flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-3 rounded-lg text-sm"
-              >
-                <RiBarChartBoxLine className="mr-1" /> Building Analytics
-              </button>
-              <button 
-                onClick={() => navigateToModelViewer('controls', selectedSensor || undefined)}
-                className="flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-3 rounded-lg text-sm"
-              >
-                <RiRemoteControlLine className="mr-1" /> Smart Controls
-              </button>
-              <button 
-                onClick={() => navigateToModelViewer('info', selectedSensor || undefined)}
-                className="flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-3 rounded-lg text-sm"
-              >
-                <RiInformationLine className="mr-1" /> Model Info
-              </button>
-            </div>
-          )}
-
-          {/* 3D Model Control Buttons */}
-          {show3DModel && models.length > 0 && models[0].file_id && activeTab !== 'cctv' && (
-            <div className="flex justify-end space-x-2 mb-4">
-              <button 
-                onClick={toggleSkyBox}
-                className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm"
-              >
-                {skyBoxEnabled ? 'Disable Sky' : 'Enable Sky'}
-              </button>
-              <button 
-                onClick={handleFullscreenView}
-                className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm flex items-center"
-                title="View in fullscreen"
-              >
-                <RiFullscreenLine className="mr-1" /> Fullscreen
-              </button>
-            </div>
-          )}
-
-          {selectedSensor ? (
-            <>
-              <div className="iot-chart-header mb-4">
-                <div className="flex justify-between items-center">
-                  <h2 className="iot-chart-title text-xl font-bold text-white">
-                    {selectedSensor.name} - {activeTab === 'iot' ? 'Data Visualization' : activeTab === 'analytics' ? 'Analytics' : 'Controls'}
-                  </h2>
-                  <div className="flex space-x-2">
+            <motion.div 
+              className="digital-twin-section mb-8"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-white flex items-center">
+                    <RiBuilding4Line className="mr-3 text-indigo-400" />
+                    Digital Twin - Building Overview
+                  </h3>
+                  <div className="flex items-center gap-3">
                     <button 
-                      onClick={() => setShow3DModel(!show3DModel)}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm"
+                      onClick={toggleSkyBox}
+                      className="px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 text-slate-300 rounded-lg text-sm transition-all"
                     >
-                      {show3DModel ? 'Hide 3D View' : 'Show 3D View'}
+                      {skyBoxEnabled ? 'Sky Off' : 'Sky On'}
+                    </button>
+                    <button 
+                      onClick={handleFullscreenView}
+                      className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-sm transition-all flex items-center"
+                      title="Fullscreen View"
+                    >
+                      <RiFullscreenLine className="mr-2" />
+                      Fullscreen View
                     </button>
                   </div>
                 </div>
-                <div className="iot-chart-subtitle text-slate-400 text-sm">
-                  {selectedSensor.location} · Floor {selectedSensor.floor}
+                
+                <div 
+                  ref={modelContainerRef} 
+                  className="h-96 w-full relative rounded-xl overflow-hidden bg-slate-900 mb-4"
+                >
+                  {loadingModel && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 z-10">
+                      <div className="flex flex-col items-center">
+                        <RiLoader4Line className="text-3xl text-indigo-500 animate-spin mb-2" />
+                        <span className="text-white text-sm">Loading 3D model...</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {modelError && !loadingModel && (
+                    <div className="h-full flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="text-red-400 font-medium mb-2">Error loading model</div>
+                        <div className="text-slate-400 text-sm">{modelError}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Model Controls */}
+                <div className="flex justify-center gap-2">
+                  <button 
+                    onClick={() => navigateToModelViewer('iot', selectedSensor)}
+                    className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-600/30 text-indigo-400 rounded-lg transition-all flex items-center"
+                    title="IoT View"
+                  >
+                    <RiSensorLine className="mr-2" />
+                    IoT View
+                  </button>
+                  <button 
+                    onClick={() => navigateToModelViewer('analytics', selectedSensor)}
+                    className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 text-blue-400 rounded-lg transition-all flex items-center"
+                    title="Analytics View"
+                  >
+                    <RiBarChartBoxLine className="mr-2" />
+                    Analytics View
+                  </button>
+                  <button 
+                    onClick={() => navigateToModelViewer('controls', selectedSensor)}
+                    className="px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-600/30 text-purple-400 rounded-lg transition-all flex items-center"
+                    title="Controls View"
+                  >
+                    <RiRemoteControlLine className="mr-2" />
+                    Controls View
+                  </button>
                 </div>
               </div>
+            </motion.div>
+          )}
+
+          {/* Main Dashboard Content */}
+          <div className="dashboard-content grid grid-cols-1 xl:grid-cols-4 gap-8">
+            
+            {/* Left Column - Interactive Cards */}
+            <div className="dashboard-left xl:col-span-3 space-y-6">
               
-              {/* IoT Tab Content */}
+              {/* Tab-specific content cards */}
               {activeTab === 'iot' && (
-                <>
-                  {/* Sensor Chart */}
-                  <div className="iot-chart-container bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-6 h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart
-                        data={getSensorTimeSeriesData(selectedSensor.type).time.map((time, index) => ({
-                          time,
-                          value: getSensorTimeSeriesData(selectedSensor.type).value[index]
-                        }))}
-                        margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
-                        <XAxis dataKey="time" stroke="#94a3b8" />
-                        <YAxis stroke="#94a3b8" />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#1e293b', 
-                            borderColor: '#334155',
-                            color: '#f8fafc' 
-                          }} 
-                        />
-                        <RechartsLine 
-                          type="monotone" 
-                          dataKey="value" 
-                          stroke={getSensorChartColor(selectedSensor.type)} 
-                          strokeWidth={2}
-                          dot={{ r: 4 }}
-                          activeDot={{ r: 6 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                  
-                  {/* Sensor Details */}
-                  <div className="iot-sensor-details grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="iot-details-card bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                      <h3 className="iot-details-title text-md font-semibold text-white mb-3">Details</h3>
-                      <div className="iot-details-grid grid grid-cols-2 gap-2">
-                        <div className="iot-details-label text-slate-400 text-sm">ID:</div>
-                        <div className="iot-details-value text-white text-sm">{selectedSensor.id}</div>
-                        <div className="iot-details-label text-slate-400 text-sm">Type:</div>
-                        <div className="iot-details-value text-white text-sm">{selectedSensor.type}</div>
-                        <div className="iot-details-label text-slate-400 text-sm">Status:</div>
-                        <div className="iot-details-value text-white text-sm">{selectedSensor.status}</div>
-                        <div className="iot-details-label text-slate-400 text-sm">Battery:</div>
-                        <div className="iot-details-value text-white text-sm">{selectedSensor.battery}%</div>
+                <motion.div 
+                  className="sensors-grid"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  {/* Live Sensors Card */}
+                  <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 mb-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-gradient-to-br from-indigo-600/20 to-purple-600/20 rounded-xl">
+                          <RiSensorLine className="text-2xl text-indigo-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-white">Live Sensor Data</h3>
+                          <p className="text-slate-400 text-sm">Real-time monitoring across all floors</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button className="px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 text-slate-300 rounded-lg text-sm transition-all">
+                          <RiFilterLine className="mr-2 inline" />
+                          Filter
+                        </button>
+                        <button
+                          onClick={handleRefresh}
+                          className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-sm transition-all"
+                        >
+                          <RiRefreshLine className={`mr-2 inline ${refreshing ? 'animate-spin' : ''}`} />
+                          Refresh
+                        </button>
                       </div>
                     </div>
                     
-                    <div className="iot-activity-card bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                      <h3 className="iot-activity-title text-md font-semibold text-white mb-3">Recent Activity</h3>
-                      <div className="iot-activity-list space-y-2">
-                        {selectedSensor.recentActivity.map((activity, idx) => (
-                          <div key={idx} className="iot-activity-item flex items-start space-x-2">
-                            <div className="iot-activity-icon text-indigo-400 mt-0.5">
-                              <RiInformationLine />
+                    {/* Sensor Cards Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {displayedSensors.slice(0, 6).map((sensor, index) => (
+                        <motion.div
+                          key={sensor.id}
+                          className={`sensor-card p-4 rounded-xl border transition-all duration-200 cursor-pointer ${
+                            selectedSensor?.id === sensor.id 
+                              ? 'bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border-indigo-500/50' 
+                              : 'bg-slate-800/30 border-slate-700/50 hover:border-slate-600/50 hover:bg-slate-800/50'
+                          }`}
+                          onClick={() => setSelectedSensor(sensor)}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: index * 0.1 }}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <SensorIcon 
+                                type={sensor.type} 
+                                size="lg" 
+                                variant="filled" 
+                                animated 
+                              />
+                              <div>
+                                <h4 className="text-white font-semibold">{sensor.name}</h4>
+                                <p className="text-slate-400 text-sm flex items-center">
+                                  <RiMapPinLine className="mr-1 text-xs" />
+                                  {sensor.location}
+                                </p>
+                              </div>
                             </div>
-                            <div className="iot-activity-content">
-                              <div className="iot-activity-text text-white text-sm">{activity.message}</div>
-                              <div className="iot-activity-time text-slate-400 text-xs">{activity.time}</div>
-                            </div>
+                            <StatusIndicator status={sensor.status} size="sm" showText={false} />
                           </div>
-                        ))}
-                      </div>
+                          
+                          <div className="flex items-end justify-between">
+                            <div>
+                              <div className="text-2xl font-bold text-white">
+                                {sensor.value} 
+                                <span className="text-sm font-normal text-slate-400 ml-1">{sensor.unit}</span>
+                              </div>
+                              <div className="text-xs text-slate-500 mt-1">Floor {sensor.floor}</div>
+                            </div>
+                            {sensor.battery && (
+                              <div className={`flex items-center text-xs ${
+                                sensor.battery > 80 ? 'text-emerald-400' :
+                                sensor.battery > 50 ? 'text-amber-400' : 'text-red-400'
+                              }`}>
+                                <RiBatteryLine className="mr-1" />
+                                {sensor.battery}%
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      ))}
                     </div>
+                    
+                    {displayedSensors.length > 6 && (
+                      <div className="text-center mt-6">
+                        <button className="px-6 py-2 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 text-slate-300 rounded-lg text-sm transition-all">
+                          View All {displayedSensors.length} Sensors
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </>
+                </motion.div>
               )}
 
-              {/* Analytics Tab Content */}
               {activeTab === 'analytics' && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                      <h3 className="text-md font-semibold text-white mb-3">Energy Consumption</h3>
+                <motion.div 
+                  className="analytics-dashboard"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  {/* Analytics Cards */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                      <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                        <RiBarChartBoxLine className="mr-2 text-blue-400" />
+                        Energy Distribution
+                      </h3>
                       <div className="h-64">
                         <Doughnut 
                           data={energyConsumptionData} 
@@ -1633,610 +1446,557 @@ const IoTDashboardPage: React.FC = () => {
                       </div>
                     </div>
                     
-                    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                      <h3 className="text-md font-semibold text-white mb-3">Historical Data</h3>
+                    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                      <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                        <RiUserLocationLine className="mr-2 text-green-400" />
+                        Occupancy Trends
+                      </h3>
                       <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart
-                            data={Array.from({ length: 30 }, (_, i) => ({
-                              day: `Day ${i + 1}`,
-                              value: Math.floor(20 + Math.random() * 10)
-                            }))}
-                            margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
-                            <XAxis dataKey="day" stroke="#94a3b8" />
-                            <YAxis stroke="#94a3b8" />
-                            <Tooltip 
-                              contentStyle={{ 
-                                backgroundColor: '#1e293b', 
-                                borderColor: '#334155',
-                                color: '#f8fafc' 
-                              }} 
-                            />
-                            <RechartsLine 
-                              type="monotone" 
-                              dataKey="value" 
-                              stroke="#8884d8" 
-                              strokeWidth={2}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
+                        <Bar 
+                          data={occupancyData} 
+                          options={occupancyOptions}
+                        />
                       </div>
                     </div>
                   </div>
                   
-                  <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-6">
-                    <h3 className="text-md font-semibold text-white mb-3">Performance Metrics</h3>
+                  {/* Performance Metrics */}
+                  <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-white mb-6 flex items-center">
+                      <RiCpuLine className="mr-2 text-purple-400" />
+                      Performance Metrics
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="p-3 bg-slate-700/50 rounded-lg">
-                        <div className="text-sm text-slate-400 mb-1">Efficiency Rating</div>
-                        <div className="text-xl font-bold text-white">92%</div>
-                        <div className="text-xs text-green-400">+2.5% from last month</div>
-                      </div>
-                      <div className="p-3 bg-slate-700/50 rounded-lg">
-                        <div className="text-sm text-slate-400 mb-1">Uptime</div>
-                        <div className="text-xl font-bold text-white">99.8%</div>
-                        <div className="text-xs text-green-400">+0.2% from last month</div>
-                      </div>
-                      <div className="p-3 bg-slate-700/50 rounded-lg">
-                        <div className="text-sm text-slate-400 mb-1">Response Time</div>
-                        <div className="text-xl font-bold text-white">120ms</div>
-                        <div className="text-xs text-red-400">+15ms from last month</div>
-                      </div>
+                      <StatCard
+                        title="Efficiency Rating"
+                        value="92%"
+                        trend={{ value: 2.5, label: 'from last month', isPositive: true }}
+                        color="emerald"
+                        size="sm"
+                      />
+                      <StatCard
+                        title="Uptime"
+                        value="99.8%"
+                        trend={{ value: 0.2, label: 'from last month', isPositive: true }}
+                        color="emerald"
+                        size="sm"
+                      />
+                      <StatCard
+                        title="Response Time"
+                        value="120ms"
+                        trend={{ value: 15, label: 'from last month', isPositive: false }}
+                        color="red"
+                        size="sm"
+                      />
                     </div>
                   </div>
-                </>
+                </motion.div>
               )}
 
-              {/* Controls Tab Content */}
               {activeTab === 'controls' && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                      <div className="flex justify-between items-center mb-4">
-                        <div className="flex items-center">
-                          <RiTempColdLine className="text-blue-400 text-xl mr-2" />
-                          <h3 className="text-md font-semibold text-white">HVAC Control</h3>
+                <motion.div 
+                  className="controls-dashboard"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* HVAC Control Card */}
+                    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                      <div className="flex justify-between items-center mb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="p-3 bg-gradient-to-br from-blue-600/20 to-cyan-600/20 rounded-xl">
+                            <RiTempColdLine className="text-2xl text-blue-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold text-white">HVAC Control</h3>
+                            <p className="text-slate-400 text-sm">Climate management system</p>
+                          </div>
                         </div>
                         <button 
-                          className={`relative inline-flex items-center h-6 rounded-full w-11 ${
+                          className={`relative inline-flex items-center h-8 rounded-full w-14 transition-colors ${
                             hvacEnabled ? 'bg-indigo-600' : 'bg-slate-600'
                           }`}
                           onClick={() => setHvacEnabled(!hvacEnabled)}
                         >
                           <span 
-                            className={`inline-block w-4 h-4 transform bg-white rounded-full transition ${
-                              hvacEnabled ? 'translate-x-6' : 'translate-x-1'
+                            className={`inline-block w-6 h-6 transform bg-white rounded-full transition-transform ${
+                              hvacEnabled ? 'translate-x-7' : 'translate-x-1'
                             }`} 
                           />
                         </button>
                       </div>
                       
-                      <div className="mt-6">
-                        <label className="block text-sm text-slate-400 mb-1">Temperature</label>
-                        <div className="flex items-center">
-                          <button 
-                            className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded"
-                            onClick={() => setTargetTemp(prev => Math.max(16, prev - 0.5))}
-                            disabled={!hvacEnabled}
-                          >
-                            <RiVolumeDownLine />
-                          </button>
-                          <div className="flex-1 mx-3 text-center">
-                            <span className="text-3xl font-bold text-white">{targetTemp}°C</span>
+                      <div className="space-y-6">
+                        <div className="text-center">
+                          <div className="text-4xl font-bold text-white mb-2">{targetTemp}°C</div>
+                          <div className="flex items-center justify-center gap-4">
+                            <button 
+                              className="p-3 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 text-white rounded-xl transition-all"
+                              onClick={() => setTargetTemp(prev => Math.max(16, prev - 0.5))}
+                              disabled={!hvacEnabled}
+                            >
+                              <RiVolumeDownLine className="text-xl" />
+                            </button>
+                            <button 
+                              className="p-3 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 text-white rounded-xl transition-all"
+                              onClick={() => setTargetTemp(prev => Math.min(28, prev + 0.5))}
+                              disabled={!hvacEnabled}
+                            >
+                              <RiVolumeUpLine className="text-xl" />
+                            </button>
                           </div>
-                          <button 
-                            className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded"
-                            onClick={() => setTargetTemp(prev => Math.min(28, prev + 0.5))}
-                            disabled={!hvacEnabled}
-                          >
-                            <RiVolumeUpLine />
-                          </button>
                         </div>
                         
-                        <div className="mt-6">
-                          <label className="block text-sm text-slate-400 mb-2">Mode</label>
-                          <div className="grid grid-cols-3 gap-2">
-                            <button className="bg-blue-500/20 text-blue-400 py-2 rounded-lg border border-blue-500/30">Cool</button>
-                            <button className="bg-slate-700 text-slate-300 py-2 rounded-lg">Auto</button>
-                            <button className="bg-slate-700 text-slate-300 py-2 rounded-lg">Heat</button>
-                          </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <button className="py-3 px-4 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-xl text-sm font-medium">
+                            Cool
+                          </button>
+                          <button className="py-3 px-4 bg-slate-700/50 text-slate-300 border border-slate-600/50 rounded-xl text-sm font-medium">
+                            Auto
+                          </button>
+                          <button className="py-3 px-4 bg-slate-700/50 text-slate-300 border border-slate-600/50 rounded-xl text-sm font-medium">
+                            Heat
+                          </button>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                      <div className="flex justify-between items-center mb-4">
-                        <div className="flex items-center">
-                          <RiLightbulbFlashLine className="text-yellow-400 text-xl mr-2" />
-                          <h3 className="text-md font-semibold text-white">Lighting Control</h3>
+                    {/* Lighting Control Card */}
+                    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                      <div className="flex justify-between items-center mb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="p-3 bg-gradient-to-br from-yellow-600/20 to-orange-600/20 rounded-xl">
+                            <RiLightbulbFlashLine className="text-2xl text-yellow-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold text-white">Lighting Control</h3>
+                            <p className="text-slate-400 text-sm">Smart lighting system</p>
+                          </div>
                         </div>
                         <button 
-                          className={`relative inline-flex items-center h-6 rounded-full w-11 ${
+                          className={`relative inline-flex items-center h-8 rounded-full w-14 transition-colors ${
                             lightingEnabled ? 'bg-indigo-600' : 'bg-slate-600'
                           }`}
                           onClick={() => setLightingEnabled(!lightingEnabled)}
                         >
                           <span 
-                            className={`inline-block w-4 h-4 transform bg-white rounded-full transition ${
-                              lightingEnabled ? 'translate-x-6' : 'translate-x-1'
+                            className={`inline-block w-6 h-6 transform bg-white rounded-full transition-transform ${
+                              lightingEnabled ? 'translate-x-7' : 'translate-x-1'
                             }`} 
                           />
                         </button>
                       </div>
                       
-                      <div className="mt-6">
-                        <label className="block text-sm text-slate-400 mb-1">Brightness ({lightingLevel}%)</label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={lightingLevel}
-                          onChange={(e) => setLightingLevel(parseInt(e.target.value))}
-                          className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                          disabled={!lightingEnabled}
-                        />
+                      <div className="space-y-6">
+                        <div>
+                          <div className="flex justify-between items-center mb-3">
+                            <span className="text-slate-300 font-medium">Brightness</span>
+                            <span className="text-white font-bold">{lightingLevel}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={lightingLevel}
+                            onChange={(e) => setLightingLevel(parseInt(e.target.value))}
+                            className="w-full h-3 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-yellow-500"
+                            disabled={!lightingEnabled}
+                          />
+                        </div>
                         
-                        <div className="flex justify-between mt-2 text-xs text-slate-400">
-                          <span>0%</span>
-                          <span>50%</span>
-                          <span>100%</span>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-6">
-                        <label className="block text-sm text-slate-400 mb-2">Zones</label>
                         <div className="grid grid-cols-2 gap-2">
-                          <button className="bg-yellow-500/20 text-yellow-400 py-2 rounded-lg border border-yellow-500/30">Main Office</button>
-                          <button className="bg-slate-700 text-slate-300 py-2 rounded-lg">Conference Room</button>
-                          <button className="bg-slate-700 text-slate-300 py-2 rounded-lg">Lobby</button>
-                          <button className="bg-slate-700 text-slate-300 py-2 rounded-lg">All Zones</button>
+                          <button className="py-3 px-4 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-xl text-sm font-medium">
+                            Main Office
+                          </button>
+                          <button className="py-3 px-4 bg-slate-700/50 text-slate-300 border border-slate-600/50 rounded-xl text-sm font-medium">
+                            Conference
+                          </button>
+                          <button className="py-3 px-4 bg-slate-700/50 text-slate-300 border border-slate-600/50 rounded-xl text-sm font-medium">
+                            Lobby
+                          </button>
+                          <button className="py-3 px-4 bg-slate-700/50 text-slate-300 border border-slate-600/50 rounded-xl text-sm font-medium">
+                            All Zones
+                          </button>
                         </div>
                       </div>
                     </div>
                   </div>
-                  
-                  <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                    <h3 className="text-md font-semibold text-white mb-4">Quick Controls</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <button className="flex flex-col items-center justify-center p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors">
-                        <RiLightbulbLine className="text-2xl text-yellow-400 mb-2" />
-                        <span className="text-sm text-white">All Lights</span>
-                      </button>
-                      <button className="flex flex-col items-center justify-center p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors">
-                        <RiTempHotLine className="text-2xl text-red-400 mb-2" />
-                        <span className="text-sm text-white">HVAC</span>
-                      </button>
-                      <button className="flex flex-col items-center justify-center p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors">
-                        <RiDoorLockLine className="text-2xl text-green-400 mb-2" />
-                        <span className="text-sm text-white">Security</span>
-                      </button>
-                      <button className="flex flex-col items-center justify-center p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors">
-                        <RiAlarmWarningLine className="text-2xl text-red-400 mb-2" />
-                        <span className="text-sm text-white">Alarms</span>
-                      </button>
-                    </div>
-                  </div>
-                </>
+                </motion.div>
               )}
-            </>
-          ) : activeTab === 'cctv' && selectedCamera ? (
-            <>
-              <div className="iot-chart-header mb-4">
-                <div className="flex justify-between items-center">
-                  <h2 className="iot-chart-title text-xl font-bold text-white">
-                    {selectedCamera.name} - Camera Feed
-                  </h2>
-                  <div className="flex space-x-2">
-                    <button 
-                      onClick={() => setShow3DModel(!show3DModel)}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm"
-                    >
-                      {show3DModel ? 'Hide 3D View' : 'Show 3D View'}
-                    </button>
-                  </div>
-                </div>
-                <div className="iot-chart-subtitle text-slate-400 text-sm">
-                  {selectedCamera.location} · Floor {selectedCamera.floor}
-                </div>
-              </div>
 
-              {/* Camera Feed Simulation */}
-              <div className="cctv-feed-container bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-6 h-72">
-                <div className="h-full w-full relative bg-slate-900 rounded-lg overflow-hidden">
-                  {/* Simulated camera feed */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
-                    <div className="text-center">
-                      <RiVideoLine className="text-6xl text-slate-600 mb-4 mx-auto" />
-                      <div className="text-white font-medium mb-2">{selectedCamera.name}</div>
-                      <div className="text-slate-400 text-sm">{selectedCamera.location} • {selectedCamera.resolution}</div>
-                      <div className="flex items-center justify-center mt-4 space-x-2">
-                        {selectedCamera.isRecording && (
-                          <div className="flex items-center text-red-400">
-                            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-1"></div>
-                            <span className="text-xs">REC</span>
-                          </div>
-                        )}
-                        <div className="text-slate-400 text-xs">LIVE</div>
+              {activeTab === 'cctv' && (
+                <motion.div 
+                  className="cctv-dashboard"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  {/* CCTV Grid */}
+                  <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-gradient-to-br from-red-600/20 to-pink-600/20 rounded-xl">
+                          <RiCameraLine className="text-2xl text-red-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-white">CCTV Surveillance</h3>
+                          <p className="text-slate-400 text-sm">Live camera feeds and monitoring</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-600/30 text-red-400 rounded-lg text-sm transition-all">
+                          <RiRecordCircleLine className="mr-2 inline" />
+                          Record All
+                        </button>
+                        <button className="px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 text-slate-300 rounded-lg text-sm transition-all">
+                          <RiFullscreenLine className="mr-2 inline" />
+                          Fullscreen
+                        </button>
                       </div>
                     </div>
-                  </div>
-                  
-                  {/* Camera controls overlay */}
-                  <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center">
-                    <div className="flex space-x-2">
-                      <button className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded">
-                        <RiPlayLine />
-                      </button>
-                      <button className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded">
-                        <RiPauseLine />
-                      </button>
-                      <button className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded">
-                        <RiRecordCircleLine />
-                      </button>
-                      <button className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded">
-                        <RiScreenshotLine />
-                      </button>
+                    
+                    {/* Camera Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {cctvCameras.map((camera, index) => (
+                        <motion.div
+                          key={camera.id}
+                          className={`camera-card rounded-xl border transition-all duration-200 cursor-pointer ${
+                            selectedCamera?.id === camera.id 
+                              ? 'bg-gradient-to-br from-red-600/20 to-pink-600/20 border-red-500/50' 
+                              : 'bg-slate-800/30 border-slate-700/50 hover:border-slate-600/50 hover:bg-slate-800/50'
+                          }`}
+                          onClick={() => setSelectedCamera(camera)}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: index * 0.1 }}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          {/* Camera Feed */}
+                          <div className="aspect-video bg-slate-900 rounded-t-xl relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
+                              <div className="text-center">
+                                <RiVideoLine className="text-4xl text-slate-600 mb-2 mx-auto" />
+                                <div className="text-white text-sm font-medium">{camera.name}</div>
+                              </div>
+                            </div>
+                            
+                            {/* Status Overlays */}
+                            <div className="absolute top-3 left-3 flex gap-2">
+                              {camera.isRecording && (
+                                <div className="bg-red-500/90 text-white text-xs px-2 py-1 rounded-full flex items-center">
+                                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse mr-1"></div>
+                                  REC
+                                </div>
+                              )}
+                              <div className={`text-xs px-2 py-1 rounded-full ${
+                                camera.status === 'online' || camera.status === 'recording' 
+                                  ? 'bg-emerald-500/90 text-white' 
+                                  : camera.status === 'maintenance'
+                                    ? 'bg-amber-500/90 text-white'
+                                    : 'bg-red-500/90 text-white'
+                              }`}>
+                                {camera.status.toUpperCase()}
+                              </div>
+                            </div>
+                            
+                            <div className="absolute top-3 right-3">
+                              <div className="bg-slate-800/90 text-slate-300 text-xs px-2 py-1 rounded-full">
+                                LIVE
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Camera Info */}
+                          <div className="p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h4 className="text-white font-semibold">{camera.name}</h4>
+                                <p className="text-slate-400 text-sm">{camera.location} • Floor {camera.floor}</p>
+                              </div>
+                              <div className="flex gap-1">
+                                {camera.nightVision && (
+                                  <div title="Night Vision">
+                                    <RiEyeLine className="text-indigo-400 text-sm" />
+                                  </div>
+                                )}
+                                {camera.motionDetection && (
+                                  <div title="Motion Detection">
+                                    <RiUserLocationLine className="text-green-400 text-sm" />
+                                  </div>
+                                )}
+                                {camera.alerts.length > 0 && (
+                                  <div className="relative" title="Alerts">
+                                    <RiAlertLine className="text-amber-400 text-sm" />
+                                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {camera.resolution} • {camera.viewAngle} • {camera.lastActivity}
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
                     </div>
-                    <div className="flex space-x-2">
-                      <button className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded">
-                        <RiZoomInLine />
-                      </button>
-                      <button className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded">
-                        <RiZoomOutLine />
-                      </button>
-                      <button className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded">
-                        <RiFullscreenLine />
-                      </button>
-                    </div>
                   </div>
-                </div>
+                </motion.div>
+              )}
+            </div>
+            
+            {/* Right Column - Smart Lock & Details */}
+            <motion.div 
+              className="dashboard-right xl:col-span-1 space-y-6"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+            >
+              {/* Smart Lock Dashboard */}
+              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl overflow-hidden">
+                <SmartLockDashboard />
               </div>
-              
-              {/* Camera Details and Controls */}
-              <div className="cctv-details grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                  <h3 className="text-md font-semibold text-white mb-3">Camera Details</h3>
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div className="text-slate-400 text-sm">Status:</div>
-                    <div className={`text-sm font-medium ${
-                      selectedCamera.status === 'recording' ? 'text-red-400' :
-                      selectedCamera.status === 'online' ? 'text-green-400' :
-                      selectedCamera.status === 'maintenance' ? 'text-yellow-400' :
-                      'text-gray-400'
-                    }`}>{selectedCamera.status}</div>
-                    <div className="text-slate-400 text-sm">Resolution:</div>
-                    <div className="text-white text-sm">{selectedCamera.resolution}</div>
-                    <div className="text-slate-400 text-sm">View Angle:</div>
-                    <div className="text-white text-sm">{selectedCamera.viewAngle}</div>
-                    <div className="text-slate-400 text-sm">Night Vision:</div>
-                    <div className="text-white text-sm">{selectedCamera.nightVision ? 'Enabled' : 'Disabled'}</div>
-                  </div>
+
+              {/* Selected Item Details */}
+              {(selectedSensor || selectedCamera) && (
+                <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                  <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                    {selectedSensor ? (
+                      <>
+                        <SensorIcon type={selectedSensor.type} size="sm" className="mr-2" />
+                        Sensor Details
+                      </>
+                    ) : (
+                      <>
+                        <RiCameraLine className="mr-2 text-red-400" />
+                        Camera Details
+                      </>
+                    )}
+                  </h3>
                   
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-300 text-sm">Recording</span>
-                      <button 
-                        className={`relative inline-flex items-center h-6 rounded-full w-11 ${
-                          selectedCamera.isRecording ? 'bg-red-600' : 'bg-slate-600'
-                        }`}
-                        onClick={() => {
-                          setCctvCameras(prev => prev.map(cam => 
-                            cam.id === selectedCamera.id 
-                              ? { ...cam, isRecording: !cam.isRecording }
-                              : cam
-                          ));
-                          setSelectedCamera(prev => prev ? { ...prev, isRecording: !prev.isRecording } : null);
-                        }}
-                      >
-                        <span 
-                          className={`inline-block w-4 h-4 transform bg-white rounded-full transition ${
-                            selectedCamera.isRecording ? 'translate-x-6' : 'translate-x-1'
-                          }`} 
-                        />
-                      </button>
-                    </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-300 text-sm">Motion Detection</span>
-                      <button 
-                        className={`relative inline-flex items-center h-6 rounded-full w-11 ${
-                          selectedCamera.motionDetection ? 'bg-indigo-600' : 'bg-slate-600'
-                        }`}
-                        onClick={() => {
-                          setCctvCameras(prev => prev.map(cam => 
-                            cam.id === selectedCamera.id 
-                              ? { ...cam, motionDetection: !cam.motionDetection }
-                              : cam
-                          ));
-                          setSelectedCamera(prev => prev ? { ...prev, motionDetection: !prev.motionDetection } : null);
-                        }}
-                      >
-                        <span 
-                          className={`inline-block w-4 h-4 transform bg-white rounded-full transition ${
-                            selectedCamera.motionDetection ? 'translate-x-6' : 'translate-x-1'
-                          }`} 
-                        />
-                      </button>
-                    </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-300 text-sm">Night Vision</span>
-                      <button 
-                        className={`relative inline-flex items-center h-6 rounded-full w-11 ${
-                          selectedCamera.nightVision ? 'bg-indigo-600' : 'bg-slate-600'
-                        }`}
-                        onClick={() => {
-                          setCctvCameras(prev => prev.map(cam => 
-                            cam.id === selectedCamera.id 
-                              ? { ...cam, nightVision: !cam.nightVision }
-                              : cam
-                          ));
-                          setSelectedCamera(prev => prev ? { ...prev, nightVision: !prev.nightVision } : null);
-                        }}
-                      >
-                        <span 
-                          className={`inline-block w-4 h-4 transform bg-white rounded-full transition ${
-                            selectedCamera.nightVision ? 'translate-x-6' : 'translate-x-1'
-                          }`} 
-                        />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                  <h3 className="text-md font-semibold text-white mb-3">Recent Alerts</h3>
-                  <div className="space-y-3">
-                    {selectedCamera.alerts.length > 0 ? (
-                      selectedCamera.alerts.map((alert, idx) => (
-                        <div key={idx} className="flex items-start space-x-2">
-                          <div className={`text-sm mt-0.5 ${
-                            alert.type === 'motion' ? 'text-yellow-400' :
-                            alert.type === 'person' ? 'text-blue-400' :
-                            alert.type === 'vehicle' ? 'text-green-400' :
-                            alert.type === 'access' ? 'text-purple-400' :
-                            'text-red-400'
+                  {selectedSensor && (
+                    <div className="space-y-4">
+                      <div className="text-center p-4 bg-slate-800/50 rounded-xl">
+                        <div className="text-3xl font-bold text-white mb-1">
+                          {selectedSensor.value} {selectedSensor.unit}
+                        </div>
+                        <div className="text-slate-400 text-sm">{selectedSensor.name}</div>
+                        <StatusIndicator status={selectedSensor.status} size="sm" className="mt-2 justify-center" />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <div className="text-slate-400">Location</div>
+                          <div className="text-white font-medium">{selectedSensor.location}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-400">Floor</div>
+                          <div className="text-white font-medium">{selectedSensor.floor}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-400">Type</div>
+                          <div className="text-white font-medium capitalize">{selectedSensor.type}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-400">Battery</div>
+                          <div className={`font-medium ${
+                            selectedSensor.battery && selectedSensor.battery > 80 ? 'text-emerald-400' :
+                            selectedSensor.battery && selectedSensor.battery > 50 ? 'text-amber-400' : 'text-red-400'
                           }`}>
-                            <RiAlertLine />
+                            {selectedSensor.battery}%
                           </div>
-                          <div className="flex-1">
-                            <div className="text-white text-sm">{alert.message}</div>
-                            <div className="text-slate-400 text-xs">{alert.time}</div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-slate-400 text-sm">No recent alerts</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Global CCTV Controls */}
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                <h3 className="text-md font-semibold text-white mb-4">System Controls</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <button 
-                    className="flex flex-col items-center justify-center p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors"
-                    onClick={() => {
-                      const newState = !cctvRecordingAll;
-                      setCctvRecordingAll(newState);
-                      setCctvCameras(prev => prev.map(cam => ({ ...cam, isRecording: newState })));
-                    }}
-                  >
-                    <RiRecordCircleLine className={`text-2xl mb-2 ${cctvRecordingAll ? 'text-red-400' : 'text-slate-400'}`} />
-                    <span className="text-sm text-white">{cctvRecordingAll ? 'Stop All' : 'Record All'}</span>
-                  </button>
-                  <button 
-                    className="flex flex-col items-center justify-center p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors"
-                    onClick={() => {
-                      const newState = !cctvNightVisionAll;
-                      setCctvNightVisionAll(newState);
-                      setCctvCameras(prev => prev.map(cam => ({ ...cam, nightVision: newState })));
-                    }}
-                  >
-                    {cctvNightVisionAll ? (
-                      <RiEyeLine className="text-2xl text-indigo-400 mb-2" />
-                    ) : (
-                      <RiEyeOffLine className="text-2xl text-slate-400 mb-2" />
-                    )}
-                    <span className="text-sm text-white">Night Vision</span>
-                  </button>
-                  <button 
-                    className="flex flex-col items-center justify-center p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors"
-                    onClick={() => {
-                      const newState = !cctvMotionDetectionAll;
-                      setCctvMotionDetectionAll(newState);
-                      setCctvCameras(prev => prev.map(cam => ({ ...cam, motionDetection: newState })));
-                    }}
-                  >
-                    <RiUserLocationLine className={`text-2xl mb-2 ${cctvMotionDetectionAll ? 'text-green-400' : 'text-slate-400'}`} />
-                    <span className="text-sm text-white">Motion Detection</span>
-                  </button>
-                  <button className="flex flex-col items-center justify-center p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors">
-                    <RiAlarmWarningLine className="text-2xl text-yellow-400 mb-2" />
-                    <span className="text-sm text-white">Alert Settings</span>
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : activeTab === 'cctv' && !selectedCamera ? (
-            <div className="cctv-grid-container">
-              {/* CCTV Grid Header */}
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-white">CCTV Surveillance</h2>
-                <div className="flex space-x-2">
-                  <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm flex items-center">
-                    <RiRecordCircleLine className="mr-2" />
-                    Record All
-                  </button>
-                  <button className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm flex items-center">
-                    <RiFullscreenLine className="mr-2" />
-                    Fullscreen
-                  </button>
-                </div>
-              </div>
-
-              {/* 6 TV Screens Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {cctvCameras.map((camera, index) => (
-                  <div 
-                    key={camera.id}
-                    className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 cursor-pointer hover:border-indigo-500 transition-all"
-                    onClick={() => setSelectedCamera(camera)}
-                  >
-                    {/* TV Screen */}
-                    <div className="aspect-video bg-slate-900 rounded-lg mb-3 relative overflow-hidden">
-                      {/* Simulated video feed */}
-                      <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
-                        <div className="text-center">
-                          <RiVideoLine className="text-3xl text-slate-600 mb-2 mx-auto" />
-                          <div className="text-white text-sm font-medium">{camera.name}</div>
-                          <div className="text-slate-400 text-xs">{camera.location}</div>
                         </div>
                       </div>
                       
-                      {/* Status indicators */}
-                      <div className="absolute top-2 left-2 flex space-x-1">
-                        {camera.isRecording && (
-                          <div className="bg-red-500/80 text-white text-xs px-2 py-1 rounded flex items-center">
-                            <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse mr-1"></div>
-                            REC
-                          </div>
-                        )}
-                        <div className={`text-xs px-2 py-1 rounded ${
-                          camera.status === 'online' || camera.status === 'recording' 
-                            ? 'bg-green-500/80 text-white' 
-                            : camera.status === 'maintenance'
-                              ? 'bg-yellow-500/80 text-white'
-                              : 'bg-red-500/80 text-white'
-                        }`}>
-                          {camera.status.toUpperCase()}
-                        </div>
-                      </div>
-                      
-                      {/* Live indicator */}
-                      <div className="absolute top-2 right-2">
-                        <div className="bg-slate-800/80 text-slate-300 text-xs px-2 py-1 rounded">
-                          LIVE
-                        </div>
-                      </div>
-                      
-                      {/* Camera info overlay */}
-                      <div className="absolute bottom-2 left-2 right-2">
-                        <div className="bg-slate-800/80 text-white text-xs px-2 py-1 rounded">
-                          {camera.resolution} • {camera.viewAngle}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Camera details */}
-                    <div className="flex justify-between items-center">
                       <div>
-                        <h3 className="text-white font-medium text-sm">{camera.name}</h3>
-                        <p className="text-slate-400 text-xs">Floor {camera.floor}</p>
-                      </div>
-                      <div className="flex space-x-1">
-                        {camera.nightVision && (
-                          <div title="Night Vision">
-                            <RiEyeLine className="text-indigo-400 text-sm" />
-                          </div>
-                        )}
-                        {camera.motionDetection && (
-                          <div title="Motion Detection">
-                            <RiUserLocationLine className="text-green-400 text-sm" />
-                          </div>
-                        )}
-                        {camera.alerts.length > 0 && (
-                          <div className="relative" title="Alerts">
-                            <RiAlertLine className="text-yellow-400 text-sm" />
-                            <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></div>
-                          </div>
-                        )}
+                        <div className="text-slate-400 text-sm mb-2">Recent Activity</div>
+                        <div className="space-y-2 max-h-32 overflow-y-auto">
+                          {selectedSensor.recentActivity.map((activity, idx) => (
+                            <div key={idx} className="flex items-start gap-2 text-sm">
+                              <RiInformationLine className="text-indigo-400 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <div className="text-white">{activity.message}</div>
+                                <div className="text-slate-500 text-xs">{activity.time}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-              
-              {/* Navigation and Controls */}
-              <div className="flex justify-between items-center">
-                <div className="flex space-x-2">
-                  <button className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm">
-                    Previous
-                  </button>
-                  <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm">
-                    Next
-                  </button>
+                  )}
+                  
+                  {selectedCamera && (
+                    <div className="space-y-4">
+                      <div className="text-center p-4 bg-slate-800/50 rounded-xl">
+                        <div className="text-2xl font-bold text-white mb-1">{selectedCamera.name}</div>
+                        <div className="text-slate-400 text-sm">{selectedCamera.location}</div>
+                        <StatusIndicator 
+                          status={(selectedCamera.status === 'recording' || selectedCamera.status === 'online') ? 'online' : 
+                                  selectedCamera.status === 'maintenance' ? 'warning' : 'offline'} 
+                          size="sm" 
+                          className="mt-2 justify-center" 
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <div className="text-slate-400">Resolution</div>
+                          <div className="text-white font-medium">{selectedCamera.resolution}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-400">View Angle</div>
+                          <div className="text-white font-medium">{selectedCamera.viewAngle}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-400">Floor</div>
+                          <div className="text-white font-medium">{selectedCamera.floor}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-400">Last Activity</div>
+                          <div className="text-white font-medium">{selectedCamera.lastActivity}</div>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-300 text-sm">Recording</span>
+                          <button 
+                            className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${
+                              selectedCamera.isRecording ? 'bg-red-600' : 'bg-slate-600'
+                            }`}
+                            onClick={() => {
+                              setCctvCameras(prev => prev.map(cam => 
+                                cam.id === selectedCamera.id 
+                                  ? { ...cam, isRecording: !cam.isRecording }
+                                  : cam
+                              ));
+                              setSelectedCamera(prev => prev ? { ...prev, isRecording: !prev.isRecording } : null);
+                            }}
+                          >
+                            <span 
+                              className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+                                selectedCamera.isRecording ? 'translate-x-6' : 'translate-x-1'
+                              }`} 
+                            />
+                          </button>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-300 text-sm">Night Vision</span>
+                          <button 
+                            className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${
+                              selectedCamera.nightVision ? 'bg-indigo-600' : 'bg-slate-600'
+                            }`}
+                            onClick={() => {
+                              setCctvCameras(prev => prev.map(cam => 
+                                cam.id === selectedCamera.id 
+                                  ? { ...cam, nightVision: !cam.nightVision }
+                                  : cam
+                              ));
+                              setSelectedCamera(prev => prev ? { ...prev, nightVision: !prev.nightVision } : null);
+                            }}
+                          >
+                            <span 
+                              className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+                                selectedCamera.nightVision ? 'translate-x-6' : 'translate-x-1'
+                              }`} 
+                            />
+                          </button>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-300 text-sm">Motion Detection</span>
+                          <button 
+                            className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${
+                              selectedCamera.motionDetection ? 'bg-indigo-600' : 'bg-slate-600'
+                            }`}
+                            onClick={() => {
+                              setCctvCameras(prev => prev.map(cam => 
+                                cam.id === selectedCamera.id 
+                                  ? { ...cam, motionDetection: !cam.motionDetection }
+                                  : cam
+                              ));
+                              setSelectedCamera(prev => prev ? { ...prev, motionDetection: !prev.motionDetection } : null);
+                            }}
+                          >
+                            <span 
+                              className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+                                selectedCamera.motionDetection ? 'translate-x-6' : 'translate-x-1'
+                              }`} 
+                            />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {selectedCamera.alerts.length > 0 && (
+                        <div>
+                          <div className="text-slate-400 text-sm mb-2">Recent Alerts</div>
+                          <div className="space-y-2 max-h-32 overflow-y-auto">
+                            {selectedCamera.alerts.map((alert, idx) => (
+                              <div key={idx} className="flex items-start gap-2 text-sm">
+                                <RiAlertLine className={`mt-0.5 flex-shrink-0 ${
+                                  alert.type === 'motion' ? 'text-yellow-400' :
+                                  alert.type === 'person' ? 'text-blue-400' :
+                                  alert.type === 'vehicle' ? 'text-green-400' :
+                                  'text-red-400'
+                                }`} />
+                                <div>
+                                  <div className="text-white">{alert.message}</div>
+                                  <div className="text-slate-500 text-xs">{alert.time}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                
-                <div className="flex items-center space-x-4">
-                  <span className="text-slate-400 text-sm">Page 1 of 1</span>
-                  <div className="flex space-x-2">
-                    <button 
-                      className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm"
-                      onClick={() => {
-                        const newState = !cctvRecordingAll;
-                        setCctvRecordingAll(newState);
-                        setCctvCameras(prev => prev.map(cam => ({ ...cam, isRecording: newState })));
-                      }}
-                    >
-                      {cctvRecordingAll ? 'Stop All Recording' : 'Start All Recording'}
-                    </button>
-                    <button className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm">
-                      Export
-                    </button>
+              )}
+
+              {/* Chart/Analytics Panel for Selected Sensor */}
+              {selectedSensor && activeTab === 'iot' && (
+                <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                  <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                    <RiBarChartBoxLine className="mr-2 text-blue-400" />
+                    Live Data
+                  </h3>
+                  <div className="h-48">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={getSensorTimeSeriesData(selectedSensor.type).time.map((time, index) => ({
+                          time,
+                          value: getSensorTimeSeriesData(selectedSensor.type).value[index]
+                        }))}
+                        margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                        <XAxis dataKey="time" stroke="#94a3b8" fontSize={12} />
+                        <YAxis stroke="#94a3b8" fontSize={12} />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#1e293b', 
+                            borderColor: '#334155',
+                            color: '#f8fafc',
+                            borderRadius: '8px'
+                          }} 
+                        />
+                        <RechartsLine 
+                          type="monotone" 
+                          dataKey="value" 
+                          stroke={getSensorChartColor(selectedSensor.type)} 
+                          strokeWidth={2}
+                          dot={{ r: 3 }}
+                          activeDot={{ r: 5 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
-              </div>
-            </div>
-          ) : (
-            // Show the 3D model as the default view instead of "No Sensor Selected"
-            <div className="iot-welcome-message bg-slate-800/50 border border-slate-700 rounded-xl p-6 mb-6">
-              <h2 className="text-xl font-bold text-white mb-3">Digital Twin Dashboard</h2>
-              <p className="text-slate-300 mb-4">
-                Welcome to your building's digital twin. Select a sensor from the list to view detailed information and control your building systems.
-              </p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className="bg-indigo-900/30 rounded-lg border border-indigo-800/50 p-4">
-                  <div className="flex items-center mb-2">
-                    <RiSensorLine className="text-indigo-400 text-xl mr-2" />
-                    <h3 className="text-white font-medium">Real-Time Monitoring</h3>
-                  </div>
-                  <p className="text-slate-300 text-sm">
-                    Monitor IoT sensors in real-time and visualize their data with interactive charts.
-                  </p>
-                </div>
-                
-                <div className="bg-indigo-900/30 rounded-lg border border-indigo-800/50 p-4">
-                  <div className="flex items-center mb-2">
-                    <RiBarChartBoxLine className="text-indigo-400 text-xl mr-2" />
-                    <h3 className="text-white font-medium">Advanced Analytics</h3>
-                  </div>
-                  <p className="text-slate-300 text-sm">
-                    Analyze building performance and find opportunities for optimization and energy savings.
-                  </p>
-                </div>
-                
-                <div className="bg-indigo-900/30 rounded-lg border border-indigo-800/50 p-4">
-                  <div className="flex items-center mb-2">
-                    <RiRemoteControlLine className="text-indigo-400 text-xl mr-2" />
-                    <h3 className="text-white font-medium">Smart Controls</h3>
-                  </div>
-                  <p className="text-slate-300 text-sm">
-                    Control HVAC, lighting, and security systems with precision from a centralized dashboard.
-                  </p>
-                </div>
-              </div>
-              
-              <div className="text-center">
-                <p className="text-slate-400 text-sm mb-1">Select a sensor from the list to get started →</p>
-              </div>
-            </div>
-          )}
+              )}
+            </motion.div>
+          </div>
         </div>
       </div>
     </div>
