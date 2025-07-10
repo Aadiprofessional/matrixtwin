@@ -55,7 +55,13 @@ import {
   RiMistLine,
   RiSettings3Line,
   RiFullscreenExitLine,
-  RiDashboardLine
+  RiDashboardLine,
+  RiCalendarEventLine,
+  RiSearchLine,
+  RiPieChartLine,
+  RiFileTextLine,
+  RiCheckLine,
+  RiExpandDiagonalLine
 } from 'react-icons/ri';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
@@ -378,6 +384,134 @@ const mockSensors: Sensor[] = [
       { message: 'Battery level low', time: '1 hour ago' }
     ]
   },
+  {
+    id: 'temp-001',
+    name: 'Temperature Sensor 1',
+    type: 'temperature' as SensorType,
+    location: 'Conference Room',
+    floor: 1,
+    value: 22.5,
+    unit: '°C',
+    status: 'online' as SensorStatus,
+    lastUpdated: '2025-07-08T14:23:00Z',
+    battery: 87,
+    recentActivity: [
+      { message: 'Temperature reading', time: '3 minutes ago' },
+      { message: 'Normal operation', time: '15 minutes ago' }
+    ]
+  },
+  {
+    id: 'temp-002',
+    name: 'Temperature Sensor 2',
+    type: 'temperature' as SensorType,
+    location: 'Meeting Room B',
+    floor: 12,
+    value: 23.8,
+    unit: '°C',
+    status: 'online' as SensorStatus,
+    lastUpdated: '2025-07-08T14:21:00Z',
+    battery: 92,
+    recentActivity: [
+      { message: 'Temperature reading', time: '5 minutes ago' },
+      { message: 'Calibration check', time: '2 hours ago' }
+    ]
+  },
+  {
+    id: 'hum-001',
+    name: 'Humidity Sensor 1',
+    type: 'humidity' as SensorType,
+    location: 'Server Room',
+    floor: 10,
+    value: 45.2,
+    unit: '%',
+    status: 'online' as SensorStatus,
+    lastUpdated: '2025-07-08T14:20:00Z',
+    battery: 78,
+    recentActivity: [
+      { message: 'Humidity reading', time: '4 minutes ago' },
+      { message: 'Normal operation', time: '30 minutes ago' }
+    ]
+  },
+  {
+    id: 'occ-001',
+    name: 'Occupancy Sensor 1',
+    type: 'occupancy' as SensorType,
+    location: 'Conference Hall',
+    floor: 15,
+    value: 12,
+    unit: 'people',
+    status: 'warning' as SensorStatus,
+    lastUpdated: '2025-07-08T14:19:00Z',
+    battery: 65,
+    recentActivity: [
+      { message: 'Occupancy reading', time: '6 minutes ago' },
+      { message: 'High occupancy alert', time: '45 minutes ago' }
+    ]
+  },
+  {
+    id: 'energy-001',
+    name: 'Energy Monitor 1',
+    type: 'energy' as SensorType,
+    location: 'Main Distribution',
+    floor: 1,
+    value: 1247.5,
+    unit: 'kWh',
+    status: 'online' as SensorStatus,
+    lastUpdated: '2025-07-08T14:18:00Z',
+    battery: 95,
+    recentActivity: [
+      { message: 'Energy reading', time: '7 minutes ago' },
+      { message: 'Peak usage detected', time: '1 hour ago' }
+    ]
+  },
+  {
+    id: 'water-001',
+    name: 'Water Flow Sensor',
+    type: 'water' as SensorType,
+    location: 'Utility Room',
+    floor: 2,
+    value: 15.8,
+    unit: 'L/min',
+    status: 'online' as SensorStatus,
+    lastUpdated: '2025-07-08T14:17:00Z',
+    battery: 83,
+    recentActivity: [
+      { message: 'Water flow reading', time: '8 minutes ago' },
+      { message: 'Normal flow rate', time: '1 hour ago' }
+    ]
+  },
+  {
+    id: 'door-001',
+    name: 'Smart Door Sensor',
+    type: 'door' as SensorType,
+    location: 'Main Entrance',
+    floor: 1,
+    value: 1,
+    unit: 'open',
+    status: 'online' as SensorStatus,
+    lastUpdated: '2025-07-08T14:16:00Z',
+    battery: 71,
+    recentActivity: [
+      { message: 'Door status reading', time: '9 minutes ago' },
+      { message: 'Access granted', time: '25 minutes ago' }
+    ]
+  },
+  {
+    id: 'air-001',
+    name: 'Air Quality Monitor',
+    type: 'air' as SensorType,
+    location: 'Lobby',
+    floor: 1,
+    value: 42,
+    unit: 'AQI',
+    status: 'online' as SensorStatus,
+    lastUpdated: '2025-07-08T14:15:00Z',
+    battery: 88,
+    recentActivity: [
+      { message: 'Air quality reading', time: '10 minutes ago' },
+      { message: 'Good air quality', time: '2 hours ago' }
+    ]
+  },
 ];
 
 // Mock CCTV data
@@ -482,178 +616,121 @@ const mockCCTVCameras: CCTVCamera[] = [
 // Add mock smart watch data
 const mockSmartWatches: SmartWatch[] = [
   {
-    id: 'watch001',
+    id: 'watch-001',
     name: 'Apple Watch Series 9',
-    user: 'John Doe',
+    user: 'John Smith',
     batteryLevel: 78,
     heartRate: 72,
-    steps: 8420,
+    steps: 8543,
     temperature: 36.5,
-    location: 'Office Building',
-    lastSync: '2 minutes ago',
-    status: 'connected',
-    notifications: [
-      { type: 'health', message: 'Heart rate spike detected', time: '5 minutes ago' },
-      { type: 'activity', message: 'Daily step goal reached', time: '1 hour ago' }
-    ]
-  },
-  {
-    id: 'watch002',
-    name: 'Samsung Galaxy Watch',
-    user: 'Jane Smith',
-    batteryLevel: 45,
-    heartRate: 68,
-    steps: 6200,
-    temperature: 36.2,
-    location: 'Conference Room',
+    location: 'Floor 12',
     lastSync: '1 minute ago',
     status: 'connected',
     notifications: [
-      { type: 'meeting', message: 'Meeting reminder in 15 mins', time: '10 minutes ago' }
+      { type: 'health', message: 'Heart rate spike detected', time: '2 minutes ago' },
+      { type: 'activity', message: 'Daily step goal achieved', time: '1 hour ago' }
     ]
   },
   {
-    id: 'watch003',
-    name: 'Fitbit Sense',
-    user: 'Mike Johnson',
-    batteryLevel: 12,
-    heartRate: 0,
-    steps: 0,
-    temperature: 0,
-    location: 'Unknown',
-    lastSync: '2 hours ago',
-    status: 'charging',
-    notifications: []
+    id: 'watch-002',
+    name: 'Samsung Galaxy Watch',
+    user: 'Sarah Johnson',
+    batteryLevel: 45,
+    heartRate: 68,
+    steps: 6234,
+    temperature: 36.2,
+    location: 'Floor 8',
+    lastSync: '3 minutes ago',
+    status: 'connected',
+    notifications: [
+      { type: 'calendar', message: 'Meeting in 10 minutes', time: '4 minutes ago' },
+      { type: 'meeting', message: 'Meeting reminder in 15 mins', time: '6 minutes ago' }
+    ]
   }
 ];
 
 // Add mock toxic gas sensor data
 const mockToxicGasSensors: ToxicGasSensor[] = [
   {
-    id: 'gas001',
-    name: 'CO Monitor 1',
-    type: 'co',
-    location: 'Parking Garage',
-    floor: 0,
-    value: 15,
-    unit: 'ppm',
-    threshold: 50,
-    status: 'safe',
-    lastUpdated: '2025-04-30T19:25:00',
-    battery: 85,
-    calibrationDate: '2025-04-01',
-    alerts: []
-  },
-  {
-    id: 'gas002',
-    name: 'CO2 Monitor 1',
+    id: 'gas-001',
+    name: 'CO2 Monitor',
     type: 'co2',
-    location: 'Main Office',
-    floor: 1,
+    location: 'Conference Room A',
+    floor: 12,
     value: 850,
     unit: 'ppm',
     threshold: 1000,
-    status: 'warning',
-    lastUpdated: '2025-04-30T19:24:30',
+    status: 'safe',
+    lastUpdated: '2025-07-08T14:22:00Z',
     battery: 92,
-    calibrationDate: '2025-04-01',
+    calibrationDate: '2025-06-15',
     alerts: [
-      { level: 'warning', message: 'CO2 levels approaching threshold', time: '10 minutes ago' }
+      { level: 'warning', message: 'CO2 levels approaching threshold', time: '45 minutes ago' }
     ]
   },
   {
-    id: 'gas003',
-    name: 'NO2 Monitor 1',
+    id: 'gas-002',
+    name: 'NO2 Sensor',
     type: 'no2',
     location: 'Laboratory',
-    floor: 2,
+    floor: 8,
     value: 0.08,
     unit: 'ppm',
     threshold: 0.1,
     status: 'warning',
-    lastUpdated: '2025-04-30T19:23:45',
+    lastUpdated: '2025-07-08T14:21:00Z',
     battery: 78,
-    calibrationDate: '2025-04-01',
+    calibrationDate: '2025-06-20',
     alerts: [
-      { level: 'warning', message: 'NO2 concentration elevated', time: '5 minutes ago' }
+      { level: 'warning', message: 'NO2 concentration elevated', time: '20 minutes ago' }
     ]
   },
   {
-    id: 'gas004',
-    name: 'H2S Monitor 1',
-    type: 'h2s',
-    location: 'Waste Treatment',
+    id: 'gas-003',
+    name: 'CO Monitor',
+    type: 'co',
+    location: 'Parking Garage',
     floor: -1,
-    value: 2.5,
+    value: 12,
+    unit: 'ppm',
+    threshold: 30,
+    status: 'safe',
+    lastUpdated: '2025-07-08T14:20:00Z',
+    battery: 85,
+    calibrationDate: '2025-06-10',
+    alerts: []
+  },
+  {
+    id: 'gas-004',
+    name: 'H2S Detector',
+    type: 'h2s',
+    location: 'Utility Room',
+    floor: 2,
+    value: 0.5,
     unit: 'ppm',
     threshold: 10,
     status: 'safe',
-    lastUpdated: '2025-04-30T19:26:15',
-    battery: 88,
-    calibrationDate: '2025-04-01',
+    lastUpdated: '2025-07-08T14:19:00Z',
+    battery: 67,
+    calibrationDate: '2025-06-25',
     alerts: []
   },
   {
-    id: 'gas005',
-    name: 'CH4 Monitor 1',
-    type: 'ch4',
-    location: 'Boiler Room',
-    floor: -1,
-    value: 125,
-    unit: 'ppm',
-    threshold: 1000,
-    status: 'safe',
-    lastUpdated: '2025-04-30T19:25:50',
-    battery: 95,
-    calibrationDate: '2025-04-01',
-    alerts: []
-  },
-  {
-    id: 'gas006',
-    name: 'SO2 Monitor 1',
+    id: 'gas-005',
+    name: 'SO2 Monitor',
     type: 'so2',
     location: 'Chemical Storage',
-    floor: 1,
+    floor: 3,
     value: 0.15,
     unit: 'ppm',
-    threshold: 0.25,
+    threshold: 0.5,
     status: 'warning',
-    lastUpdated: '2025-04-30T19:22:30',
-    battery: 72,
-    calibrationDate: '2025-04-01',
+    lastUpdated: '2025-07-08T14:18:00Z',
+    battery: 71,
+    calibrationDate: '2025-06-05',
     alerts: [
-      { level: 'warning', message: 'SO2 levels increasing', time: '15 minutes ago' }
+      { level: 'warning', message: 'SO2 levels increasing', time: '30 minutes ago' }
     ]
-  },
-  {
-    id: 'gas007',
-    name: 'O3 Monitor 1',
-    type: 'o3',
-    location: 'Server Room',
-    floor: 2,
-    value: 0.05,
-    unit: 'ppm',
-    threshold: 0.1,
-    status: 'safe',
-    lastUpdated: '2025-04-30T19:24:00',
-    battery: 90,
-    calibrationDate: '2025-04-01',
-    alerts: []
-  },
-  {
-    id: 'gas008',
-    name: 'NH3 Monitor 1',
-    type: 'nh3',
-    location: 'Cleaning Storage',
-    floor: 0,
-    value: 8,
-    unit: 'ppm',
-    threshold: 25,
-    status: 'safe',
-    lastUpdated: '2025-04-30T19:26:45',
-    battery: 83,
-    calibrationDate: '2025-04-01',
-    alerts: []
   }
 ];
 
@@ -708,12 +785,21 @@ const ModelViewerPage: React.FC = () => {
   const [leftPanelWidth, setLeftPanelWidth] = useState(350);
   const [rightPanelWidth, setRightPanelWidth] = useState(400);
   const [isResizing, setIsResizing] = useState<'left' | 'right' | null>(null);
-  const [activeLeftTab, setActiveLeftTab] = useState('Building Analytics');
-  const [activeRightTab, setActiveRightTab] = useState('smartlock');
+  const [activeLeftTab, setActiveLeftTab] = useState('All Events');
+  const [activeRightTab, setActiveRightTab] = useState('overview');
+  const [timelineFilter, setTimelineFilter] = useState('Today');
+  
+  // New filter states for All Events
+  const [eventTypeFilter, setEventTypeFilter] = useState('All');
+  const [priorityFilter, setPriorityFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [buildingFilter, setBuildingFilter] = useState('All');
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
   
   // Panel visibility state
   const [leftPanelVisible, setLeftPanelVisible] = useState(true);
   const [rightPanelVisible, setRightPanelVisible] = useState(true);
+  const [assetPanelVisible, setAssetPanelVisible] = useState(false);
   
   // Screen width calculations
   const screenWidth = window.innerWidth;
@@ -733,6 +819,16 @@ const ModelViewerPage: React.FC = () => {
   const [selectedWatch, setSelectedWatch] = useState<SmartWatch | null>(null);
   const [fullscreenCamera, setFullscreenCamera] = useState<CCTVCamera | null>(null);
   const [toxicGasSensors, setToxicGasSensors] = useState<ToxicGasSensor[]>(mockToxicGasSensors);
+
+  // Notification and modal state
+  const [notifications, setNotifications] = useState([
+    { id: 1, type: 'alarm', message: 'HVAC System Alert - Temperature threshold exceeded', time: '3 min ago', read: false },
+    { id: 2, type: 'warning', message: 'Sensor battery low - Floor 15', time: '8 min ago', read: false },
+    { id: 3, type: 'info', message: 'Maintenance scheduled for tomorrow', time: '1 hour ago', read: true }
+  ]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [showFullEventPanel, setShowFullEventPanel] = useState(false);
 
   // Clock update
   useEffect(() => {
@@ -1465,81 +1561,444 @@ const ModelViewerPage: React.FC = () => {
     return () => clearInterval(weatherInterval);
   }, []);
 
+  // Function to get all combined events data
+  const getAllCombinedEvents = () => {
+    const allEvents = [];
+    
+    // Add Alarms
+    const alarms = [
+      {
+        id: 'alarm-001',
+        title: 'R/F ES1 BMS:ES1_BM_RM19_VENT_TRI',
+        location: 'ES1.BMS.URGENT',
+        time: '2025-07-08T11:14:00Z',
+        status: 'NOT ACKNOWLEDGED',
+        priority: 'Urgent',
+        building: 'E2',
+        description: 'HVAC ventilation system triggered alarm',
+        eventId: 'ES2_BMS:ES2_BM_RM19_VENT_TRI_17518',
+        type: 'Alarm',
+        category: 'Alarms'
+      },
+      {
+        id: 'alarm-002',
+        title: 'CH_BMS_NEW:CH_BMS_B3F_FlushTank_Low_Alarm',
+        location: 'CH.BMS.URGENT',
+        time: '2025-07-08T11:03:00Z',
+        status: 'CLOSED',
+        priority: 'Urgent',
+        building: 'CH',
+        description: 'Flush tank water level critically low',
+        eventId: 'CH_BMS_NEW:CH_BMS_B3F_FlushTank_Low_Alarm_175185743',
+        type: 'Alarm',
+        category: 'Alarms'
+      },
+      {
+        id: 'alarm-003',
+        title: 'ES3_BMS:NiagaraNetwork',
+        location: 'ES3.DDC.BF_01_05',
+        time: '2025-07-08T11:02:00Z',
+        status: 'CLOSED',
+        priority: 'Urgent',
+        building: 'E3',
+        description: 'Network connectivity issue detected',
+        eventId: 'ES3_BMS:NiagaraNetwork_ES3_DDC_BF_01_05_175185732',
+        type: 'Alarm',
+        category: 'Alarms'
+      }
+    ];
+    
+    // Add Predictive Analytics
+    const predictive = [
+      {
+        id: 'pred-001',
+        title: 'HVAC Filter Replacement Due',
+        location: 'Building A - AHU-01',
+        time: '2025-07-10T09:00:00Z',
+        status: 'PREDICTED',
+        priority: 'Medium',
+        building: 'A',
+        description: 'AI analysis indicates filter efficiency dropping below 85%',
+        eventId: 'PRED_HVAC_FILTER_AHU01_20250710',
+        type: 'Maintenance',
+        category: 'Predictive',
+        confidence: '94%'
+      },
+      {
+        id: 'pred-002',
+        title: 'Pump Bearing Wear Detection',
+        location: 'Building B - Pump Room',
+        time: '2025-07-12T14:30:00Z',
+        status: 'PREDICTED',
+        priority: 'High',
+        building: 'B',
+        description: 'Vibration analysis shows bearing wear pattern',
+        eventId: 'PRED_PUMP_BEARING_B01_20250712',
+        type: 'Critical',
+        category: 'Predictive',
+        confidence: '87%'
+      }
+    ];
+    
+    // Add Service Requests
+    const serviceRequests = [
+      {
+        id: 'sr-001',
+        title: 'Air Conditioning Repair',
+        location: 'Building A - Office 12F',
+        time: '2025-07-08T10:30:00Z',
+        status: 'IN PROGRESS',
+        priority: 'Medium',
+        building: 'A',
+        description: 'AC unit not cooling properly',
+        eventId: 'SR_AC_REPAIR_A12_20250708',
+        type: 'Maintenance',
+        category: 'Service Request',
+        requestor: 'John Doe',
+        assignee: 'HVAC Team'
+      },
+      {
+        id: 'sr-002',
+        title: 'Lighting Fixture Replacement',
+        location: 'Building B - Corridor 5F',
+        time: '2025-07-08T09:15:00Z',
+        status: 'PENDING',
+        priority: 'Low',
+        building: 'B',
+        description: 'LED light fixture flickering',
+        eventId: 'SR_LIGHT_REPLACE_B05_20250708',
+        type: 'Electrical',
+        category: 'Service Request',
+        requestor: 'Jane Smith',
+        assignee: 'Electrical Team'
+      }
+    ];
+    
+    // Add Work Orders
+    const workOrders = [
+      {
+        id: 'wo-001',
+        title: 'Monthly HVAC Maintenance',
+        location: 'Building A - Rooftop',
+        time: '2025-07-09T08:00:00Z',
+        status: 'SCHEDULED',
+        priority: 'Medium',
+        building: 'A',
+        description: 'Routine maintenance of HVAC systems',
+        eventId: 'WO_HVAC_MAINT_A_20250709',
+        type: 'Maintenance',
+        category: 'Work Order',
+        assignee: 'Maintenance Team',
+        estimatedDuration: '4 hours'
+      },
+      {
+        id: 'wo-002',
+        title: 'Fire Safety System Check',
+        location: 'Building C - All Floors',
+        time: '2025-07-10T07:00:00Z',
+        status: 'SCHEDULED',
+        priority: 'High',
+        building: 'C',
+        description: 'Quarterly fire safety system inspection',
+        eventId: 'WO_FIRE_CHECK_C_20250710',
+        type: 'Safety',
+        category: 'Work Order',
+        assignee: 'Safety Team',
+        estimatedDuration: '6 hours'
+      }
+    ];
+    
+    // Add Sensor Events
+    const sensorEvents = sensors.map(sensor => ({
+      id: `sensor-${sensor.id}`,
+      title: `${sensor.name} Status Update`,
+      location: `${sensor.location} - Floor ${sensor.floor}`,
+      time: sensor.lastUpdated,
+      status: sensor.status.toUpperCase(),
+      priority: sensor.status === 'critical' ? 'High' : sensor.status === 'warning' ? 'Medium' : 'Low',
+      building: sensor.location.split(' ')[0],
+      description: `${sensor.type} sensor reading: ${sensor.value} ${sensor.unit}`,
+      eventId: `SENSOR_${sensor.id}`,
+      type: 'Sensor',
+      category: 'Sensor Status',
+      value: sensor.value,
+      unit: sensor.unit
+    }));
+    
+    // Add CCTV Events
+    const cctvEvents = cctvCameras.map(camera => ({
+      id: `cctv-${camera.id}`,
+      title: `${camera.name} Status`,
+      location: `${camera.location} - Floor ${camera.floor}`,
+      time: camera.lastActivity,
+      status: camera.status.toUpperCase(),
+      priority: camera.status === 'offline' ? 'High' : 'Low',
+      building: camera.location.split(' ')[0],
+      description: `CCTV camera ${camera.status} - ${camera.resolution}`,
+      eventId: `CCTV_${camera.id}`,
+      type: 'Security',
+      category: 'Security Dashboard',
+      isRecording: camera.isRecording
+    }));
+    
+    // Add Gas Sensor Events
+    const gasEvents = toxicGasSensors.map(gas => ({
+      id: `gas-${gas.id}`,
+      title: `${gas.name} Gas Level Alert`,
+      location: `${gas.location} - Floor ${gas.floor}`,
+      time: gas.lastUpdated,
+      status: gas.status.toUpperCase(),
+      priority: gas.status === 'critical' || gas.status === 'danger' ? 'High' : gas.status === 'warning' ? 'Medium' : 'Low',
+      building: gas.location.split(' ')[0],
+      description: `${gas.type.toUpperCase()} level: ${gas.value} ${gas.unit}`,
+      eventId: `GAS_${gas.id}`,
+      type: 'Gas Monitor',
+      category: 'Environmental',
+      value: gas.value,
+      unit: gas.unit,
+      threshold: gas.threshold
+    }));
+    
+    // Add Smart Watch Events
+    const watchEvents = smartWatches.map(watch => ({
+      id: `watch-${watch.id}`,
+      title: `${watch.name} Health Data`,
+      location: watch.location,
+      time: watch.lastSync,
+      status: watch.status.toUpperCase(),
+      priority: watch.status === 'disconnected' ? 'Medium' : 'Low',
+      building: watch.location.split(' ')[0],
+      description: `Heart rate: ${watch.heartRate} BPM, Steps: ${watch.steps}`,
+      eventId: `WATCH_${watch.id}`,
+      type: 'Health',
+      category: 'Smart Watch',
+      heartRate: watch.heartRate,
+      steps: watch.steps,
+      batteryLevel: watch.batteryLevel
+    }));
+    
+    // Combine all events
+    allEvents.push(...alarms, ...predictive, ...serviceRequests, ...workOrders, ...sensorEvents, ...cctvEvents, ...gasEvents, ...watchEvents);
+    
+    // Apply filters
+    let filteredEvents = allEvents;
+    
+    if (eventTypeFilter !== 'All') {
+      filteredEvents = filteredEvents.filter(event => event.category === eventTypeFilter);
+    }
+    
+    if (priorityFilter !== 'All') {
+      filteredEvents = filteredEvents.filter(event => event.priority === priorityFilter);
+    }
+    
+    if (statusFilter !== 'All') {
+      filteredEvents = filteredEvents.filter(event => event.status === statusFilter);
+    }
+    
+    if (buildingFilter !== 'All') {
+      filteredEvents = filteredEvents.filter(event => event.building === buildingFilter);
+    }
+    
+    // Sort by time (newest first)
+    filteredEvents.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    
+    return filteredEvents;
+  };
+
   return (
     <div className="h-screen w-screen bg-gradient-to-br from-slate-900/20 via-slate-950/15 to-black/30 relative overflow-hidden">
-      {/* 3D Viewer - Full Screen Background */}
-      <div className="absolute inset-0 w-full h-full z-0">
-        {/* BIMFACE Viewer Container */}
-        <div 
-          ref={containerRef}
-          className="absolute inset-0 w-full h-full bg-slate-950"
-          style={{ pointerEvents: 'auto' }}
-        />
-        
-        {/* React Three Fiber Canvas - fallback/overlay */}
-        <div className="absolute inset-0 pointer-events-none">
-          <Canvas
-            camera={{ position: [5, 5, 5], fov: 60 }}
-            style={{ background: 'transparent', pointerEvents: 'none' }}
-          >
-            <ambientLight intensity={0.5} />
-            <directionalLight position={[10, 10, 5]} intensity={1} />
-            
-            {skyBoxEnabled && (
-              <Sky
-                distance={450000}
-                sunPosition={[0, 1, 0]}
-                inclination={0}
-                azimuth={0.25}
-              />
-            )}
-            
-            <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
-            
-            {/* Removed the 3D cube - now empty for better BIMFACE viewer access */}
-          </Canvas>
-        </div>
-
-        {/* Loading Overlay */}
-        {loading && (
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400 mx-auto mb-4"></div>
-              <div className="text-white text-lg font-medium">Loading 3D Model...</div>
-              <div className="text-white/60 text-sm mt-2">Please wait while we initialize the viewer</div>
-            </div>
-          </div>
-        )}
-        
-        {/* Error Overlay */}
-        {error && (
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="text-center max-w-md mx-auto p-6">
-              <div className="text-red-400 text-6xl mb-4">⚠️</div>
-              <div className="text-white text-lg font-medium mb-2">Unable to Load 3D Model</div>
-              <div className="text-white/60 text-sm mb-4">{error}</div>
-              <button 
-                onClick={() => {
-                  setError(null);
-                  setLoading(true);
-                  // Retry loading
-                  const { fileId, viewToken: urlViewToken } = getParamsFromUrl();
-                  if (fileId || urlViewToken) {
-                    window.location.reload();
-                  }
-                }}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                Retry
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* UI Layer - Above 3D Viewer */}
       <div className="absolute inset-0 z-10 pointer-events-none">
-        <div className="h-full flex">
+        {/* Top Header Bar - Solid Style */}
+        <div className="fixed top-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-xl border-b border-slate-600/30 h-12">
+          <div className="flex items-center justify-between px-4 h-full">
+            {/* Left Section - Back Button and Date/Time */}
+            <div className="flex items-center gap-4">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleBack}
+                className="flex items-center gap-2 bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg px-3 py-1.5 text-slate-100 hover:text-white transition-all shadow-lg backdrop-blur-sm pointer-events-auto"
+              >
+                <RiArrowGoBackLine className="text-sm" />
+                <span className="text-xs font-medium">Back</span>
+              </motion.button>
+              
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-lg flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-xs">UAT</span>
+                </div>
+                <div>
+                  <div className="text-slate-100 font-bold text-xs">
+                    {currentTime.toLocaleDateString('en-US', { 
+                      day: '2-digit', 
+                      month: 'short', 
+                      year: 'numeric',
+                      weekday: 'short' 
+                    })} {currentTime.toLocaleTimeString('en-US', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </div>
+                  <div className="text-slate-300 text-xs">28°C | 72%</div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Center Section - Connection Status */}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-green-300 text-xs font-medium">PQM</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-green-300 text-xs font-medium">Chiller</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-green-300 text-xs font-medium">AHU</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-green-300 text-xs font-medium">AFA</span>
+                  </div>
+            </div>
+            
+            {/* Right Section - System Controls */}
+            <div className="flex items-center gap-3">
+              {/* Notifications */}
+              <div className="relative">
+                <button 
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="relative p-1.5 text-slate-400 hover:text-white transition-colors pointer-events-auto"
+                >
+                  <RiBellLine className="w-4 h-4" />
+                  {notifications.filter(n => !n.read).length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-xs flex items-center justify-center text-white font-bold">
+                      {notifications.filter(n => !n.read).length}
+                    </span>
+                  )}
+                </button>
+                
+                {/* Notification Dropdown */}
+                <AnimatePresence>
+                  {showNotifications && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute top-full right-0 mt-2 w-80 bg-slate-900/95 backdrop-blur-xl rounded-lg border border-slate-600/30 shadow-2xl z-50"
+                    >
+                      <div className="p-3 border-b border-slate-600/30">
+                        <h3 className="text-white font-medium text-sm">Notifications</h3>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto">
+                        {[
+                          {
+                            id: 1,
+                            type: 'R/F ES1',
+                            title: 'BMS:ES1_BM_RM19_VENT_TRI',
+                            location: 'ES1.BMS.URGENT',
+                            description: 'HVAC ventilation system triggered alarm',
+                            time: '3 min ago',
+                            status: 'NOT ACKNOWLEDGED',
+                            priority: 'urgent'
+                          },
+                          {
+                            id: 2,
+                            type: 'CH_BMS_NEW',
+                            title: 'CH_BMS_B3F_FlushTank_Low',
+                            location: 'CH.BMS.URGENT',
+                            description: 'Flush tank water level critically low',
+                            time: '8 min ago',
+                            status: 'NOT ACKNOWLEDGED',
+                            priority: 'urgent'
+                          },
+                          {
+                            id: 3,
+                            type: 'ES3_BMS',
+                            title: 'NiagaraNetwork',
+                            location: 'ES3.DDC.BF_01_05',
+                            description: 'Network connectivity issue detected',
+                            time: '1 hour ago',
+                            status: 'ACKNOWLEDGED',
+                            priority: 'warning'
+                          }
+                        ].map((notification) => (
+                          <div 
+                            key={notification.id}
+                            className="p-3 border-b border-slate-600/20 hover:bg-slate-800/30 cursor-pointer transition-colors"
+                            onClick={() => {
+                              setSelectedEvent(notification);
+                              setShowNotifications(false);
+                            }}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`w-2 h-2 rounded-full mt-1 ${notification.priority === 'urgent' ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-orange-300 text-xs font-medium">{notification.type}</span>
+                                  <span className="text-slate-400 text-xs">{notification.time}</span>
+                                </div>
+                                <div className="text-white text-sm font-medium truncate">{notification.title}</div>
+                                <div className="text-slate-400 text-xs">{notification.location}</div>
+                                <div className="text-slate-300 text-xs mt-1">{notification.description}</div>
+                                <div className="mt-2">
+                                  <span className={`inline-block px-2 py-1 rounded text-xs ${
+                                    notification.status === 'NOT ACKNOWLEDGED' 
+                                      ? 'bg-red-600 text-white' 
+                                      : 'bg-gray-600 text-gray-300'
+                                  }`}>
+                                    {notification.status}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              
+              {/* System Dropdown */}
+              <select className="bg-slate-700/30 border border-slate-500/20 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500/50 text-sm">
+                <option>System</option>
+                <option>HVAC</option>
+                <option>Lighting</option>
+                <option>Security</option>
+              </select>
+              
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2">
+                <button className="bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all">
+                  <RiSettings3Line className="text-lg" />
+                </button>
+                <button className="bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all">
+                  <RiRefreshLine className="text-lg" />
+                </button>
+                <button className="bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all">
+                  <RiFullscreenLine className="text-lg" />
+                </button>
+                <button className="bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all">
+                  <RiMoreLine className="text-lg" />
+                </button>
+              </div>
+              
+              {/* User Profile */}
+              <div className="flex items-center gap-2 bg-slate-700/30 border border-slate-500/20 rounded-lg px-3 py-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-xs">C</span>
+                </div>
+                <span className="text-slate-100 text-sm font-medium">Admin</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="h-full flex" style={{ top: '48px', position: 'absolute', left: 0, right: 0, bottom: 0 }}>
           {/* Left Panel */}
       <AnimatePresence>
             {leftPanelVisible && (
@@ -1551,76 +2010,6 @@ const ModelViewerPage: React.FC = () => {
                 className="relative bg-slate-900/10 backdrop-blur-xl border-r border-slate-600/20 shadow-2xl flex flex-col z-20 pointer-events-auto"
                 style={{ width: leftPanelWidth }}
               >
-                {/* Context Area - Above Left Panel */}
-                <div className="bg-slate-800/10 backdrop-blur-xl border-b border-slate-600/20 p-4 flex-shrink-0">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={handleBack}
-                        className="flex items-center gap-2 bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg px-3 py-2 text-slate-100 hover:text-white transition-all shadow-lg backdrop-blur-sm"
-                      >
-                        <RiArrowGoBackLine className="text-lg" />
-                        <span className="text-sm font-medium">Back</span>
-                      </motion.button>
-                      
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
-                          <span className="text-white font-bold text-sm">MT</span>
-                        </div>
-                        <div>
-                          <h1 className="text-slate-100 font-bold text-lg">MatrixTwin</h1>
-                          <p className="text-slate-200 text-xs">Digital Twin Platform</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="text-left">
-                      <div className="text-slate-100 font-bold text-xl">
-                        {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                      <div className="text-slate-200 text-sm">
-                        {currentTime.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      {/* Weather */}
-                      <div className="flex items-center gap-2 bg-slate-700/30 backdrop-blur-sm rounded-lg px-3 py-2 border border-slate-500/20 shadow-lg">
-                        {getWeatherIcon('01d')}
-                        <div>
-                          <div className="text-slate-100 font-bold text-sm">
-                            {weatherData.current?.temperature?.[0]?.value || 24}°C
-                          </div>
-                          <div className="text-slate-200 text-xs">Hong Kong</div>
-                        </div>
-                      </div>
-                      
-                      {/* Sky Toggle */}
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={toggleSkyBox}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all shadow-lg backdrop-blur-sm ${
-                          skyBoxEnabled 
-                            ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white' 
-                            : 'bg-slate-700/30 text-slate-100 border border-slate-500/20 hover:bg-slate-600/40'
-                        }`}
-                      >
-                        {skyBoxEnabled ? (
-                          <RiSunLine className="text-lg" />
-                        ) : (
-                          <RiMoonLine className="text-lg" />
-                        )}
-                        <span className="text-sm">{skyBoxEnabled ? 'Day' : 'Night'}</span>
-                      </motion.button>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Resize Handle */}
                 <div
                   className="absolute top-0 right-0 w-1 h-full bg-slate-600/50 hover:bg-blue-500/70 cursor-col-resize transition-colors z-10"
@@ -1629,8 +2018,19 @@ const ModelViewerPage: React.FC = () => {
                 
                 {/* Panel Header */}
                 <div className="p-4 border-b border-slate-600/20 flex-shrink-0 bg-slate-800/10 backdrop-blur-md">
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-slate-100 font-bold text-lg">Event Center</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <RiCalendarEventLine className="text-blue-400 text-xl" />
+                      <h2 className="text-slate-100 font-bold text-lg">Event Panel</h2>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => setShowFullEventPanel(true)}
+                        className="text-slate-400 hover:text-blue-400 transition-colors"
+                        title="Open Full Event Analysis"
+                      >
+                        <RiExpandDiagonalLine className="text-lg" />
+                      </button>
                     <button
                       onClick={() => setLeftPanelVisible(false)}
                       className="text-slate-200 hover:text-white transition-colors"
@@ -1638,8 +2038,54 @@ const ModelViewerPage: React.FC = () => {
                       <RiCloseLine className="text-xl" />
                     </button>
                   </div>
+                  </div>
+                  
+                  {/* Event Summary Stats */}
+                  <div className="grid grid-cols-4 gap-2 mb-4">
+                    <div className="bg-slate-800/30 backdrop-blur-sm rounded-lg p-2 border border-slate-600/20">
+                      <div className="text-slate-100 font-bold text-lg">128</div>
+                      <div className="text-slate-300 text-xs">All</div>
+                    </div>
+                    <div className="bg-red-900/30 backdrop-blur-sm rounded-lg p-2 border border-red-500/20">
+                      <div className="text-red-400 font-bold text-lg">14</div>
+                      <div className="text-red-300 text-xs">Alarm</div>
+                    </div>
+                    <div className="bg-orange-900/30 backdrop-blur-sm rounded-lg p-2 border border-orange-500/20">
+                      <div className="text-orange-400 font-bold text-lg">23</div>
+                      <div className="text-orange-300 text-xs">Warning</div>
+                    </div>
+                    <div className="bg-blue-900/30 backdrop-blur-sm rounded-lg p-2 border border-blue-500/20">
+                      <div className="text-blue-400 font-bold text-lg">91</div>
+                      <div className="text-blue-300 text-xs">Info</div>
+                    </div>
+                  </div>
+                  
+                  {/* Timeline Filter */}
+                  <div className="mb-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <RiTimeLine className="text-slate-400" />
+                      <span className="text-slate-200 text-sm font-medium">Timeline Filter</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {['Today', 'Week', 'Month'].map((period) => (
+                        <button 
+                          key={period}
+                          onClick={() => setTimelineFilter(period)}
+                          className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                            timelineFilter === period
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-slate-700/30 text-slate-100 hover:bg-slate-600/40 border border-slate-500/20'
+                          }`}
+                        >
+                          {period}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Event Type Tabs */}
                   <div className="flex gap-2 flex-wrap">
-                    {['All', 'Building Analytics', 'Environmental Controls', 'Sensor Status', 'Security Dashboard'].map((tab) => (
+                    {['All Events', 'Alarms', 'Predictive', 'Service Request', 'Work Order', 'Sensor Status', 'Security Dashboard', 'Environmental Controls', 'Building Analytics'].map((tab) => (
                       <button 
                         key={tab}
                         onClick={() => setActiveLeftTab(tab)}
@@ -1655,202 +2101,229 @@ const ModelViewerPage: React.FC = () => {
                   </div>
                 </div>
                 
-                {/* Content */}
-                <div className="p-4 h-full overflow-y-auto bg-slate-900/10 backdrop-blur-md">
-                  {activeLeftTab === 'All' && (
+                {/* Content - Made scrollable */}
+                <div className="flex-1 overflow-y-auto bg-slate-900/10 backdrop-blur-md">
+                  <div className="p-4">
+                    {activeLeftTab === 'All Events' && (
                     <div className="space-y-4">
-                      {/* Comprehensive Dashboard */}
+                        {/* Comprehensive Filter Section */}
                       <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
                         <h3 className="text-slate-100 font-medium mb-3 flex items-center gap-2">
-                          <RiDashboardLine className="text-cyan-400" />
-                          Comprehensive Analytics
+                            <RiFilterLine className="text-blue-400" />
+                            Event Filters
                         </h3>
+                          
+                          {/* Filter Controls */}
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-gradient-to-r from-blue-600/80 to-cyan-600/80 rounded-xl p-3 shadow-lg backdrop-blur-sm">
-                            <div className="text-blue-100 text-sm">Total Sensors</div>
-                            <div className="text-white font-bold text-xl">{sensors.length + toxicGasSensors.length}</div>
-                            <div className="text-blue-200 text-xs">Active Monitoring</div>
+                            {/* Event Type Filter */}
+                            <div>
+                              <label className="text-slate-300 text-xs mb-1 block">Event Type</label>
+                              <select
+                                value={eventTypeFilter}
+                                onChange={(e) => setEventTypeFilter(e.target.value)}
+                                className="w-full bg-slate-700/40 border border-slate-600/30 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-blue-500/50"
+                              >
+                                <option value="All">All Types</option>
+                                <option value="Alarms">Alarms</option>
+                                <option value="Predictive">Predictive</option>
+                                <option value="Service Request">Service Request</option>
+                                <option value="Work Order">Work Order</option>
+                                <option value="Sensor Status">Sensor Status</option>
+                                <option value="Security Dashboard">Security</option>
+                                <option value="Environmental">Environmental</option>
+                                <option value="Smart Watch">Smart Watch</option>
+                              </select>
                           </div>
-                          <div className="bg-gradient-to-r from-green-600/80 to-emerald-600/80 rounded-xl p-3 shadow-lg backdrop-blur-sm">
-                            <div className="text-green-100 text-sm">System Health</div>
-                            <div className="text-white font-bold text-xl">
-                              {Math.round(((sensors.filter(s => s.status === 'online').length + toxicGasSensors.filter(g => g.status === 'safe').length) / (sensors.length + toxicGasSensors.length)) * 100)}%
+                            
+                            {/* Priority Filter */}
+                            <div>
+                              <label className="text-slate-300 text-xs mb-1 block">Priority</label>
+                              <select
+                                value={priorityFilter}
+                                onChange={(e) => setPriorityFilter(e.target.value)}
+                                className="w-full bg-slate-700/40 border border-slate-600/30 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-blue-500/50"
+                              >
+                                <option value="All">All Priorities</option>
+                                <option value="Urgent">Urgent</option>
+                                <option value="High">High</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Low">Low</option>
+                              </select>
                             </div>
-                            <div className="text-green-200 text-xs">Overall Status</div>
+                            
+                            {/* Status Filter */}
+                            <div>
+                              <label className="text-slate-300 text-xs mb-1 block">Status</label>
+                              <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="w-full bg-slate-700/40 border border-slate-600/30 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-blue-500/50"
+                              >
+                                <option value="All">All Status</option>
+                                <option value="NOT ACKNOWLEDGED">Not Acknowledged</option>
+                                <option value="IN PROGRESS">In Progress</option>
+                                <option value="PENDING">Pending</option>
+                                <option value="SCHEDULED">Scheduled</option>
+                                <option value="PREDICTED">Predicted</option>
+                                <option value="CLOSED">Closed</option>
+                                <option value="COMPLETED">Completed</option>
+                                <option value="ONLINE">Online</option>
+                                <option value="OFFLINE">Offline</option>
+                              </select>
                           </div>
-                          <div className="bg-gradient-to-r from-purple-600/80 to-pink-600/80 rounded-xl p-3 shadow-lg backdrop-blur-sm">
-                            <div className="text-purple-100 text-sm">CCTV Cameras</div>
-                            <div className="text-white font-bold text-xl">{cctvCameras.length}</div>
-                            <div className="text-purple-200 text-xs">Security Coverage</div>
+                            
+                            {/* Building Filter */}
+                            <div>
+                              <label className="text-slate-300 text-xs mb-1 block">Building</label>
+                              <select
+                                value={buildingFilter}
+                                onChange={(e) => setBuildingFilter(e.target.value)}
+                                className="w-full bg-slate-700/40 border border-slate-600/30 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-blue-500/50"
+                              >
+                                <option value="All">All Buildings</option>
+                                <option value="A">Building A</option>
+                                <option value="B">Building B</option>
+                                <option value="C">Building C</option>
+                                <option value="E2">Building E2</option>
+                                <option value="E3">Building E3</option>
+                                <option value="CH">Building CH</option>
+                              </select>
                           </div>
-                          <div className="bg-gradient-to-r from-orange-600/80 to-red-600/80 rounded-xl p-3 shadow-lg backdrop-blur-sm">
-                            <div className="text-orange-100 text-sm">Gas Monitors</div>
-                            <div className="text-white font-bold text-xl">{toxicGasSensors.length}</div>
-                            <div className="text-orange-200 text-xs">Air Quality</div>
+                          </div>
+                          
+                          {/* Clear Filters Button */}
+                          <button
+                            onClick={() => {
+                              setEventTypeFilter('All');
+                              setPriorityFilter('All');
+                              setStatusFilter('All');
+                              setBuildingFilter('All');
+                            }}
+                            className="mt-3 px-4 py-2 bg-slate-600/50 hover:bg-slate-600/70 text-slate-100 rounded-lg text-sm transition-colors"
+                          >
+                            Clear All Filters
+                          </button>
+                      </div>
+
+                        {/* Events Summary Stats */}
+                      <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
+                          <h3 className="text-slate-100 font-medium mb-3 flex items-center gap-2">
+                            <RiDashboardLine className="text-cyan-400" />
+                            Events Overview
+                          </h3>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-gradient-to-r from-blue-600/80 to-cyan-600/80 rounded-xl p-3 shadow-lg backdrop-blur-sm">
+                              <div className="text-blue-100 text-sm">Total Events</div>
+                              <div className="text-white font-bold text-xl">{getAllCombinedEvents().length}</div>
+                              <div className="text-blue-200 text-xs">All Systems</div>
+                            </div>
+                            <div className="bg-gradient-to-r from-red-600/80 to-orange-600/80 rounded-xl p-3 shadow-lg backdrop-blur-sm">
+                              <div className="text-red-100 text-sm">Critical Events</div>
+                              <div className="text-white font-bold text-xl">
+                                {getAllCombinedEvents().filter(e => e.priority === 'Urgent' || e.priority === 'High').length}
+                          </div>
+                              <div className="text-red-200 text-xs">Needs Attention</div>
+                            </div>
+                            <div className="bg-gradient-to-r from-yellow-600/80 to-amber-600/80 rounded-xl p-3 shadow-lg backdrop-blur-sm">
+                              <div className="text-yellow-100 text-sm">Pending Actions</div>
+                              <div className="text-white font-bold text-xl">
+                                {getAllCombinedEvents().filter(e => e.status === 'NOT ACKNOWLEDGED' || e.status === 'PENDING' || e.status === 'IN PROGRESS').length}
+                          </div>
+                              <div className="text-yellow-200 text-xs">Active Items</div>
+                            </div>
+                            <div className="bg-gradient-to-r from-green-600/80 to-emerald-600/80 rounded-xl p-3 shadow-lg backdrop-blur-sm">
+                              <div className="text-green-100 text-sm">Resolved</div>
+                              <div className="text-white font-bold text-xl">
+                                {getAllCombinedEvents().filter(e => e.status === 'CLOSED' || e.status === 'COMPLETED').length}
+                          </div>
+                              <div className="text-green-200 text-xs">Completed</div>
                           </div>
                         </div>
                       </div>
 
-                      {/* All Systems Status */}
+                        {/* All Events List - Scrollable */}
                       <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
-                        <h3 className="text-slate-100 font-medium mb-3">All Systems Status</h3>
-                        <div className="grid grid-cols-4 gap-3">
-                          <div className="text-center">
-                            <div className="text-green-400 text-2xl font-bold">
-                              {sensors.filter(s => s.status === 'online').length + toxicGasSensors.filter(g => g.status === 'safe').length}
-                            </div>
-                            <div className="text-slate-200 text-sm">Normal</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-yellow-400 text-2xl font-bold">
-                              {sensors.filter(s => s.status === 'warning').length + toxicGasSensors.filter(g => g.status === 'warning').length}
-                            </div>
-                            <div className="text-slate-200 text-sm">Warning</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-red-400 text-2xl font-bold">
-                              {sensors.filter(s => s.status === 'critical').length + toxicGasSensors.filter(g => g.status === 'critical' || g.status === 'danger').length}
-                            </div>
-                            <div className="text-slate-200 text-sm">Critical</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-gray-400 text-2xl font-bold">
-                              {sensors.filter(s => s.status === 'offline').length}
-                            </div>
-                            <div className="text-slate-200 text-sm">Offline</div>
-                          </div>
+                          <h3 className="text-slate-100 font-medium mb-3 flex items-center gap-2">
+                            <RiCalendarEventLine className="text-blue-400" />
+                            All Events ({getAllCombinedEvents().length})
+                          </h3>
+                          
+                          <div className="space-y-2 max-h-96 overflow-y-auto">
+                            {getAllCombinedEvents().map((event) => (
+                              <div 
+                                key={event.id}
+                                className="bg-slate-800/30 backdrop-blur-sm rounded-lg p-3 border border-slate-600/20 hover:border-blue-500/30 transition-colors cursor-pointer"
+                                onClick={() => setSelectedEvent(event)}
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${
+                                      event.priority === 'Urgent' ? 'bg-red-500' :
+                                      event.priority === 'High' ? 'bg-orange-500' :
+                                      event.priority === 'Medium' ? 'bg-yellow-500' :
+                                      'bg-green-500'
+                                    }`}></div>
+                                    <span className={`text-xs px-2 py-1 rounded font-medium ${
+                                      event.category === 'Alarms' ? 'bg-red-600 text-white' :
+                                      event.category === 'Predictive' ? 'bg-purple-600 text-white' :
+                                      event.category === 'Service Request' ? 'bg-blue-600 text-white' :
+                                      event.category === 'Work Order' ? 'bg-green-600 text-white' :
+                                      event.category === 'Sensor Status' ? 'bg-cyan-600 text-white' :
+                                      event.category === 'Security Dashboard' ? 'bg-red-600 text-white' :
+                                      event.category === 'Environmental' ? 'bg-orange-600 text-white' :
+                                      'bg-slate-600 text-white'
+                                    }`}>
+                                      {event.category}
+                                    </span>
+                                    <span className={`text-xs px-2 py-1 rounded font-medium ${
+                                      event.status === 'NOT ACKNOWLEDGED' ? 'bg-red-500 text-white' :
+                                      event.status === 'IN PROGRESS' ? 'bg-yellow-500 text-black' :
+                                      event.status === 'PENDING' ? 'bg-orange-500 text-white' :
+                                      event.status === 'SCHEDULED' ? 'bg-blue-500 text-white' :
+                                      event.status === 'PREDICTED' ? 'bg-purple-500 text-white' :
+                                      event.status === 'CLOSED' || event.status === 'COMPLETED' ? 'bg-green-500 text-white' :
+                                      'bg-slate-500 text-white'
+                                    }`}>
+                                      {event.status}
+                                    </span>
+                                  </div>
+                                  <div className="text-slate-400 text-xs">
+                                    {new Date(event.time).toLocaleString()}
                         </div>
                       </div>
 
-                      {/* Combined Analytics Chart */}
-                      <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
-                        <h3 className="text-slate-100 font-medium mb-3">System Performance (24h)</h3>
-                        <div className="h-48">
-                          <Line
-                            data={{
-                              labels: generateTimeSeriesData(24).labels,
-                              datasets: [
-                                {
-                                  label: 'Energy (kWh)',
-                                  data: generateTimeSeriesData(24, 40, 8).data,
-                                  borderColor: 'rgb(59, 130, 246)',
-                                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                  fill: false,
-                                  tension: 0.4
-                                },
-                                {
-                                  label: 'Temperature (°C)',
-                                  data: generateTimeSeriesData(24, 22, 2).data,
-                                  borderColor: 'rgb(34, 197, 94)',
-                                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                                  fill: false,
-                                  tension: 0.4
-                                },
-                                {
-                                  label: 'Air Quality Index',
-                                  data: generateTimeSeriesData(24, 75, 15).data,
-                                  borderColor: 'rgb(168, 85, 247)',
-                                  backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                                  fill: false,
-                                  tension: 0.4
-                                }
-                              ]
-                            }}
-                            options={{
-                              responsive: true,
-                              maintainAspectRatio: false,
-                              plugins: {
-                                legend: { 
-                                  display: true,
-                                  labels: { color: 'rgba(148, 163, 184, 0.8)' }
-                                }
-                              },
-                              scales: {
-                                x: { 
-                                  grid: { color: 'rgba(148, 163, 184, 0.1)' },
-                                  ticks: { color: 'rgba(148, 163, 184, 0.8)' }
-                                },
-                                y: { 
-                                  grid: { color: 'rgba(148, 163, 184, 0.1)' },
-                                  ticks: { color: 'rgba(148, 163, 184, 0.8)' }
-                                }
-                              }
-                            }}
-                          />
-                        </div>
+                                <div className="mb-2">
+                                  <div className="text-slate-100 font-medium text-sm mb-1">{event.title}</div>
+                                  <div className="text-slate-300 text-xs">{event.description}</div>
                       </div>
 
-                      {/* System Distribution */}
-                      <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
-                        <h3 className="text-slate-100 font-medium mb-3">System Distribution</h3>
-                        <div className="h-48">
-                          <Doughnut
-                            data={{
-                              labels: ['Environmental', 'Security', 'Gas Monitoring', 'Energy', 'HVAC'],
-                              datasets: [{
-                                data: [
-                                  sensors.filter(s => s.type === 'temperature' || s.type === 'humidity').length,
-                                  cctvCameras.length,
-                                  toxicGasSensors.length,
-                                  sensors.filter(s => s.type === 'energy').length,
-                                  2 // HVAC systems
-                                ],
-                                backgroundColor: [
-                                  'rgba(34, 197, 94, 0.8)',
-                                  'rgba(239, 68, 68, 0.8)',
-                                  'rgba(251, 191, 36, 0.8)',
-                                  'rgba(59, 130, 246, 0.8)',
-                                  'rgba(168, 85, 247, 0.8)'
-                                ],
-                                borderColor: [
-                                  'rgb(34, 197, 94)',
-                                  'rgb(239, 68, 68)',
-                                  'rgb(251, 191, 36)',
-                                  'rgb(59, 130, 246)',
-                                  'rgb(168, 85, 247)'
-                                ],
-                                borderWidth: 1
-                              }]
-                            }}
-                            options={{
-                              responsive: true,
-                              maintainAspectRatio: false,
-                              plugins: {
-                                legend: { 
-                                  display: true,
-                                  position: 'bottom',
-                                  labels: { color: 'rgba(148, 163, 184, 0.8)' }
-                                }
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Recent Alerts */}
-                      <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
-                        <h3 className="text-slate-100 font-medium mb-3">Recent Alerts</h3>
-                        <div className="space-y-2">
-                          {toxicGasSensors.filter(g => g.alerts.length > 0).slice(0, 3).map((gas) => (
-                            <div key={gas.id} className="bg-yellow-500/20 rounded-lg p-3 border border-yellow-500/30">
-                              <div className="flex items-center gap-2 mb-1">
-                                {getToxicGasIcon(gas.type)}
-                                <span className="text-yellow-300 text-sm font-medium">{getToxicGasName(gas.type)}</span>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-4">
+                                    <div className="text-slate-400 text-xs">
+                                      <span className="font-medium">Location:</span> {event.location}
                               </div>
-                              <div className="text-yellow-200 text-xs">{gas.alerts[0]?.message}</div>
-                              <div className="text-yellow-400 text-xs">{gas.location} • {gas.alerts[0]?.time}</div>
+                                    <div className="text-slate-400 text-xs">
+                                      <span className="font-medium">Building:</span> {event.building}
+                            </div>
+                              </div>
+                                  <div className="text-slate-400 text-xs">
+                                    Priority: <span className={`font-medium ${
+                                      event.priority === 'Urgent' ? 'text-red-400' :
+                                      event.priority === 'High' ? 'text-orange-400' :
+                                      event.priority === 'Medium' ? 'text-yellow-400' :
+                                      'text-green-400'
+                                    }`}>{event.priority}</span>
+                                  </div>
+                                </div>
                             </div>
                           ))}
-                          {cctvCameras.filter(c => c.alerts.length > 0).slice(0, 2).map((camera) => (
-                            <div key={camera.id} className="bg-red-500/20 rounded-lg p-3 border border-red-500/30">
-                              <div className="flex items-center gap-2 mb-1">
-                                <RiCameraLine className="text-red-400" />
-                                <span className="text-red-300 text-sm font-medium">{camera.name}</span>
+                            
+                            {getAllCombinedEvents().length === 0 && (
+                              <div className="text-center py-8 text-slate-400">
+                                <RiSearchLine className="text-4xl mx-auto mb-2 opacity-50" />
+                                <p>No events found matching the selected filters.</p>
                               </div>
-                              <div className="text-red-200 text-xs">{camera.alerts[0]?.message}</div>
-                              <div className="text-red-400 text-xs">{camera.location} • {camera.alerts[0]?.time}</div>
-                            </div>
-                          ))}
+                            )}
                         </div>
                       </div>
                     </div>
@@ -2260,6 +2733,331 @@ const ModelViewerPage: React.FC = () => {
                       </div>
                     </div>
                   )}
+                  
+                  {activeLeftTab === 'Alarms' && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-red-400 font-medium">Active Alarms</h3>
+                        <div className="text-slate-400 text-sm">Total: 14</div>
+                      </div>
+                      
+                      {/* Critical Alarms */}
+                      <div className="space-y-2">
+                        {[
+                          {
+                            id: 'alarm-001',
+                            title: 'R/F ES1 BMS:ES1_BM_RM19_VENT_TRI',
+                            location: 'ES1.BMS.URGENT',
+                            time: '2025-07-08T11:14:00Z',
+                            status: 'NOT ACKNOWLEDGED',
+                            priority: 'Urgent',
+                            building: 'E2',
+                            description: 'HVAC ventilation system triggered alarm',
+                            eventId: 'ES2_BMS:ES2_BM_RM19_VENT_TRI_17518',
+                            type: 'R/F'
+                          },
+                          {
+                            id: 'alarm-002',
+                            title: 'CH_BMS_NEW:CH_BMS_B3F_FlushTank_Low_Alarm',
+                            location: 'CH.BMS.URGENT',
+                            time: '2025-07-08T11:03:00Z',
+                            status: 'CLOSED',
+                            priority: 'Urgent',
+                            building: 'CH',
+                            description: 'Flush tank water level critically low',
+                            eventId: 'CH_BMS_NEW:CH_BMS_B3F_FlushTank_Low_Alarm_175185743',
+                            type: 'B3/F'
+                          },
+                          {
+                            id: 'alarm-003',
+                            title: 'ES3_BMS:NiagaraNetwork',
+                            location: 'ES3.DDC.BF_01_05',
+                            time: '2025-07-08T11:02:00Z',
+                            status: 'CLOSED',
+                            priority: 'Urgent',
+                            building: 'E3',
+                            description: 'Network connectivity issue detected',
+                            eventId: 'ES3_BMS:NiagaraNetwork_ES3_DDC_BF_01_05_175185732',
+                            type: 'R/F'
+                          }
+                        ].map((alarm) => (
+                          <div 
+                            key={alarm.id}
+                            className="bg-slate-800/30 backdrop-blur-sm rounded-lg p-3 border border-slate-600/20 hover:border-red-500/30 transition-colors cursor-pointer"
+                            onClick={() => setSelectedEvent(alarm)}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className={`w-3 h-3 rounded-full flex-shrink-0 ${alarm.status === 'NOT ACKNOWLEDGED' ? 'bg-red-500 animate-pulse' : 'bg-red-600'}`}></div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-red-300 font-medium text-sm break-words">{alarm.title}</div>
+                                  <div className="text-slate-300 text-xs break-words">{alarm.location}</div>
+                                  <div className="text-slate-400 text-xs mt-1 break-words">{alarm.description}</div>
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <div className="text-slate-100 text-xs">{new Date(alarm.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
+                                <div className="text-slate-400 text-xs">Jul 8</div>
+                                <div className={`text-xs px-2 py-1 rounded mt-1 whitespace-nowrap ${alarm.status === 'NOT ACKNOWLEDGED' ? 'bg-red-600 text-white' : 'bg-gray-600 text-gray-300'}`}>
+                                  {alarm.status}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {activeLeftTab === 'Predictive' && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-purple-400 font-medium">Predictive Analytics</h3>
+                        <div className="text-slate-400 text-sm">Predictions: 8</div>
+                      </div>
+                      
+                      {/* Predictive Maintenance Alerts */}
+                      <div className="space-y-2">
+                        {[
+                          {
+                            id: 'pred-001',
+                            title: 'HVAC Filter Replacement Due',
+                            location: 'Building A - AHU-01',
+                            time: '2025-07-10T09:00:00Z',
+                            status: 'PREDICTED',
+                            priority: 'Medium',
+                            building: 'A',
+                            description: 'AI analysis indicates filter efficiency dropping below 85%',
+                            eventId: 'PRED_HVAC_FILTER_AHU01_20250710',
+                            type: 'Maintenance',
+                            category: 'Predictive',
+                            confidence: '94%'
+                          },
+                          {
+                            id: 'pred-002',
+                            title: 'Pump Bearing Wear Detection',
+                            location: 'Building B - Pump Room',
+                            time: '2025-07-12T14:30:00Z',
+                            status: 'PREDICTED',
+                            priority: 'High',
+                            building: 'B',
+                            description: 'Vibration analysis shows bearing wear pattern',
+                            eventId: 'PRED_PUMP_BEARING_B01_20250712',
+                            type: 'Critical',
+                            category: 'Predictive',
+                            confidence: '87%'
+                          },
+                          {
+                            id: 'pred-003',
+                            title: 'Elevator Cable Inspection Due',
+                            location: 'Building C - Elevator 3',
+                            time: '2025-07-15T11:00:00Z',
+                            status: 'SCHEDULED',
+                            priority: 'Medium',
+                            building: 'C',
+                            description: 'Usage pattern analysis suggests early inspection',
+                            eventId: 'PRED_ELEVATOR_CABLE_C03_20250715',
+                            type: 'Inspection',
+                            category: 'Predictive',
+                            confidence: '91%'
+                          }
+                        ].map((pred) => (
+                          <div 
+                            key={pred.id}
+                            className="bg-slate-800/30 backdrop-blur-sm rounded-lg p-3 border border-slate-600/20 hover:border-purple-500/30 transition-colors cursor-pointer"
+                            onClick={() => setSelectedEvent(pred)}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                                <div className="flex-1">
+                                  <div className="text-purple-300 font-medium text-sm">{pred.title}</div>
+                                  <div className="text-slate-300 text-xs">{pred.location}</div>
+                                  <div className="text-slate-400 text-xs mt-1">{pred.description}</div>
+                                  <div className="text-purple-200 text-xs mt-1">Confidence: {pred.confidence}</div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-slate-100 text-xs">{new Date(pred.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                                <div className="text-slate-400 text-xs">{new Date(pred.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
+                                <div className={`text-xs px-2 py-1 rounded mt-1 ${pred.priority === 'High' ? 'bg-orange-600 text-white' : 'bg-purple-600 text-white'}`}>
+                                  {pred.status}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeLeftTab === 'Service Request' && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-blue-400 font-medium">Service Requests</h3>
+                        <div className="text-slate-400 text-sm">Open: 12</div>
+                      </div>
+                      
+                      {/* Service Requests */}
+                      <div className="space-y-2">
+                        {[
+                          {
+                            id: 'sr-001',
+                            title: 'Air Conditioning Repair',
+                            location: 'Building A - Floor 15',
+                            time: '2025-07-08T09:30:00Z',
+                            status: 'IN PROGRESS',
+                            priority: 'High',
+                            building: 'A',
+                            description: 'AC unit not cooling properly in conference room',
+                            eventId: 'SR_AC_REPAIR_A15_20250708',
+                            type: 'Repair',
+                            requestor: 'John Smith',
+                            assignee: 'HVAC Team'
+                          },
+                          {
+                            id: 'sr-002',
+                            title: 'Lighting Fixture Replacement',
+                            location: 'Building B - Corridor 8',
+                            time: '2025-07-08T10:15:00Z',
+                            status: 'NEW',
+                            priority: 'Medium',
+                            building: 'B',
+                            description: 'Fluorescent lights flickering in main corridor',
+                            eventId: 'SR_LIGHT_REPLACE_B08_20250708',
+                            type: 'Maintenance',
+                            requestor: 'Sarah Johnson',
+                            assignee: 'Electrical Team'
+                          },
+                          {
+                            id: 'sr-003',
+                            title: 'Plumbing Leak Fix',
+                            location: 'Building C - Restroom 3F',
+                            time: '2025-07-08T08:45:00Z',
+                            status: 'COMPLETED',
+                            priority: 'High',
+                            building: 'C',
+                            description: 'Water leak detected under sink',
+                            eventId: 'SR_PLUMB_LEAK_C03_20250708',
+                            type: 'Emergency',
+                            requestor: 'Mike Wilson',
+                            assignee: 'Plumbing Team'
+                          }
+                        ].map((sr) => (
+                          <div 
+                            key={sr.id}
+                            className="bg-slate-800/30 backdrop-blur-sm rounded-lg p-3 border border-slate-600/20 hover:border-blue-500/30 transition-colors cursor-pointer"
+                            onClick={() => setSelectedEvent(sr)}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-3 h-3 rounded-full ${sr.status === 'IN PROGRESS' ? 'bg-yellow-500 animate-pulse' : sr.status === 'NEW' ? 'bg-blue-500' : 'bg-green-500'}`}></div>
+                                <div className="flex-1">
+                                  <div className="text-blue-300 font-medium text-sm">{sr.title}</div>
+                                  <div className="text-slate-300 text-xs">{sr.location}</div>
+                                  <div className="text-slate-400 text-xs mt-1">{sr.description}</div>
+                                  <div className="text-blue-200 text-xs mt-1">Assigned to: {sr.assignee}</div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-slate-100 text-xs">{new Date(sr.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
+                                <div className="text-slate-400 text-xs">Jul 8</div>
+                                <div className={`text-xs px-2 py-1 rounded mt-1 ${sr.status === 'IN PROGRESS' ? 'bg-yellow-600 text-white' : sr.status === 'NEW' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'}`}>
+                                  {sr.status}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeLeftTab === 'Work Order' && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-green-400 font-medium">Work Orders</h3>
+                        <div className="text-slate-400 text-sm">Active: 18</div>
+                      </div>
+                      
+                      {/* Work Orders */}
+                      <div className="space-y-2">
+                        {[
+                          {
+                            id: 'wo-001',
+                            title: 'Monthly HVAC Maintenance',
+                            location: 'Building A - Rooftop',
+                            time: '2025-07-08T07:00:00Z',
+                            status: 'IN PROGRESS',
+                            priority: 'Medium',
+                            building: 'A',
+                            description: 'Routine monthly maintenance of HVAC systems',
+                            eventId: 'WO_HVAC_MAINT_A_20250708',
+                            type: 'Preventive',
+                            requestor: 'System Auto',
+                            assignee: 'HVAC Team',
+                            estimatedHours: '4h'
+                          },
+                          {
+                            id: 'wo-002',
+                            title: 'Fire Safety System Check',
+                            location: 'Building B - All Floors',
+                            time: '2025-07-08T14:00:00Z',
+                            status: 'SCHEDULED',
+                            priority: 'High',
+                            building: 'B',
+                            description: 'Quarterly fire safety system inspection',
+                            eventId: 'WO_FIRE_CHECK_B_20250708',
+                            type: 'Safety',
+                            requestor: 'Safety Officer',
+                            assignee: 'Fire Safety Team',
+                            estimatedHours: '6h'
+                          },
+                          {
+                            id: 'wo-003',
+                            title: 'Elevator Maintenance',
+                            location: 'Building C - Elevator 1',
+                            time: '2025-07-08T06:00:00Z',
+                            status: 'COMPLETED',
+                            priority: 'Medium',
+                            building: 'C',
+                            description: 'Monthly elevator maintenance and inspection',
+                            eventId: 'WO_ELEVATOR_MAINT_C1_20250708',
+                            type: 'Preventive',
+                            requestor: 'Facilities',
+                            assignee: 'Elevator Team',
+                            estimatedHours: '3h'
+                          }
+                        ].map((wo) => (
+                          <div 
+                            key={wo.id}
+                            className="bg-slate-800/30 backdrop-blur-sm rounded-lg p-3 border border-slate-600/20 hover:border-green-500/30 transition-colors cursor-pointer"
+                            onClick={() => setSelectedEvent(wo)}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-3 h-3 rounded-full ${wo.status === 'IN PROGRESS' ? 'bg-yellow-500 animate-pulse' : wo.status === 'SCHEDULED' ? 'bg-blue-500' : 'bg-green-500'}`}></div>
+                                <div className="flex-1">
+                                  <div className="text-green-300 font-medium text-sm">{wo.title}</div>
+                                  <div className="text-slate-300 text-xs">{wo.location}</div>
+                                  <div className="text-slate-400 text-xs mt-1">{wo.description}</div>
+                                  <div className="text-green-200 text-xs mt-1">Team: {wo.assignee} | Est: {wo.estimatedHours}</div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-slate-100 text-xs">{new Date(wo.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
+                                <div className="text-slate-400 text-xs">Jul 8</div>
+                                <div className={`text-xs px-2 py-1 rounded mt-1 ${wo.status === 'IN PROGRESS' ? 'bg-yellow-600 text-white' : wo.status === 'SCHEDULED' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'}`}>
+                                  {wo.status}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 </div>
               </motion.div>
             )}
@@ -2291,7 +3089,7 @@ const ModelViewerPage: React.FC = () => {
                 {/* Header */}
                 <div className="p-4 border-b border-slate-600/20 bg-slate-800/10 backdrop-blur-md">
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-slate-100 font-bold text-lg">Smart Controls</h2>
+                   
                     <button 
                       onClick={() => setRightPanelVisible(false)}
                       className="text-slate-200 hover:text-white transition-colors"
@@ -2299,13 +3097,37 @@ const ModelViewerPage: React.FC = () => {
                       <RiCloseLine className="text-xl" />
                     </button>
                   </div>
+                  
+                  {/* Work Order Overview Stats */}
+                  <div className="grid grid-cols-4 gap-2 mb-4">
+                    <div className="bg-slate-800/30 backdrop-blur-sm rounded-lg p-2 border border-slate-600/20 text-center">
+                      <div className="text-slate-100 font-bold text-lg">0</div>
+                      <div className="text-slate-300 text-xs">In Progress</div>
+                    </div>
+                    <div className="bg-orange-900/30 backdrop-blur-sm rounded-lg p-2 border border-orange-500/20 text-center">
+                      <div className="text-orange-400 font-bold text-lg">0</div>
+                      <div className="text-orange-300 text-xs">Pending for Action</div>
+                    </div>
+                    <div className="bg-blue-900/30 backdrop-blur-sm rounded-lg p-2 border border-blue-500/20 text-center">
+                      <div className="text-blue-400 font-bold text-lg">0</div>
+                      <div className="text-blue-300 text-xs">Pending for Closure</div>
+                    </div>
+                    <div className="bg-green-900/30 backdrop-blur-sm rounded-lg p-2 border border-green-500/20 text-center">
+                      <div className="text-green-400 font-bold text-lg">0</div>
+                      <div className="text-green-300 text-xs">Completed</div>
+                    </div>
+                  </div>
+                  
+                  {/* Tab Navigation */}
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { id: 'smartlock', name: 'Smart Lock', icon: RiDoorLockLine, color: 'cyan' },
-                      { id: 'cctv', name: 'CCTV', icon: RiCameraLine, color: 'red' },
-                      { id: 'smartwatch', name: 'Smart Watch', icon: RiTimeLine, color: 'green' },
-                      { id: 'toxicgas', name: 'Gas Monitor', icon: RiAlarmWarningLine, color: 'orange' },
-                      { id: 'weather', name: 'Weather', icon: RiCloudyLine, color: 'blue' }
+                      { id: 'overview', name: 'Overview', icon: RiDashboardLine },
+                      { id: 'smartwatch', name: 'Smart Watch', icon: RiTimeLine },
+                      { id: 'smartlock', name: 'Smart Lock', icon: RiDoorLockLine },
+                      { id: 'cctv', name: 'CCTV', icon: RiCameraLine },
+                      { id: 'toxicgas', name: 'Gas Monitor', icon: RiAlarmWarningLine },
+                      { id: 'weather', name: 'Weather', icon: RiCloudyLine },
+                      ...(rightPanelVisible ? [{ id: 'asset', name: 'Asset Info', icon: RiInformationLine }] : [])
                     ].map((tab) => (
                       <button 
                         key={tab.id}
@@ -2324,15 +3146,127 @@ const ModelViewerPage: React.FC = () => {
                 </div>
                 
                 {/* Content */}
-                <div className="h-full overflow-y-auto bg-slate-900/10 backdrop-blur-md">
+                <div className="flex-1 overflow-y-auto">
+                  {/* Overview Tab */}
+                  {activeRightTab === 'overview' && (
+                    <div className="p-4 space-y-4 h-full overflow-y-auto">
+                      {/* Work Order Distribution Chart */}
+                      <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
+                        <h3 className="text-slate-100 font-medium mb-3 flex items-center gap-2">
+                          <RiPieChartLine className="text-blue-400" />
+                          Work Order Distribution (Last 30 Days)
+                        </h3>
+                        <div className="flex items-center justify-center h-48">
+                          <div className="relative">
+                            {/* Pie Chart Placeholder */}
+                            <div className="w-32 h-32 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center">
+                              <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center">
+                                <span className="text-white font-bold text-lg">100%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mt-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                            <span className="text-slate-300 text-sm">HVAC (40%)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                            <span className="text-slate-300 text-sm">Electrical (25%)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-pink-500 rounded-full"></div>
+                            <span className="text-slate-300 text-sm">Plumbing (20%)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <span className="text-slate-300 text-sm">Others (15%)</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Asset Information */}
+                      <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
+                        <h3 className="text-slate-100 font-medium mb-3 flex items-center gap-2">
+                          <RiInformationLine className="text-green-400" />
+                          Asset Information
+                        </h3>
+                        <div className="space-y-3">
+                          <div className="bg-slate-700/30 rounded-lg p-3 border border-slate-600/20">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-slate-200 font-medium">ES1-LIFT-L18</span>
+                              <span className="bg-green-500/20 text-green-300 px-2 py-1 rounded text-xs">ON</span>
+                            </div>
+                            <div className="text-slate-300 text-sm">E1-LIFT2_4-LIFT_18</div>
+                          </div>
+                          <div className="bg-slate-700/30 rounded-lg p-3 border border-slate-600/20">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-slate-200 font-medium">Lift & Escalator</span>
+                              <span className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded text-xs">ACTIVE</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 mt-2">
+                              <div>
+                                <div className="text-slate-400 text-xs">Passenger Lift</div>
+                                <div className="text-slate-100 font-bold">5</div>
+                              </div>
+                              <div>
+                                <div className="text-slate-400 text-xs">Service Lift</div>
+                                <div className="text-slate-100 font-bold">2</div>
+                              </div>
+                              <div>
+                                <div className="text-slate-400 text-xs">Escalator</div>
+                                <div className="text-slate-100 font-bold">3</div>
+                              </div>
+                              <div>
+                                <div className="text-slate-400 text-xs">VIP Shuttle Lift</div>
+                                <div className="text-slate-100 font-bold">1</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Overall Asset Availability */}
+                      <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
+                        <h3 className="text-slate-100 font-medium mb-3 flex items-center gap-2">
+                          <RiBarChartBoxLine className="text-yellow-400" />
+                          Overall Asset Availability
+                        </h3>
+                        <div className="text-center mb-4">
+                          <div className="text-4xl font-bold text-yellow-400 mb-2">100%</div>
+                          <div className="text-slate-300 text-sm">Consider Maintenance Downtime (From Maxime)</div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-300">Electrical</span>
+                            <span className="text-green-400">100%</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-300">Plumbing & Drainage</span>
+                            <span className="text-green-400">100%</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-300">HVAC</span>
+                            <span className="text-green-400">100%</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-300">Lift & Escalator</span>
+                            <span className="text-green-400">100%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {activeRightTab === 'smartlock' && (
-                    <div className="h-full">
+                    <div className="h-full overflow-y-auto">
                       <SmartLockDashboard />
                     </div>
                   )}
                   
                   {activeRightTab === 'cctv' && (
-                    <div className="p-4 space-y-4">
+                    <div className="p-4 space-y-4 h-full overflow-y-auto">
                       <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
                         <h3 className="text-slate-100 font-medium mb-3 flex items-center gap-2">
                           <RiCameraLine className="text-red-400" />
@@ -2350,75 +3284,46 @@ const ModelViewerPage: React.FC = () => {
                         </div>
                       </div>
                       
+                      {/* Camera List - Scrollable */}
+                      <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
+                        <h3 className="text-slate-100 font-medium mb-3">Camera Feed</h3>
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
                       {cctvCameras.map((camera) => (
-                        <div key={camera.id} className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <RiCameraLine className="text-red-400" />
-                              <span className="text-slate-100 font-medium">{camera.name}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {camera.isRecording && (
-                                <RiRecordCircleLine className="text-red-500 animate-pulse" />
-                              )}
-                              <div className={`w-2 h-2 rounded-full ${
-                                camera.status === 'online' ? 'bg-green-400' : 
-                                camera.status === 'recording' ? 'bg-red-400' : 'bg-gray-400'
-                              }`} />
-                            </div>
-                          </div>
-                          
-                          {/* Camera Screen */}
-                          <div className="bg-black/50 rounded-lg p-4 mb-3 aspect-video flex items-center justify-center border border-slate-600/20">
-                            <div className="text-center">
-                              <RiCameraLine className="text-slate-400 text-4xl mb-2 mx-auto" />
-                              <div className="text-slate-300 text-sm">{camera.name}</div>
-                              <div className="text-slate-400 text-xs">{camera.resolution}</div>
-                            </div>
-                          </div>
-                          
-                          {/* Camera Controls */}
-                          <div className="flex gap-2 mb-3">
-                            <button 
-                              onClick={() => setFullscreenCamera(camera)}
-                              className="flex-1 bg-blue-600/80 hover:bg-blue-600 text-white p-2 rounded-lg transition-all text-sm backdrop-blur-sm"
+                            <div
+                              key={camera.id}
+                              className="bg-slate-800/30 backdrop-blur-sm rounded-lg p-3 border border-slate-600/20 hover:border-blue-500/30 transition-colors cursor-pointer"
+                              onClick={() => setSelectedCamera(camera)}
                             >
-                              <RiFullscreenLine className="inline mr-1" />
-                              Fullscreen
-                            </button>
-                            <button className="flex-1 bg-green-600/80 hover:bg-green-600 text-white p-2 rounded-lg transition-all text-sm backdrop-blur-sm">
-                              <RiRecordCircleLine className="inline mr-1" />
-                              Record
-                            </button>
+                              <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                                  <div className={`w-2 h-2 rounded-full ${getStatusColor(camera.status)}`}></div>
+                                  <span className="text-slate-100 font-medium text-sm">{camera.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                  {camera.isRecording && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>}
+                                  <span className={`text-xs px-2 py-1 rounded ${
+                                    camera.status === 'online' ? 'bg-green-600 text-white' :
+                                    camera.status === 'recording' ? 'bg-red-600 text-white' :
+                                    camera.status === 'offline' ? 'bg-red-600 text-white' :
+                                    'bg-yellow-600 text-white'
+                                  }`}>
+                                    {camera.status.toUpperCase()}
+                                  </span>
+                            </div>
                           </div>
-                          
-                          <div className="text-slate-200 text-sm space-y-1">
-                            <div>Location: {camera.location}</div>
-                            <div>Status: <span className="capitalize text-slate-100">{camera.status}</span></div>
-                            <div>Resolution: {camera.resolution}</div>
-                            <div>Night Vision: {camera.nightVision ? 'Enabled' : 'Disabled'}</div>
-                          </div>
-                          
-                          {/* Recent Alerts */}
-                          {camera.alerts.length > 0 && (
-                            <div className="mt-3 pt-3 border-t border-slate-600/20">
-                              <div className="text-slate-100 text-sm font-medium mb-2">Recent Alerts</div>
-                              {camera.alerts.slice(0, 2).map((alert, idx) => (
-                                <div key={idx} className="bg-yellow-500/20 rounded-lg p-2 mb-1">
-                                  <div className="text-yellow-300 text-xs font-medium">{alert.type}</div>
-                                  <div className="text-yellow-200 text-xs">{alert.message}</div>
-                                  <div className="text-yellow-400 text-xs">{alert.time}</div>
+                              <div className="text-slate-300 text-xs mb-1">{camera.location} - Floor {camera.floor}</div>
+                              <div className="text-slate-400 text-xs">
+                                Resolution: {camera.resolution} | Last Activity: {new Date(camera.lastActivity).toLocaleString()}
+                            </div>
                                 </div>
                               ))}
                             </div>
-                          )}
                         </div>
-                      ))}
                     </div>
                   )}
                   
                   {activeRightTab === 'smartwatch' && (
-                    <div className="p-4 space-y-4">
+                    <div className="p-4 space-y-4 h-full overflow-y-auto">
                       <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
                         <h3 className="text-slate-100 font-medium mb-3 flex items-center gap-2">
                           <RiTimeLine className="text-green-400" />
@@ -2509,7 +3414,7 @@ const ModelViewerPage: React.FC = () => {
                   )}
 
                   {activeRightTab === 'toxicgas' && (
-                    <div className="p-4 space-y-4">
+                    <div className="p-4 space-y-4 h-full overflow-y-auto">
                       <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
                         <h3 className="text-slate-100 font-medium mb-3 flex items-center gap-2">
                           <RiAlarmWarningLine className="text-orange-400" />
@@ -2684,7 +3589,7 @@ const ModelViewerPage: React.FC = () => {
                   )}
 
                   {activeRightTab === 'weather' && (
-                    <div className="p-4 space-y-4">
+                    <div className="p-4 space-y-4 h-full overflow-y-auto">
                       <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
                         <div className="flex items-center justify-between mb-3">
                           <h3 className="text-slate-100 font-medium flex items-center gap-2">
@@ -2790,6 +3695,89 @@ const ModelViewerPage: React.FC = () => {
                       </div>
                     </div>
                   )}
+
+                  {activeRightTab === 'asset' && (
+                    <div className="p-4 space-y-4 h-full overflow-y-auto">
+                      <div className="bg-slate-800/20 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
+                        <h3 className="text-slate-100 font-medium mb-3 flex items-center gap-2">
+                          <RiInformationLine className="text-cyan-400" />
+                          Asset Information
+                        </h3>
+                        
+                        {/* Search Bar */}
+                        <div className="relative mb-4">
+                          <RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Search assets..."
+                            className="w-full pl-10 pr-4 py-2 bg-slate-700/30 border border-slate-600/20 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-500/50"
+                          />
+                        </div>
+                        
+                        {/* Asset Categories */}
+                        <div className="space-y-3">
+                          <div className="bg-slate-700/20 rounded-lg p-3 border border-slate-600/20">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-slate-100 font-medium text-sm">General</h4>
+                              <RiExpandDiagonalLine className="text-slate-400 text-sm" />
+                            </div>
+                            <div className="text-slate-300 text-xs">Building systems and infrastructure</div>
+                          </div>
+                          
+                          <div className="bg-slate-700/20 rounded-lg p-3 border border-slate-600/20">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-slate-100 font-medium text-sm">Documentations</h4>
+                              <RiExpandDiagonalLine className="text-slate-400 text-sm" />
+                            </div>
+                            <div className="text-slate-300 text-xs">Technical manuals and specifications</div>
+                          </div>
+                          
+                          {/* Asset List */}
+                          <div className="space-y-2">
+                            <div className="bg-slate-700/20 rounded-lg p-3 border border-slate-600/20">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                                  <span className="text-slate-100 text-sm">ES1-PLIFT-L18</span>
+                                </div>
+                                <div className="text-green-400 text-xs">ON</div>
+                              </div>
+                              <div className="text-slate-300 text-xs mt-1">E1-LFTZ_4-LIFT_18</div>
+                            </div>
+                            
+                            <div className="bg-slate-700/20 rounded-lg p-3 border border-slate-600/20">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                                  <span className="text-slate-100 text-sm">HVAC-AHU-01</span>
+                                </div>
+                                <div className="text-green-400 text-xs">ON</div>
+                              </div>
+                              <div className="text-slate-300 text-xs mt-1">Air Handling Unit - Floor 1</div>
+                            </div>
+                            
+                            <div className="bg-slate-700/20 rounded-lg p-3 border border-slate-600/20">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                                  <span className="text-slate-100 text-sm">PUMP-WS-02</span>
+                                </div>
+                                <div className="text-yellow-400 text-xs">MAINTENANCE</div>
+                              </div>
+                              <div className="text-slate-300 text-xs mt-1">Water Supply Pump - Basement</div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Events Button */}
+                        <div className="mt-4 pt-4 border-t border-slate-600/20">
+                          <button className="w-full bg-blue-600/80 hover:bg-blue-600 text-white py-2 px-4 rounded-lg transition-all text-sm font-medium">
+                            Events
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -2879,27 +3867,771 @@ const ModelViewerPage: React.FC = () => {
           )}
         </AnimatePresence>
 
-        {/* Floating Panel Toggle Buttons */}
+        {/* Enhanced Event Detail Modal */}
+        <AnimatePresence>
+          {selectedEvent && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[9998] pointer-events-auto"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-slate-900/95 backdrop-blur-xl rounded-lg border border-slate-600/30 shadow-2xl w-96 max-h-[80vh] overflow-hidden pointer-events-auto z-[9999]"
+                drag
+                dragMomentum={false}
+                dragConstraints={{
+                  left: -400,
+                  right: 400,
+                  top: -50,
+                  bottom: 300
+                }}
+              >
+                {/* Modal Header */}
+                <div className="flex items-center justify-between p-4 border-b border-slate-600/20 bg-slate-800/20 cursor-move">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      <span className="text-slate-100 font-medium text-sm">Alarm</span>
+                    </div>
+                    <div className="text-slate-400 text-xs">Details</div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedEvent(null)}
+                    className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <RiCloseLine className="text-lg" />
+                  </button>
+                </div>
+
+                {/* Modal Content */}
+                <div className="p-4 max-h-96 overflow-y-auto">
+                  {/* Alert Info */}
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-1 h-1 bg-red-500 rounded-full"></div>
+                      <span className="text-red-400 font-medium text-sm">R/F</span>
+                      <span className="text-slate-400 text-xs">ES1</span>
+                    </div>
+                    <div className="text-slate-100 font-medium text-sm mb-1">
+                      {selectedEvent.title}
+                    </div>
+                    <div className="text-slate-400 text-xs mb-2">
+                      ES1.BMS.URGENT
+                    </div>
+                    <div className="text-slate-400 text-xs">
+                      {new Date(selectedEvent.time).toLocaleString('en-US', { 
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Status Badge */}
+                  <div className="mb-4">
+                    <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
+                      selectedEvent.status === 'NOT ACKNOWLEDGED' ? 'bg-red-600 text-white' :
+                      selectedEvent.status === 'IN PROGRESS' ? 'bg-yellow-600 text-white' :
+                      selectedEvent.status === 'COMPLETED' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'
+                    }`}>
+                      {selectedEvent.status}
+                    </span>
+                  </div>
+
+                  {/* Remarks Section */}
+                  <div className="mb-4">
+                    <textarea
+                      placeholder="Please leave remarks here..."
+                      className="w-full p-3 bg-slate-800/30 border border-slate-600/20 rounded text-slate-100 placeholder-slate-400 text-sm resize-none focus:outline-none focus:border-blue-500/50"
+                      rows={3}
+                    />
+                    <div className="flex justify-end mt-2">
+                      <button className="px-3 py-1 bg-slate-600 text-white rounded text-xs hover:bg-slate-500 transition-colors">
+                        Submit
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-2">
+                    <button 
+                      className="w-full px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
+                      onClick={() => {
+                        // Handle create work order
+                        console.log('Create Work Order clicked');
+                      }}
+                    >
+                      Create Work Order
+                    </button>
+                    <button 
+                      className="w-full px-3 py-2 bg-slate-700 text-slate-100 rounded text-sm hover:bg-slate-600 transition-colors"
+                      onClick={() => {
+                        // Handle asset information
+                        console.log('Asset Information clicked');
+                      }}
+                    >
+                      Asset Information
+                    </button>
+                    <button 
+                      className="w-full px-3 py-2 bg-slate-700 text-slate-100 rounded text-sm hover:bg-slate-600 transition-colors"
+                      onClick={() => {
+                        // Handle surrounding events
+                        console.log('Surrounding Events clicked');
+                      }}
+                    >
+                      Surrounding Events
+                    </button>
+                    {selectedEvent.status === 'NOT ACKNOWLEDGED' && (
+                      <button 
+                        className="w-full px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors"
+                        onClick={() => {
+                          // Handle acknowledge
+                          console.log('Acknowledge clicked');
+                        }}
+                      >
+                        Acknowledge
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Full Event Panel Modal */}
+        <AnimatePresence>
+          {showFullEventPanel && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] pointer-events-auto"
+              onClick={() => setShowFullEventPanel(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-slate-900/95 backdrop-blur-xl rounded-2xl border border-slate-600/30 shadow-2xl w-[95vw] h-[90vh] overflow-hidden relative z-[10000]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Full Panel Header */}
+                <div className="p-6 border-b border-slate-600/20 bg-slate-800/20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <RiBarChartBoxLine className="text-blue-400 text-2xl" />
+                      <div>
+                        <h2 className="text-slate-100 font-bold text-2xl">Events Summary</h2>
+                        <div className="text-slate-400 text-sm">Total Events: 1872 | Current Period: 07-Jul-25 11:45:23</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button 
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                        onClick={() => {
+                          console.log('Export clicked');
+                          // Handle export functionality
+                        }}
+                      >
+                        EXPORT
+                      </button>
+                      <button
+                        onClick={() => setShowFullEventPanel(false)}
+                        className="text-slate-400 hover:text-white transition-colors"
+                      >
+                        <RiCloseLine className="text-2xl" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Full Panel Content */}
+                <div className="p-6 h-full overflow-y-auto">
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-4 gap-4 mb-6">
+                    <div className="bg-slate-800/30 backdrop-blur-sm rounded-lg p-4 border border-slate-600/20">
+                      <div className="text-slate-400 text-sm">Total</div>
+                      <div className="text-slate-100 font-bold text-2xl">1872</div>
+                      <div className="text-slate-400 text-xs">Current Period</div>
+                    </div>
+                    <div className="bg-slate-800/30 backdrop-blur-sm rounded-lg p-4 border border-slate-600/20">
+                      <div className="text-slate-400 text-sm">Severity Summary</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="text-slate-100 font-bold text-xl">1871</div>
+                        <div className="text-yellow-400 text-sm">⚠ Action</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-slate-100 font-bold text-xl">1</div>
+                        <div className="text-blue-400 text-sm">📢 Notification</div>
+                      </div>
+                    </div>
+                    <div className="bg-slate-800/30 backdrop-blur-sm rounded-lg p-4 border border-slate-600/20">
+                      <div className="text-slate-400 text-sm">Status Summary</div>
+                      <div className="grid grid-cols-3 gap-2 mt-1">
+                        <div className="text-center">
+                          <div className="text-slate-100 font-bold">84</div>
+                          <div className="text-xs text-slate-400">New</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-slate-100 font-bold">218</div>
+                          <div className="text-xs text-slate-400">In Progress</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-slate-100 font-bold">1570</div>
+                          <div className="text-xs text-slate-400">Completed</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-slate-800/30 backdrop-blur-sm rounded-lg p-4 border border-slate-600/20">
+                      <div className="text-slate-400 text-sm">Actions</div>
+                      <div className="flex items-center gap-2 mt-2">
+                        <button 
+                          className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
+                          onClick={() => {
+                            console.log('Action clicked');
+                            // Handle action functionality
+                          }}
+                        >
+                          ACTION
+                        </button>
+                        <button 
+                          className="px-3 py-1 bg-slate-600 text-white rounded text-xs hover:bg-slate-500 transition-colors"
+                          onClick={() => {
+                            console.log('Reset clicked');
+                            // Handle reset functionality
+                          }}
+                        >
+                          RESET
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Date Range and Filters */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <RiCalendarEventLine className="text-slate-400" />
+                        <span className="text-slate-400 text-sm">30 Jun 25</span>
+                        <span className="text-slate-400">—</span>
+                        <span className="text-slate-400 text-sm">07 Jul 25</span>
+                      </div>
+                      <button 
+                        className="px-3 py-1 bg-slate-600 text-white rounded text-sm hover:bg-slate-500 transition-colors"
+                        onClick={() => {
+                          console.log('Reset date range clicked');
+                          // Handle reset functionality
+                        }}
+                      >
+                        RESET
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        className="px-3 py-1 bg-slate-600 text-white rounded text-sm hover:bg-slate-500 transition-colors"
+                        onClick={() => {
+                          console.log('Filter presets clicked');
+                          // Handle filter presets
+                        }}
+                      >
+                        FILTER PRESETS
+                      </button>
+                      <button 
+                        className="px-3 py-1 bg-slate-600 text-white rounded text-sm hover:bg-slate-500 transition-colors"
+                        onClick={() => {
+                          console.log('Case clicked');
+                          // Handle case functionality
+                        }}
+                      >
+                        CASE
+                      </button>
+                      <button 
+                        className="px-3 py-1 bg-slate-600 text-white rounded text-sm hover:bg-slate-500 transition-colors"
+                        onClick={() => {
+                          console.log('Sort by clicked');
+                          // Handle sort functionality
+                        }}
+                      >
+                        SORT BY
+                      </button>
+                      <button 
+                        className="px-3 py-1 bg-slate-600 text-white rounded text-sm hover:bg-slate-500 transition-colors"
+                        onClick={() => {
+                          console.log('Filter clicked');
+                          // Handle filter functionality
+                        }}
+                      >
+                        FILTER
+                      </button>
+                      <button 
+                        className="px-3 py-1 bg-slate-600 text-white rounded text-sm hover:bg-slate-500 transition-colors"
+                        onClick={() => {
+                          console.log('View completed clicked');
+                          // Handle view completed functionality
+                        }}
+                      >
+                        VIEW COMPLETED NOTIFY ME WO
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Events Table */}
+                  <div className="bg-slate-800/20 backdrop-blur-sm rounded-lg border border-slate-600/20 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-700/30 border-b border-slate-600/20">
+                          <tr>
+                            <th className="text-left p-3 text-slate-300 font-medium">Building</th>
+                            <th className="text-left p-3 text-slate-300 font-medium">Event Type</th>
+                            <th className="text-left p-3 text-slate-300 font-medium">Status</th>
+                            <th className="text-left p-3 text-slate-300 font-medium">Priority</th>
+                            <th className="text-left p-3 text-slate-300 font-medium">Event Time / Permit Start</th>
+                            <th className="text-left p-3 text-slate-300 font-medium">Location</th>
+                            <th className="text-left p-3 text-slate-300 font-medium">Event ID</th>
+                            <th className="text-left p-3 text-slate-300 font-medium">Last Updated Time</th>
+                            <th className="text-left p-3 text-slate-300 font-medium">Time Spent</th>
+                            <th className="text-left p-3 text-slate-300 font-medium">Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            {
+                              building: 'E2',
+                              eventType: 'ALARM',
+                              status: 'ACKNOWLEDGED',
+                              priority: 'Urgent',
+                              eventTime: '07-Jul-2025 11:11:14 AM',
+                              location: 'B/F',
+                              eventId: 'ES2_BMS:ES2_BM_RM19_VENT_TRI_17518 57874988',
+                              lastUpdated: '07-Jul-2025 11:19:22 AM',
+                              timeSpent: 'N/A',
+                              description: 'ES2_BMS:ES2_BM_RM19_VENT_TRI'
+                            },
+                            {
+                              building: 'E2',
+                              eventType: 'ALARM',
+                              status: 'CLOSED',
+                              priority: 'Urgent',
+                              eventTime: '07-Jul-2025 11:10:35 AM',
+                              location: 'B/F',
+                              eventId: 'ES2_BMS:ES2_BM_RM19_VENT_TRI_17518 57835746',
+                              lastUpdated: '07-Jul-2025 11:19:22 AM',
+                              timeSpent: '0:8:46',
+                              description: 'ES2_BMS:ES2_BM_RM19_VENT_TRI'
+                            },
+                            {
+                              building: 'E2',
+                              eventType: 'ALARM',
+                              status: 'CLOSED',
+                              priority: 'Urgent',
+                              eventTime: '07-Jul-2025 11:10:04 AM',
+                              location: 'B/F',
+                              eventId: 'ES2_BMS:ES2_BM_RM19_VENT_TRI_17518 57800729',
+                              lastUpdated: '07-Jul-2025 11:19:22 AM',
+                              timeSpent: '0:9:17',
+                              description: 'ES2_BMS:ES2_BM_RM19_VENT_TRI'
+                            },
+                            {
+                              building: 'E2',
+                              eventType: 'ALARM',
+                              status: 'CLOSED',
+                              priority: 'Urgent',
+                              eventTime: '07-Jul-2025 11:09:18 AM',
+                              location: 'B/F',
+                              eventId: 'ES2_BMS:ES2_BM_RM19_VENT_TRI_17518 57758670',
+                              lastUpdated: '07-Jul-2025 11:19:22 AM',
+                              timeSpent: '0:10:3',
+                              description: 'ES2_BMS:ES2_BM_RM19_VENT_TRI'
+                            },
+                            {
+                              building: 'CH',
+                              eventType: 'ALARM',
+                              status: 'CLOSED',
+                              priority: 'Urgent',
+                              eventTime: '07-Jul-2025 11:03:56 AM',
+                              location: 'B3/F',
+                              eventId: 'CH_BMS_NEW:CH_BMS_B3F_FlushTank_Low_Alarm_175185743',
+                              lastUpdated: '07-Jul-2025 11:18:58 AM',
+                              timeSpent: '0:15:1',
+                              description: 'CH_BMS_NEW:CH_BMS_B3F_FlushTank_Low_Alarm'
+                            }
+                          ].map((event, index) => (
+                            <tr key={index} className="border-b border-slate-600/10 hover:bg-slate-700/20 transition-colors">
+                              <td className="p-3 text-slate-300">{event.building}</td>
+                              <td className="p-3">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  event.eventType === 'ALARM' ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'
+                                }`}>
+                                  {event.eventType}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  event.status === 'ACKNOWLEDGED' ? 'bg-red-600 text-white' : 'bg-gray-600 text-white'
+                                }`}>
+                                  {event.status}
+                                </span>
+                              </td>
+                              <td className="p-3 text-slate-300">{event.priority}</td>
+                              <td className="p-3 text-slate-300">{event.eventTime}</td>
+                              <td className="p-3 text-slate-300">{event.location}</td>
+                              <td className="p-3 text-slate-300 text-xs">{event.eventId}</td>
+                              <td className="p-3 text-slate-300">{event.lastUpdated}</td>
+                              <td className="p-3 text-slate-300">{event.timeSpent}</td>
+                              <td className="p-3 text-slate-300 text-xs">{event.description}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Pagination */}
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-slate-400 text-sm">Selected Events Count: 0</div>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        className="px-3 py-1 bg-slate-600 text-white rounded text-sm hover:bg-slate-500 transition-colors"
+                        onClick={() => {
+                          console.log('Deselect all clicked');
+                          // Handle deselect all functionality
+                        }}
+                      >
+                        Deselect All
+                      </button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          className="w-8 h-8 bg-slate-600 text-white rounded flex items-center justify-center hover:bg-slate-500 transition-colors"
+                          onClick={() => {
+                            console.log('Page 1 clicked');
+                            // Handle page navigation
+                          }}
+                        >
+                          1
+                        </button>
+                        <button 
+                          className="w-8 h-8 bg-slate-700 text-slate-300 rounded flex items-center justify-center hover:bg-slate-600 transition-colors"
+                          onClick={() => {
+                            console.log('Page 2 clicked');
+                            // Handle page navigation
+                          }}
+                        >
+                          2
+                        </button>
+                        <button 
+                          className="w-8 h-8 bg-slate-700 text-slate-300 rounded flex items-center justify-center hover:bg-slate-600 transition-colors"
+                          onClick={() => {
+                            console.log('Page 3 clicked');
+                            // Handle page navigation
+                          }}
+                        >
+                          3
+                        </button>
+                        <button 
+                          className="w-8 h-8 bg-slate-700 text-slate-300 rounded flex items-center justify-center hover:bg-slate-600 transition-colors"
+                          onClick={() => {
+                            console.log('Page 4 clicked');
+                            // Handle page navigation
+                          }}
+                        >
+                          4
+                        </button>
+                        <button 
+                          className="w-8 h-8 bg-slate-700 text-slate-300 rounded flex items-center justify-center hover:bg-slate-600 transition-colors"
+                          onClick={() => {
+                            console.log('Page 5 clicked');
+                            // Handle page navigation
+                          }}
+                        >
+                          5
+                        </button>
+                        <span className="text-slate-400">...</span>
+                        <button 
+                          className="w-8 h-8 bg-slate-700 text-slate-300 rounded flex items-center justify-center hover:bg-slate-600 transition-colors"
+                          onClick={() => {
+                            console.log('Page 188 clicked');
+                            // Handle page navigation
+                          }}
+                        >
+                          188
+                        </button>
+                        <button 
+                          className="w-8 h-8 bg-slate-700 text-slate-300 rounded flex items-center justify-center hover:bg-slate-600 transition-colors"
+                          onClick={() => {
+                            console.log('Next page clicked');
+                            // Handle next page navigation
+                          }}
+                        >
+                          →
+                        </button>
+                      </div>
+                      <select 
+                        className="bg-slate-700 text-slate-300 rounded px-2 py-1 text-sm hover:bg-slate-600 transition-colors"
+                        onChange={(e) => {
+                          console.log('Items per page changed:', e.target.value);
+                          // Handle items per page change
+                        }}
+                      >
+                        <option>10 per view</option>
+                        <option>25 per view</option>
+                        <option>50 per view</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Floating Panel Toggle Buttons - Centered below header */}
+        <div className="fixed top-16 left-1/2 transform -translate-x-1/2 z-30 flex items-center gap-4">
+          {/* Left Panel Button */}
         {!leftPanelVisible && (
           <motion.button
-            initial={{ x: -50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
             onClick={() => setLeftPanelVisible(true)}
-            className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-slate-800/50 hover:bg-slate-700/60 backdrop-blur-md border border-slate-600/30 rounded-full p-3 text-slate-100 hover:text-white z-30 shadow-lg pointer-events-auto transition-all"
+              className="bg-slate-800/40 hover:bg-slate-700/50 backdrop-blur-md border border-slate-600/30 rounded-lg px-4 py-2 text-slate-100 hover:text-white shadow-lg pointer-events-auto transition-all"
           >
-            <RiMenuLine className="text-xl" />
+              <div className="flex items-center gap-2">
+                <RiMenuLine className="text-lg" />
+                <span className="text-sm font-medium">Left Panel</span>
+              </div>
           </motion.button>
         )}
         
-        {!rightPanelVisible && (
+          {/* Right Panel Button */}
+        {!rightPanelVisible && !assetPanelVisible && (
           <motion.button
-            initial={{ x: 50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
             onClick={() => setRightPanelVisible(true)}
-            className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-slate-800/50 hover:bg-slate-700/60 backdrop-blur-md border border-slate-600/30 rounded-full p-3 text-slate-100 hover:text-white z-30 shadow-lg pointer-events-auto transition-all"
+              className="bg-slate-800/40 hover:bg-slate-700/50 backdrop-blur-md border border-slate-600/30 rounded-lg px-4 py-2 text-slate-100 hover:text-white shadow-lg pointer-events-auto transition-all"
           >
-            <RiAppsLine className="text-xl" />
+              <div className="flex items-center gap-2">
+                <RiAppsLine className="text-lg" />
+                <span className="text-sm font-medium">Right Panel</span>
+              </div>
           </motion.button>
+        )}
+        
+          {/* Asset Information Button */}
+        {!rightPanelVisible && !assetPanelVisible && (
+          <motion.button
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+            onClick={() => setAssetPanelVisible(true)}
+              className="bg-slate-800/40 hover:bg-slate-700/50 backdrop-blur-md border border-slate-600/30 rounded-lg px-4 py-2 text-slate-100 hover:text-white shadow-lg pointer-events-auto transition-all"
+          >
+            <div className="flex items-center gap-2">
+              <RiInformationLine className="text-lg" />
+              <span className="text-sm font-medium">Asset Information</span>
+            </div>
+          </motion.button>
+        )}
+        </div>
+        
+        {/* Asset Panel */}
+        <AnimatePresence>
+          {assetPanelVisible && !rightPanelVisible && (
+            <motion.div
+              initial={{ x: rightPanelWidth }}
+              animate={{ x: 0 }}
+              exit={{ x: rightPanelWidth }}
+              transition={{ duration: 0.3 }}
+              className="absolute right-0 bottom-0 bg-slate-900/95 backdrop-blur-xl border-l border-slate-600/30 shadow-2xl z-40 pointer-events-auto"
+              style={{ width: rightPanelWidth, top: '48px' }}
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-slate-600/20 bg-slate-800/20 backdrop-blur-md">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-slate-100 font-bold text-lg flex items-center gap-2">
+                    <RiInformationLine className="text-cyan-400" />
+                    Asset Information
+                  </h2>
+                  <button 
+                    onClick={() => setAssetPanelVisible(false)}
+                    className="text-slate-200 hover:text-white transition-colors"
+                  >
+                    <RiCloseLine className="text-xl" />
+                  </button>
+                </div>
+                
+                {/* Search Bar */}
+                <div className="relative">
+                  <RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search assets..."
+                    className="w-full pl-10 pr-4 py-2 bg-slate-700/40 border border-slate-600/30 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-500/50 focus:bg-slate-700/60"
+                  />
+                </div>
+              </div>
+              
+              {/* Content */}
+              <div className="p-4 space-y-4 h-full overflow-y-auto">
+                {/* Asset Categories */}
+                <div className="space-y-3">
+                  {/* General Category */}
+                  <div className="bg-slate-800/30 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-slate-100 font-medium flex items-center gap-2">
+                        <RiGridLine className="text-blue-400" />
+                        General
+                      </h4>
+                      <RiExpandDiagonalLine className="text-slate-400 hover:text-slate-200 cursor-pointer" />
+                    </div>
+                    <div className="text-slate-300 text-sm">Building systems and infrastructure</div>
+                  </div>
+                  
+                  {/* Documentations Category */}
+                  <div className="bg-slate-800/30 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-slate-100 font-medium flex items-center gap-2">
+                        <RiFileTextLine className="text-green-400" />
+                        Documentations
+                      </h4>
+                      <RiExpandDiagonalLine className="text-slate-400 hover:text-slate-200 cursor-pointer" />
+                    </div>
+                    <div className="text-slate-300 text-sm">Technical manuals and specifications</div>
+                  </div>
+                  
+                  {/* Asset List */}
+                  <div className="space-y-2">
+                    <h4 className="text-slate-100 font-medium mb-3 flex items-center gap-2">
+                      <RiDashboardLine className="text-purple-400" />
+                      Active Assets
+                    </h4>
+                    
+                    <div className="bg-slate-800/30 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg hover:bg-slate-800/40 transition-all cursor-pointer">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                          <div>
+                            <div className="text-slate-100 font-medium">ES1-PLIFT-L18</div>
+                            <div className="text-slate-400 text-xs">E1-LFTZ_4-LIFT_18</div>
+                          </div>
+                        </div>
+                        <div className="text-green-400 text-sm font-medium bg-green-400/20 px-2 py-1 rounded">ON</div>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-slate-800/30 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg hover:bg-slate-800/40 transition-all cursor-pointer">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                          <div>
+                            <div className="text-slate-100 font-medium">HVAC-AHU-01</div>
+                            <div className="text-slate-400 text-xs">Air Handling Unit - Floor 1</div>
+                          </div>
+                        </div>
+                        <div className="text-green-400 text-sm font-medium bg-green-400/20 px-2 py-1 rounded">ON</div>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-slate-800/30 backdrop-blur-lg rounded-xl p-4 border border-slate-600/20 shadow-lg hover:bg-slate-800/40 transition-all cursor-pointer">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
+                          <div>
+                            <div className="text-slate-100 font-medium">PUMP-WS-02</div>
+                            <div className="text-slate-400 text-xs">Water Supply Pump - Basement</div>
+                          </div>
+                        </div>
+                        <div className="text-yellow-400 text-sm font-medium bg-yellow-400/20 px-2 py-1 rounded">MAINTENANCE</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Events Button */}
+                <div className="pt-4 border-t border-slate-600/20">
+                  <button className="w-full bg-blue-600/80 hover:bg-blue-600 text-white py-3 px-4 rounded-lg transition-all font-medium flex items-center justify-center gap-2">
+                    <RiCalendarEventLine />
+                    Events
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* 3D Viewer - Below Header */}
+      <div className="absolute left-0 right-0 bottom-0 z-0" style={{ top: '48px' }}>
+        {/* BIMFACE Viewer Container */}
+        <div 
+          ref={containerRef}
+          className="absolute inset-0 w-full h-full bg-slate-950"
+          style={{ pointerEvents: 'auto' }}
+        />
+        
+        {/* React Three Fiber Canvas - fallback/overlay */}
+        <div className="absolute inset-0 pointer-events-none">
+          <Canvas
+            camera={{ position: [5, 5, 5], fov: 60 }}
+            style={{ background: 'transparent', pointerEvents: 'none' }}
+          >
+            <ambientLight intensity={0.5} />
+            <directionalLight position={[10, 10, 5]} intensity={1} />
+            
+            {skyBoxEnabled && (
+              <Sky
+                distance={450000}
+                sunPosition={[0, 1, 0]}
+                inclination={0}
+                azimuth={0.25}
+              />
+            )}
+            
+            <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
+            
+            {/* Removed the 3D cube - now empty for better BIMFACE viewer access */}
+          </Canvas>
+        </div>
+
+        {/* Loading Overlay */}
+        {loading && (
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400 mx-auto mb-4"></div>
+              <div className="text-white text-lg font-medium">Loading 3D Model...</div>
+              <div className="text-white/60 text-sm mt-2">Please wait while we initialize the viewer</div>
+            </div>
+          </div>
+        )}
+        
+        {/* Error Overlay */}
+        {error && (
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="text-center max-w-md mx-auto p-6">
+              <div className="text-red-400 text-6xl mb-4">⚠️</div>
+              <div className="text-white text-lg font-medium mb-2">Unable to Load 3D Model</div>
+              <div className="text-white/60 text-sm mb-4">{error}</div>
+              <button 
+                onClick={() => {
+                  setError(null);
+                  setLoading(true);
+                  // Retry loading
+                  const { fileId, viewToken: urlViewToken } = getParamsFromUrl();
+                  if (fileId || urlViewToken) {
+                    window.location.reload();
+                  }
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

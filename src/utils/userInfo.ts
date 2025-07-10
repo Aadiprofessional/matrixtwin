@@ -32,7 +32,7 @@ export const clearUserInfo = () => {
 
 export const updateUserRole = async () => {
   try {
-    const response = await fetch('https://matrixbim-server.onrender.com/api/users/me', {
+    const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/users/me', {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }

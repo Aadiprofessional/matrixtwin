@@ -274,7 +274,7 @@ const CleansingPage: React.FC = () => {
     try {
       setLoading(true);
       const projectParam = selectedProject?.id ? `?projectId=${selectedProject.id}` : '';
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/list/${user?.id}${projectParam}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/cleansing/list/${user?.id}${projectParam}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -297,7 +297,7 @@ const CleansingPage: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoadingUsers(true);
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${user?.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${user?.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -417,7 +417,7 @@ const CleansingPage: React.FC = () => {
         projectId: selectedProject?.id
       });
 
-      const response = await fetch('https://matrixbim-server.onrender.com/api/cleansing/create', {
+      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/cleansing/create', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -483,7 +483,7 @@ const CleansingPage: React.FC = () => {
   const handleViewDetails = async (entry: CleansingEntry) => {
     try {
       // Fetch full entry details including workflow and comments
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${entry.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/cleansing/${entry.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -507,7 +507,7 @@ const CleansingPage: React.FC = () => {
   const handleViewForm = async (entry: CleansingEntry) => {
     try {
       // Fetch full entry details including form data
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${entry.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/cleansing/${entry.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -538,7 +538,7 @@ const CleansingPage: React.FC = () => {
         updatedBy: user.id
       });
 
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${selectedCleansingEntry.id}/update`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/cleansing/${selectedCleansingEntry.id}/update`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -594,7 +594,7 @@ const CleansingPage: React.FC = () => {
         userId: user.id
       });
 
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${selectedCleansingEntry.id}/update`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/cleansing/${selectedCleansingEntry.id}/update`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -779,7 +779,7 @@ const CleansingPage: React.FC = () => {
     if (!confirmDelete) return;
 
     try {
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/cleansing/${entry.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/cleansing/${entry.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

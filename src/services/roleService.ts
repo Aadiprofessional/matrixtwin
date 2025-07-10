@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://matrixbim-server.onrender.com';
+const API_BASE_URL = 'https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run';
 
 export interface Permission {
   id: number;

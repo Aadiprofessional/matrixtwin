@@ -102,7 +102,7 @@ const Login: React.FC = () => {
       setIsLoading(true);
       
       // Make API call to the new endpoint
-      const response = await fetch('https://matrixbim-server.onrender.com/api/auth/login', {
+      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

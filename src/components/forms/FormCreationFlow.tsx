@@ -251,7 +251,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
     
     try {
       setLoadingUsers(true);
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${user?.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${user?.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -282,7 +282,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
     
     try {
       setLoadingTemplates(true);
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/custom-forms/templates?projectId=${selectedProject.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/custom-forms/templates?projectId=${selectedProject.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -473,7 +473,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
 
       console.log('Creating custom form template:', templateData);
 
-      const response = await fetch('https://matrixbim-server.onrender.com/api/custom-forms/templates/create', {
+      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/custom-forms/templates/create', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

@@ -37,7 +37,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const userInfo = getUserInfo();
       if (!userInfo) return;
 
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/projects/assigned?creator_uid=${userInfo.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects/assigned?creator_uid=${userInfo.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }

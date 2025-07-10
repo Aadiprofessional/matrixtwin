@@ -29,7 +29,7 @@ const BUILDING_TYPES = [
 ];
 
 // MatrixBIM API endpoints
-const API_BASE_URL = 'https://matrixbim-server.onrender.com/api/bimface';
+const API_BASE_URL = 'https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/bimface';
 const UPLOAD_ENDPOINT = `${API_BASE_URL}/upload`;
 const STATUS_ENDPOINT = `${API_BASE_URL}/status`;
 

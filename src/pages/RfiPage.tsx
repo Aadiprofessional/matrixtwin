@@ -74,7 +74,7 @@ const RfiPage: React.FC = () => {
       setIsLoadingUsers(true);
       if (!user?.id) return;
 
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${user.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${user.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }

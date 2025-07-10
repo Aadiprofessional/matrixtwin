@@ -2,7 +2,7 @@
 export {};
 
 // API utility functions for authenticated requests
-const API_BASE_URL = 'https://matrixbim-server.onrender.com/api';
+const API_BASE_URL = 'https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api';
 
 interface ApiResponse<T = any> {
   success: boolean;

@@ -260,7 +260,7 @@ const LabourPage: React.FC = () => {
     try {
       setLoading(true);
       const projectParam = selectedProject?.id ? `?projectId=${selectedProject.id}` : '';
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/labour/list/${user?.id}${projectParam}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/labour/list/${user?.id}${projectParam}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -283,7 +283,7 @@ const LabourPage: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoadingUsers(true);
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${user?.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${user?.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -404,7 +404,7 @@ const LabourPage: React.FC = () => {
         projectId: selectedProject?.id
       });
 
-      const response = await fetch('https://matrixbim-server.onrender.com/api/labour/create', {
+      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/labour/create', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -468,7 +468,7 @@ const LabourPage: React.FC = () => {
   const handleViewDetails = async (entry: LabourEntry) => {
     try {
       // Fetch full entry details including workflow and comments
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/labour/${entry.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/labour/${entry.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -492,7 +492,7 @@ const LabourPage: React.FC = () => {
   const handleViewForm = async (entry: LabourEntry) => {
     try {
       // Fetch full entry details including form data
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/labour/${entry.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/labour/${entry.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -517,7 +517,7 @@ const LabourPage: React.FC = () => {
     if (!selectedLabourEntry || !user?.id) return;
     
     try {
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/labour/${selectedLabourEntry.id}/update`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/labour/${selectedLabourEntry.id}/update`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -560,7 +560,7 @@ const LabourPage: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/labour/${selectedLabourEntry.id}/update`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/labour/${selectedLabourEntry.id}/update`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -720,7 +720,7 @@ const LabourPage: React.FC = () => {
     if (!confirmDelete) return;
 
     try {
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/labour/${entry.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/labour/${entry.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

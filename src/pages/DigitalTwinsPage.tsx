@@ -65,7 +65,7 @@ const DigitalTwinsPage: React.FC = () => {
     
     try {
       // Get token from MatrixBIM server API
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/bimface/getviewid?fileId=${fileId}&token=cn-937d5634-69e4-4543-9ea6-d2f2545ff3bc`);
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/bimface/getviewid?fileId=${fileId}&token=cn-937d5634-69e4-4543-9ea6-d2f2545ff3bc`);
       const data = await response.json();
       
       console.log(`GetViewToken response for fileId ${fileId}:`, data);
@@ -135,7 +135,7 @@ const DigitalTwinsPage: React.FC = () => {
           console.log(`Model ${model.id} is completed but missing viewtoken - fetching from API`);
           
           // Call the getviewid API to get the view token
-          const response = await fetch(`https://matrixbim-server.onrender.com/api/bimface/getviewid?fileId=${model.file_id}&token=cn-937d5634-69e4-4543-9ea6-d2f2545ff3bc`);
+          const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/bimface/getviewid?fileId=${model.file_id}&token=cn-937d5634-69e4-4543-9ea6-d2f2545ff3bc`);
           const data = await response.json();
           
           console.log(`GetViewID response for model ${model.id}:`, data);
@@ -158,7 +158,7 @@ const DigitalTwinsPage: React.FC = () => {
           console.log(`Checking status for model ID: ${model.id}, fileId: ${model.file_id}`);
           
           // Use the MatrixBIM server API instead of direct BIMFACE API
-          const response = await fetch(`https://matrixbim-server.onrender.com/api/bimface/status/${model.file_id}`);
+          const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/bimface/status/${model.file_id}`);
           const statusData = await response.json();
           
           console.log(`Model ${model.id} status response:`, statusData);

@@ -23,7 +23,7 @@ const ForgotPassword: React.FC = () => {
     setError('');
 
     try {
-      const response = await fetch('https://matrixbim-server.onrender.com/api/auth/forgot-password', {
+      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/forgot-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

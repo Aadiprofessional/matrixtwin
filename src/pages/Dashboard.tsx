@@ -192,7 +192,7 @@ const Dashboard: React.FC = () => {
           const userInfo = getUserInfo();
           if (!userInfo) return;
 
-          const response = await fetch(`https://matrixbim-server.onrender.com/api/projects/${selectedProject.id}`, {
+          const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects/${selectedProject.id}`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('token')}`
             }

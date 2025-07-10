@@ -48,7 +48,7 @@ const Signup: React.FC = () => {
     }
     
     try {
-      const response = await fetch('https://matrixbim-server.onrender.com/api/auth/signup', {
+      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

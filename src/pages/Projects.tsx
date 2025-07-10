@@ -108,7 +108,7 @@ const Projects: React.FC = () => {
       const userInfo = getUserInfo();
       if (!userInfo) return;
 
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/projects/assigned?creator_uid=${userInfo.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects/assigned?creator_uid=${userInfo.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -174,7 +174,7 @@ const Projects: React.FC = () => {
         formData.append('image', newProjectData.image, newProjectData.image.name);
       }
 
-      const response = await fetch('https://matrixbim-server.onrender.com/api/projects', {
+      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -305,7 +305,7 @@ const Projects: React.FC = () => {
       const userInfo = getUserInfo();
       if (!userInfo) return;
 
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/projects/${projectId}/status`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects/${projectId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -341,7 +341,7 @@ const Projects: React.FC = () => {
       const userInfo = getUserInfo();
       if (!userInfo) return;
 
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/projects/${projectToDelete.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects/${projectToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -372,7 +372,7 @@ const Projects: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setIsLoadingUsers(true);
-      const response = await fetch(`https://matrixbim-server.onrender.com/api/auth/users/${user?.id}`, {
+      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${user?.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -397,7 +397,7 @@ const Projects: React.FC = () => {
       const userInfo = getUserInfo();
       if (!userInfo) return;
 
-      const response = await fetch('https://matrixbim-server.onrender.com/api/projects/assign', {
+      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects/assign', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
