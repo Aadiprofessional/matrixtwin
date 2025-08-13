@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <!-- Background with gradient -->
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E40AF" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#3B82F6" stop-opacity="0.3"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg-gradient)" rx="20" ry="20"/>
+  
+  <!-- Digital Twin Building -->
+  <g transform="translate(100, 150)">
+    <!-- Building Structure -->
+    <rect x="0" y="0" width="250" height="300" fill="#3B82F6" opacity="0.8" rx="5" ry="5"/>
+    
+    <!-- Windows -->
+    <g fill="#E0F2FE">
+      <rect x="30" y="40" width="40" height="40" rx="2" ry="2"/>
+      <rect x="100" y="40" width="40" height="40" rx="2" ry="2"/>
+      <rect x="170" y="40" width="40" height="40" rx="2" ry="2"/>
+      
+      <rect x="30" y="110" width="40" height="40" rx="2" ry="2"/>
+      <rect x="100" y="110" width="40" height="40" rx="2" ry="2"/>
+      <rect x="170" y="110" width="40" height="40" rx="2" ry="2"/>
+      
+      <rect x="30" y="180" width="40" height="40" rx="2" ry="2"/>
+      <rect x="100" y="180" width="40" height="40" rx="2" ry="2"/>
+      <rect x="170" y="180" width="40" height="40" rx="2" ry="2"/>
+    </g>
+    
+    <!-- Door -->
+    <rect x="100" y="250" width="50" height="50" fill="#E0F2FE" rx="2" ry="2"/>
+  </g>
+  
+  <!-- Digital Elements -->
+  <g transform="translate(450, 150)">
+    <!-- Digital Twin Representation -->
+    <rect x="0" y="0" width="250" height="300" fill="none" stroke="#60A5FA" stroke-width="2" stroke-dasharray="5,5" rx="5" ry="5"/>
+    
+    <!-- Data Points -->
+    <g fill="#60A5FA">
+      <circle cx="30" cy="40" r="5"/>
+      <circle cx="100" cy="40" r="5"/>
+      <circle cx="170" cy="40" r="5"/>
+      
+      <circle cx="30" cy="110" r="5"/>
+      <circle cx="100" cy="110" r="5"/>
+      <circle cx="170" cy="110" r="5"/>
+      
+      <circle cx="30" cy="180" r="5"/>
+      <circle cx="100" cy="180" r="5"/>
+      <circle cx="170" cy="180" r="5"/>
+      
+      <circle cx="100" cy="250" r="5"/>
+    </g>
+    
+    <!-- Connection Lines -->
+    <g stroke="#60A5FA" stroke-width="1" stroke-dasharray="3,3">
+      <line x1="30" y1="40" x2="-320" y2="40"/>
+      <line x1="100" y1="40" x2="-250" y2="40"/>
+      <line x1="170" y1="40" x2="-180" y2="40"/>
+      
+      <line x1="30" y1="110" x2="-320" y2="110"/>
+      <line x1="100" y1="110" x2="-250" y2="110"/>
+      <line x1="170" y1="110" x2="-180" y2="110"/>
+      
+      <line x1="30" y1="180" x2="-320" y2="180"/>
+      <line x1="100" y1="180" x2="-250" y2="180"/>
+      <line x1="170" y1="180" x2="-180" y2="180"/>
+      
+      <line x1="100" y1="250" x2="-250" y2="250"/>
+    </g>
+  </g>
+  
+  <!-- IoT Sensors -->
+  <g transform="translate(400, 100)">
+    <circle cx="0" cy="0" r="15" fill="#2563EB" opacity="0.7"/>
+    <circle cx="0" cy="0" r="25" fill="none" stroke="#2563EB" stroke-width="2" opacity="0.5"/>
+    <circle cx="0" cy="0" r="35" fill="none" stroke="#2563EB" stroke-width="1" opacity="0.3"/>
+  </g>
+  
+  <g transform="translate(200, 100)">
+    <circle cx="0" cy="0" r="15" fill="#2563EB" opacity="0.7"/>
+    <circle cx="0" cy="0" r="25" fill="none" stroke="#2563EB" stroke-width="2" opacity="0.5"/>
+    <circle cx="0" cy="0" r="35" fill="none" stroke="#2563EB" stroke-width="1" opacity="0.3"/>
+  </g>
+  
+  <g transform="translate(600, 200)">
+    <circle cx="0" cy="0" r="15" fill="#2563EB" opacity="0.7"/>
+    <circle cx="0" cy="0" r="25" fill="none" stroke="#2563EB" stroke-width="2" opacity="0.5"/>
+    <circle cx="0" cy="0" r="35" fill="none" stroke="#2563EB" stroke-width="1" opacity="0.3"/>
+  </g>
+  
+  <!-- Dashboard Elements -->
+  <g transform="translate(400, 500)">
+    <!-- Dashboard Frame -->
+    <rect x="-150" y="-80" width="300" height="120" fill="#1E40AF" opacity="0.9" rx="10" ry="10"/>
+    
+    <!-- Charts -->
+    <rect x="-130" y="-60" width="80" height="80" fill="#BFDBFE" rx="5" ry="5"/>
+    <rect x="-30" y="-60" width="80" height="80" fill="#BFDBFE" rx="5" ry="5"/>
+    <rect x="70" y="-60" width="80" height="80" fill="#BFDBFE" rx="5" ry="5"/>
+    
+    <!-- Chart Lines -->
+    <polyline points="-120,-40 -110,-20 -100,-50 -90,-30 -80,-10 -70,-25" stroke="#1E40AF" stroke-width="2" fill="none"/>
+    <rect x="-20" y="-50" width="60" height="60" fill="#1E40AF" opacity="0.5"/>
+    
+    <!-- Pie Chart -->
+    <path d="M110,-20 L110,-60 A40,40 0 0,1 140,-35 Z" fill="#1E40AF"/>
+    <path d="M110,-20 L140,-35 A40,40 0 0,1 110,20 Z" fill="#3B82F6"/>
+    <path d="M110,-20 L110,20 A40,40 0 0,1 80,-35 Z" fill="#60A5FA"/>
+    <path d="M110,-20 L80,-35 A40,40 0 0,1 110,-60 Z" fill="#93C5FD"/>
+  </g>
+  
+  <!-- MatrixTwin Logo -->
+  <g transform="translate(400, 50)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="30" font-weight="bold" fill="#1E40AF" text-anchor="middle">MatrixTwin</text>
+    <text x="0" y="30" font-family="Arial, sans-serif" font-size="16" fill="#3B82F6" text-anchor="middle">Digital Construction Platform</text>
+  </g>
+</svg>

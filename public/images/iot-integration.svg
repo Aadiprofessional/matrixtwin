@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <!-- Background with gradient -->
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7E22CE" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#A855F7" stop-opacity="0.3"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg-gradient)" rx="20" ry="20"/>
+  
+  <!-- Construction Site with IoT Sensors -->
+  <g transform="translate(400, 300)">
+    <!-- Building Structure -->
+    <g>
+      <!-- Foundation -->
+      <rect x="-200" y="100" width="400" height="20" fill="#94A3B8" stroke="#64748B" stroke-width="2"/>
+      
+      <!-- Columns -->
+      <rect x="-180" y="-100" width="20" height="200" fill="#94A3B8" stroke="#64748B" stroke-width="2"/>
+      <rect x="-60" y="-100" width="20" height="200" fill="#94A3B8" stroke="#64748B" stroke-width="2"/>
+      <rect x="40" y="-100" width="20" height="200" fill="#94A3B8" stroke="#64748B" stroke-width="2"/>
+      <rect x="160" y="-100" width="20" height="200" fill="#94A3B8" stroke="#64748B" stroke-width="2"/>
+      
+      <!-- Beams -->
+      <rect x="-200" y="-100" width="400" height="20" fill="#94A3B8" stroke="#64748B" stroke-width="2"/>
+      <rect x="-200" y="0" width="400" height="20" fill="#94A3B8" stroke="#64748B" stroke-width="2"/>
+    </g>
+    
+    <!-- IoT Sensors -->
+    <g>
+      <!-- Temperature Sensor -->
+      <circle cx="-170" cy="-50" r="15" fill="#F9A8D4" stroke="#BE185D" stroke-width="2"/>
+      <path d="M-175,-55 L-165,-45 M-175,-45 L-165,-55" stroke="#BE185D" stroke-width="2"/>
+      
+      <!-- Humidity Sensor -->
+      <circle cx="-50" cy="-50" r="15" fill="#A5B4FC" stroke="#4F46E5" stroke-width="2"/>
+      <path d="M-55,-50 L-45,-50 M-50,-55 L-50,-45" stroke="#4F46E5" stroke-width="2"/>
+      
+      <!-- Pressure Sensor -->
+      <circle cx="50" cy="-50" r="15" fill="#BAE6FD" stroke="#0284C7" stroke-width="2"/>
+      <circle cx="50" cy="-50" r="7" fill="none" stroke="#0284C7" stroke-width="2"/>
+      
+      <!-- Motion Sensor -->
+      <circle cx="170" cy="-50" r="15" fill="#FDE68A" stroke="#D97706" stroke-width="2"/>
+      <path d="M170,-58 L170,-42 M162,-50 L178,-50" stroke="#D97706" stroke-width="2"/>
+      
+      <!-- Structural Integrity Sensor -->
+      <circle cx="-170" cy="50" r="15" fill="#86EFAC" stroke="#16A34A" stroke-width="2"/>
+      <path d="M-177,50 L-163,50 M-170,43 L-170,57" stroke="#16A34A" stroke-width="2"/>
+      
+      <!-- Air Quality Sensor -->
+      <circle cx="-50" cy="50" r="15" fill="#FCA5A5" stroke="#DC2626" stroke-width="2"/>
+      <path d="M-55,45 L-45,55 M-55,55 L-45,45" stroke="#DC2626" stroke-width="2"/>
+      
+      <!-- Noise Level Sensor -->
+      <circle cx="50" cy="50" r="15" fill="#D8B4FE" stroke="#7E22CE" stroke-width="2"/>
+      <path d="M43,50 L57,50 M50,43 L50,57" stroke="#7E22CE" stroke-width="2"/>
+      
+      <!-- Light Sensor -->
+      <circle cx="170" cy="50" r="15" fill="#FDBA74" stroke="#EA580C" stroke-width="2"/>
+      <circle cx="170" cy="50" r="7" fill="none" stroke="#EA580C" stroke-width="2"/>
+    </g>
+    
+    <!-- Wireless Connections -->
+    <g stroke="#A855F7" stroke-width="1" stroke-dasharray="5,5">
+      <!-- Connect sensors to gateway -->
+      <path d="M-170,-50 C-100,-150 100,-150 170,-50" fill="none"/>
+      <path d="M-50,-50 C-25,-120 25,-120 50,-50" fill="none"/>
+      <path d="M-170,50 C-100,150 100,150 170,50" fill="none"/>
+      <path d="M-50,50 C-25,120 25,120 50,50" fill="none"/>
+    </g>
+  </g>
+  
+  <!-- Gateway Device -->
+  <g transform="translate(650, 200)">
+    <!-- Gateway Box -->
+    <rect x="-70" y="-40" width="140" height="80" rx="10" ry="10" fill="#F3E8FF" stroke="#A855F7" stroke-width="3"/>
+    
+    <!-- Antenna -->
+    <line x1="-40" y1="-40" x2="-40" y2="-70" stroke="#A855F7" stroke-width="3"/>
+    <line x1="0" y1="-40" x2="0" y2="-80" stroke="#A855F7" stroke-width="3"/>
+    <line x1="40" y1="-40" x2="40" y2="-70" stroke="#A855F7" stroke-width="3"/>
+    
+    <!-- Status Lights -->
+    <circle cx="-40" cy="0" r="10" fill="#86EFAC"/>
+    <circle cx="0" cy="0" r="10" fill="#86EFAC"/>
+    <circle cx="40" cy="0" r="10" fill="#86EFAC"/>
+    
+    <!-- Label -->
+    <text x="0" y="30" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#7E22CE" text-anchor="middle">IoT Gateway</text>
+  </g>
+  
+  <!-- Cloud Connection -->
+  <g transform="translate(650, 300)">
+    <!-- Connection Line -->
+    <path d="M0,-60 C0,-20 0,-20 0,0" stroke="#A855F7" stroke-width="3" stroke-dasharray="10,5" fill="none"/>
+    
+    <!-- Cloud -->
+    <path d="M-60,20 C-70,0 -50,-20 -30,-20 C-30,-40 0,-50 20,-30 C40,-50 70,-30 70,-10 C90,0 80,30 60,30 C60,50 30,60 10,40 C0,60 -30,50 -40,30 C-60,30 -80,40 -60,20" fill="#F3E8FF" stroke="#A855F7" stroke-width="3"/>
+    
+    <!-- Cloud Text -->
+    <text x="0" y="20" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#7E22CE" text-anchor="middle">MatrixTwin Cloud</text>
+  </g>
+  
+  <!-- Dashboard -->
+  <g transform="translate(650, 450)">
+    <!-- Connection Line -->
+    <path d="M0,-50 C0,-30 0,-30 0,-10" stroke="#A855F7" stroke-width="3" stroke-dasharray="10,5" fill="none"/>
+    
+    <!-- Dashboard Screen -->
+    <rect x="-80" y="-10" width="160" height="100" rx="5" ry="5" fill="#F3E8FF" stroke="#A855F7" stroke-width="3"/>
+    
+    <!-- Screen Content -->
+    <rect x="-70" y="0" width="140" height="20" rx="3" ry="3" fill="#E9D5FF"/>
+    <rect x="-70" y="25" width="65" height="20" rx="3" ry="3" fill="#E9D5FF"/>
+    <rect x="5" y="25" width="65" height="20" rx="3" ry="3" fill="#E9D5FF"/>
+    <rect x="-70" y="50" width="140" height="20" rx="3" ry="3" fill="#E9D5FF"/>
+    
+    <!-- Dashboard Text -->
+    <text x="0" y="80" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#7E22CE" text-anchor="middle">IoT Dashboard</text>
+  </g>
+  
+  <!-- Mobile Device -->
+  <g transform="translate(150, 450)">
+    <!-- Phone Outline -->
+    <rect x="-30" y="-60" width="60" height="120" rx="10" ry="10" fill="#F3E8FF" stroke="#A855F7" stroke-width="3"/>
+    
+    <!-- Screen -->
+    <rect x="-25" y="-50" width="50" height="90" fill="#E9D5FF" rx="5" ry="5"/>
+    
+    <!-- Home Button -->
+    <circle cx="0" cy="50" r="8" fill="#A855F7" stroke="#7E22CE" stroke-width="1"/>
+    
+    <!-- Connection to Cloud -->
+    <path d="M30,0 C100,-50 400,-50 570,20" stroke="#A855F7" stroke-width="2" stroke-dasharray="10,5" fill="none"/>
+    
+    <!-- Phone Text -->
+    <text x="0" y="80" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#7E22CE" text-anchor="middle">Mobile App</text>
+  </g>
+  
+  <!-- Title -->
+  <g transform="translate(400, 50)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="30" font-weight="bold" fill="#7E22CE" text-anchor="middle">MatrixTwin IoT Integration</text>
+    <text x="0" y="30" font-family="Arial, sans-serif" font-size="16" fill="#A855F7" text-anchor="middle">Real-time Construction Site Monitoring</text>
+  </g>
+</svg>

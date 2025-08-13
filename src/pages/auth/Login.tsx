@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Turnstile } from '../../components/ui/Turnstile';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
@@ -29,24 +30,34 @@ const Login: React.FC = () => {
   const [pendingVerification, setPendingVerification] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showTokenExpiredMessage, setShowTokenExpiredMessage] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
   
-  const { setUser, setIsAuthenticated, verifyTwoFactor } = useAuth();
+  const { setUser, setIsAuthenticated, verifyTwoFactor, isAuthenticated } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  
-  // Scroll to top when component mounts
+
   useEffect(() => {
-    window.scrollTo(0, 0);
+    // Check if user was redirected here due to token expiration
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenExpired = urlParams.get('tokenExpired');
+    if (tokenExpired === 'true') {
+      setShowTokenExpiredMessage(true);
+      // Clear the URL parameter
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
-  
+
   // Add this new useEffect at the top of the component
   useEffect(() => {
-    // Clear any existing auth data for fresh login experience
-    console.log('Clearing existing auth data...');
-    localStorage.removeItem('auth.user');
-    localStorage.removeItem('auth.session');
-    sessionStorage.removeItem('login_success');
+    // Only clear auth data if user is not already authenticated
+    if (!isAuthenticated) {
+      console.log('Clearing existing auth data for fresh login...');
+      localStorage.removeItem('auth.user');
+      localStorage.removeItem('auth.session');
+      sessionStorage.removeItem('login_success');
+    }
     
     // Allow special direct login for specific email
     const urlParams = new URLSearchParams(window.location.search);
@@ -62,7 +73,7 @@ const Login: React.FC = () => {
         }
       }, 500);
     }
-  }, []);
+  }, [isAuthenticated]);
   
   // Check for password reset confirmation
   useEffect(() => {
@@ -77,10 +88,11 @@ const Login: React.FC = () => {
           // Set the session using the recovery token
           const { error } = await supabase.auth.setSession({
             access_token: accessToken,
-            refresh_token: '',
+            refresh_token: hashParams.get('refresh_token') || ''
           });
           
           if (!error) {
+            // Redirect to reset password page
             navigate('/reset-password');
           }
         }
@@ -89,7 +101,12 @@ const Login: React.FC = () => {
     
     checkPasswordReset();
   }, [navigate]);
-  
+
+  // Scroll to top when component mounts
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.clear(); // Start with clean console
@@ -101,13 +118,19 @@ const Login: React.FC = () => {
       setError(null);
       setIsLoading(true);
       
-      // Make API call to the new endpoint
+      if (!turnstileToken) {
+        setError('Please complete the CAPTCHA verification');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Make API call to the remote server (same as other pages)
       const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password, turnstileToken })
       });
 
       const data = await response.json();
@@ -155,336 +178,293 @@ const Login: React.FC = () => {
       setIsLoading(false);
     }
   };
-  
+
   const handleTwoFactorSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
+      setError(null);
+      setIsLoading(true);
+      
       await verifyTwoFactor(twoFactorCode);
+      
+      console.log('Two-factor verification successful');
       setLoginSuccess(true);
+      
+      // Navigate to projects page
       setTimeout(() => {
-        navigate('/');
-      }, 1000);
+        navigate('/projects', { replace: true });
+      }, 500);
+      
     } catch (err) {
-      console.error(err);
+      const error = err as Error;
+      console.error('Two-factor verification failed:', error);
+      setError(error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
-  
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-dark-950 bg-ai-dots relative overflow-hidden">
-      {/* Video Background */}
-      <video
-        autoPlay
-        loop
-        muted
-        className="absolute inset-0 w-full h-full object-cover z-0 opacity-50"
-        style={{ filter: 'brightness(2)' }}
-      >
-        <source src={BackgroundVideo} type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
-      
-      {/* Animated background elements */}
-      <div className="absolute inset-0 bg-ai-grid opacity-20 z-10"></div>
-      
-      {/* Logo and branding at top left */}
-      <div className="absolute top-8 left-8 z-20 flex items-center">
-        <div className="w-16 h-16 mr-4">
-          <img src={MatrixAILogo} alt="MatrixAI Logo" className="w-full h-full object-contain" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-ai-blue">MatrixTwin</h1>
-          <p className="text-sm text-gray-300">Intelligent Construction Management</p>
-        </div>
-      </div>
-      
-      {/* Company footer at bottom right */}
-      <div className="absolute bottom-4 right-8 z-20 text-right">
-        <p className="text-gray-400 text-sm">Powered by: MatrixAI Company Ltd</p>
-      </div>
-      
-      {/* Animated gradient orbs - with z-index to appear above video */}
-      <motion.div 
-        className="absolute top-1/4 -left-20 w-60 h-60 rounded-full bg-ai-blue/20 blur-3xl z-10"
-        animate={{ 
-          x: [0, 30, 0], 
-          opacity: [0.2, 0.3, 0.2] 
-        }}
-        transition={{ 
-          duration: 8, 
-          repeat: Infinity,
-          ease: "easeInOut" 
-        }}
-      />
-      
-      <motion.div 
-        className="absolute bottom-1/4 -right-20 w-80 h-80 rounded-full bg-ai-purple/20 blur-3xl z-10"
-        animate={{ 
-          x: [0, -40, 0], 
-          opacity: [0.15, 0.25, 0.15] 
-        }}
-        transition={{ 
-          duration: 10, 
-          repeat: Infinity,
-          ease: "easeInOut",
-          delay: 1 
-        }}
-      />
-      
-      <motion.div 
-        className="absolute top-2/3 left-1/4 w-40 h-40 rounded-full bg-ai-teal/20 blur-3xl z-10"
-        animate={{ 
-          y: [0, -30, 0], 
-          opacity: [0.1, 0.2, 0.1] 
-        }}
-        transition={{ 
-          duration: 7, 
-          repeat: Infinity,
-          ease: "easeInOut",
-          delay: 2 
-        }}
-      />
 
-      <div className="absolute top-4 right-4 flex gap-2 z-20">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={toggleDarkMode}
-          className="p-2 rounded-full bg-dark-800/50 backdrop-blur-sm border border-dark-700/50 text-gray-300"
-        >
-          <IconContext.Provider value={{ className: "text-xl" }}>
-            {darkMode ? <RiIcons.RiEyeLine /> : <RiIcons.RiEyeOffLine />}
-          </IconContext.Provider>
-        </motion.button>
+  const handlePasswordReset = async () => {
+    if (!email) {
+      setError('Please enter your email address first');
+      return;
+    }
+    
+    try {
+      setError(null);
+      setIsLoading(true);
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      
+      if (error) throw new Error(error.message);
+      
+      alert('Password reset email sent! Check your inbox.');
+      
+    } catch (err) {
+      const error = err as Error;
+      console.error('Password reset failed:', error);
+      setError(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleLanguage = () => {
+    const newLang = i18n.language === 'en' ? 'ar' : 'en';
+    i18n.changeLanguage(newLang);
+    document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
+  };
+
+  if (showTwoFactor) {
+    return (
+      <div className="min-h-screen relative flex items-center justify-center">
+        {/* Background Video */}
+        <div className="absolute inset-0 overflow-hidden">
+          <video
+            autoPlay
+            loop
+            muted
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ filter: 'brightness(0.3)' }}
+          >
+            <source src={BackgroundVideo} type="video/mp4" />
+          </video>
+        </div>
         
-        <motion.select
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          value={i18n.language}
-          onChange={(e) => i18n.changeLanguage(e.target.value)}
-          className="bg-dark-800/50 backdrop-blur-sm border border-dark-700/50 rounded-lg text-sm px-3 py-2 text-gray-300"
+        {/* Content */}
+        <div className="relative z-10 w-full max-w-md mx-auto p-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <Card className="backdrop-blur-md bg-white/10 border-white/20 shadow-2xl">
+              <div className="p-8">
+                <div className="text-center mb-8">
+                  <img src={MatrixAILogo} alt="MatrixAI Logo" className="h-16 mx-auto mb-4" />
+                  <h1 className="text-3xl font-bold text-white mb-2">
+                    {t('twoFactorAuth')}
+                  </h1>
+                  <p className="text-white/80">
+                    {t('enterVerificationCode')}
+                  </p>
+                </div>
+
+                <form onSubmit={handleTwoFactorSubmit} className="space-y-6">
+                  <div>
+                    <Input
+                      type="text"
+                      placeholder={t('verificationCode')}
+                      value={twoFactorCode}
+                      onChange={(e) => setTwoFactorCode(e.target.value)}
+                      className="bg-white/10 border-white/20 text-white placeholder-white/60"
+                      required
+                    />
+                  </div>
+
+                  {error && (
+                    <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3">
+                      <p className="text-red-200 text-sm">{error}</p>
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? t('verifying') : t('verify')}
+                  </Button>
+                </form>
+
+                <div className="mt-6 text-center">
+                  <button
+                    onClick={() => setShowTwoFactor(false)}
+                    className="text-white/80 hover:text-white text-sm"
+                  >
+                    {t('backToLogin')}
+                  </button>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen relative flex items-center justify-center">
+      {/* Background Video */}
+      <div className="absolute inset-0 overflow-hidden">
+        <video
+          autoPlay
+          loop
+          muted
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ filter: 'brightness(0.3)' }}
         >
-          <option value="en">🇺🇸 English</option>
-          <option value="zh">🇨🇳 中文</option>
-          <option value="fr">🇫🇷 Français</option>
-        </motion.select>
+          <source src={BackgroundVideo} type="video/mp4" />
+        </video>
       </div>
       
-      <div className="w-full max-w-md z-10">
-        <motion.div 
-          className="text-center mb-10"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
+      {/* Top Controls */}
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-3">
+        <button
+          onClick={toggleLanguage}
+          className="p-2 rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-colors"
+          title={i18n.language === 'en' ? 'العربية' : 'English'}
         >
-          
-        
-        </motion.div>
-        
+          <RiIcons.RiGlobalLine className="w-5 h-5" />
+        </button>
+        <button
+          onClick={toggleDarkMode}
+          className="p-2 rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-colors"
+          title={darkMode ? t('lightMode') : t('darkMode')}
+        >
+          {darkMode ? <RiIcons.RiSunLine className="w-5 h-5" /> : <RiIcons.RiMoonLine className="w-5 h-5" />}
+        </button>
+      </div>
+      
+      {/* Content */}
+      <div className="relative z-10 w-full max-w-md mx-auto p-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.2 }}
+          transition={{ duration: 0.6 }}
         >
-          <Card variant="ai-dark" className="p-6 border border-ai-blue/20 shadow-ai-glow bg-dark-950/40 backdrop-blur-sm">
-            {loginSuccess ? (
-              <motion.div 
-                className="py-8 text-center"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5 }}
-              >
-                <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-success/10 text-success mb-4">
-                  <IconContext.Provider value={{ className: "text-3xl" }}>
-                    <RiIcons.RiCheckLine />
-                  </IconContext.Provider>
-                </div>
-                <h2 className="text-xl font-display font-semibold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-ai-blue to-ai-teal">
-                  {t('auth.loginSuccess')}
-                </h2>
-                <p className="text-gray-400">
-                  {t('auth.redirecting')}
+          <Card className="backdrop-blur-md bg-white/10 border-white/20 shadow-2xl">
+            <div className="p-8">
+              <div className="text-center mb-8">
+                <img src={MatrixAILogo} alt="MatrixAI Logo" className="h-16 mx-auto mb-4" />
+                <h1 className="text-3xl font-bold text-white mb-2">
+                  {t('welcomeBack')}
+                </h1>
+                <p className="text-white/80">
+                  {t('signInToContinue')}
                 </p>
-              </motion.div>
-            ) : pendingVerification ? (
-              <motion.div 
-                className="py-8 text-center"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5 }}
-              >
-                <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-warning/10 text-warning mb-4">
-                  <IconContext.Provider value={{ className: "text-3xl" }}>
-                    <RiIcons.RiTimeLine />
-                  </IconContext.Provider>
-                </div>
-                <h2 className="text-xl font-display font-semibold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-ai-blue to-ai-teal">
-                  Account Pending Verification
-                </h2>
-                <p className="text-gray-400 mb-4">
-                  Your account is waiting for admin verification. Please check back later or contact an administrator.
-                </p>
-                <Button
-                  variant="ai-secondary"
-                  onClick={() => setPendingVerification(false)}
-                >
-                  Back to Login
-                </Button>
-              </motion.div>
-            ) : showTwoFactor ? (
-              <form onSubmit={handleTwoFactorSubmit}>
-                <h2 className="text-xl font-display font-semibold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r from-ai-blue to-ai-teal">
-                  {t('auth.2fa')}
-                </h2>
-            
-                <div className="mb-6 text-center">
-                  <p className="text-sm text-gray-400 mb-4">
-                    {t('auth.enterCode')}
+              </div>
+
+              {/* Token Expired Message */}
+              {showTokenExpiredMessage && (
+                <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-3 mb-6">
+                  <p className="text-yellow-200 text-sm">
+                    <RiIcons.RiInformationLine className="inline mr-2" />
+                    Your session has expired. Please log in again to continue.
                   </p>
-                  
-                  <div className="flex justify-center mb-4">
-                    <Input
-                      type="text"
-                      value={twoFactorCode}
-                      onChange={(e) => setTwoFactorCode(e.target.value)}
-                      placeholder="000000"
-                      required
-                      className="text-center text-xl tracking-wide max-w-[180px] input-ai bg-dark-800/50 border-ai-blue/30 text-white"
-                    />
-                  </div>
-                  
-                  <p className="text-xs text-gray-500 mb-4">
-                    For demo purposes, any 6-digit code will work
-                  </p>
-                  
-                  {error && (
-                    <motion.div 
-                      className="bg-error/10 text-error text-sm p-3 rounded-lg mb-4 border border-error/20"
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      {error}
-                    </motion.div>
-                  )}
-                  
-                  <div className="flex gap-3">
-                    <Button
-                      type="button"
-                      variant="ai-secondary"
-                      className="flex-1"
-                      onClick={() => setShowTwoFactor(false)}
-                    >
-                      Back
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="ai-gradient"
-                      isLoading={isLoading}
-                      className="flex-1"
-                      glowing
-                    >
-                      Verify
-                    </Button>
-                  </div>
                 </div>
-              </form>
-            ) : (
-              <form onSubmit={handleSubmit}>
-                <h2 className="text-xl font-display font-semibold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r from-ai-blue to-ai-teal">
-                  {t('auth.login')}
-                </h2>
-                
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Input
-                      label={t('auth.email')}
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      leftIcon={
-                        <IconContext.Provider value={{ className: "text-ai-blue" }}>
-                          <RiIcons.RiMailLine />
-                        </IconContext.Provider>
-                      }
-                      required
-                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white placeholder:text-gray-500"
-                    />
-                  </div>
-                
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div>
+                  <Input
+                    type="email"
+                    placeholder={t('email')}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="bg-white/10 border-white/20 text-white placeholder-white/60"
+                    required
+                  />
+                </div>
+
                 <div className="relative">
                   <Input
-                    label={t('auth.password')}
                     type={showPassword ? 'text' : 'password'}
+                    placeholder={t('password')}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    leftIcon={
-                      <IconContext.Provider value={{ className: "text-ai-blue" }}>
-                        <RiIcons.RiLockLine />
-                      </IconContext.Provider>
-                    }
+                    className="bg-white/10 border-white/20 text-white placeholder-white/60 pr-12"
                     required
-                    className="input-ai bg-dark-800/50 border-ai-blue/30 text-white placeholder:text-gray-500"
                   />
                   <button
                     type="button"
-                    className="absolute right-3 top-[38px] text-gray-400 hover:text-ai-blue transition-colors"
                     onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white"
                   >
-                    <IconContext.Provider value={{}}>
-                      {showPassword ? <RiIcons.RiEyeOffLine /> : <RiIcons.RiEyeLine />}
-                    </IconContext.Provider>
+                    {showPassword ? <RiIcons.RiEyeOffLine /> : <RiIcons.RiEyeLine />}
                   </button>
-                  </div>
                 </div>
-                
-                <div className="flex items-center justify-between my-4">
-                  <label className="flex items-center space-x-2 cursor-pointer">
+
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center text-white/80">
                     <input
                       type="checkbox"
                       checked={rememberMe}
-                      onChange={() => setRememberMe(!rememberMe)}
-                      className="form-checkbox h-4 w-4 text-ai-blue rounded border-ai-blue/50 focus:ring-ai-blue/30 bg-dark-800"
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="mr-2 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="text-sm text-gray-400">{t('auth.rememberMe')}</span>
+                    {t('rememberMe')}
                   </label>
-                  
-                  <Link to="/forgot-password" className="text-sm text-ai-blue hover:text-ai-teal transition-colors">
-                    {t('auth.forgotPassword')}
-                  </Link>
-                </div>
-                
-                {error && (
-                  <motion.div 
-                    className="bg-error/10 text-error text-sm p-3 rounded-lg mb-4 border border-error/20"
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
+                  <button
+                    type="button"
+                    onClick={handlePasswordReset}
+                    className="text-white/80 hover:text-white text-sm"
                   >
-                    {error}
-                  </motion.div>
+                    {t('forgotPassword')}
+                  </button>
+                </div>
+
+                {error && (
+                  <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3">
+                    <p className="text-red-200 text-sm">{error}</p>
+                  </div>
                 )}
-                
+
+                {loginSuccess && (
+                  <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-3">
+                    <p className="text-green-200 text-sm">{t('loginSuccessful')}</p>
+                  </div>
+                )}
+
+                <div className="mt-4 flex justify-center">
+                  <Turnstile 
+                    siteKey={process.env.REACT_APP_TURNSTILE_SITE_KEY || "0x4AAAAAABrRlVmhV5uIuLDZ"}
+                    onVerify={(token) => setTurnstileToken(token)}
+                    theme="dark"
+                  />
+                </div>
+
                 <Button
                   type="submit"
-                  variant="ai-gradient"
-                  isLoading={isLoading}
-                  fullWidth
-                  className="mt-6"
-                  glowing
+                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+                  disabled={isLoading}
                 >
-                  {t('auth.login')}
+                  {isLoading ? t('signingIn') : t('signIn')}
                 </Button>
-                
-                <p className="text-center text-sm text-gray-400 mt-4">
-                  {t('auth.noAccount')}{' '}
-                  <Link to="/signup" className="text-ai-blue hover:text-ai-teal transition-colors">
-                    {t('auth.signup')}
+              </form>
+
+              <div className="mt-6 text-center">
+                <p className="text-white/80 text-sm">
+                  {t('dontHaveAccount')}{' '}
+                  <Link to="/signup" className="text-blue-400 hover:text-blue-300">
+                    {t('signUp')}
                   </Link>
                 </p>
-              </form>
-            )}
+              </div>
+            </div>
           </Card>
         </motion.div>
       </div>
@@ -492,4 +472,4 @@ const Login: React.FC = () => {
   );
 };
 
-export default Login; 
+export default Login;

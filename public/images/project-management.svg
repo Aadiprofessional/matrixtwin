@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <!-- Background with gradient -->
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#065F46" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#10B981" stop-opacity="0.3"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg-gradient)" rx="20" ry="20"/>
+  
+  <!-- Main Project Board -->
+  <g transform="translate(400, 300)">
+    <!-- Board Background -->
+    <rect x="-300" y="-200" width="600" height="400" fill="#ECFDF5" rx="10" ry="10" stroke="#10B981" stroke-width="2"/>
+    
+    <!-- Board Header -->
+    <rect x="-300" y="-200" width="600" height="50" fill="#10B981" rx="10" ry="10"/>
+    <text x="0" y="-170" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="white" text-anchor="middle">Construction Project Dashboard</text>
+    
+    <!-- Column Headers -->
+    <g font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#065F46" text-anchor="middle">
+      <text x="-225" y="-130">Planning</text>
+      <text x="-75" y="-130">In Progress</text>
+      <text x="75" y="-130">Quality Check</text>
+      <text x="225" y="-130">Completed</text>
+    </g>
+    
+    <!-- Column Dividers -->
+    <g stroke="#D1FAE5" stroke-width="2">
+      <line x1="-150" y1="-140" x2="-150" y2="190"/>
+      <line x1="0" y1="-140" x2="0" y2="190"/>
+      <line x1="150" y1="-140" x2="150" y2="190"/>
+    </g>
+    
+    <!-- Task Cards - Planning -->
+    <g transform="translate(-225, -90)">
+      <!-- Card 1 -->
+      <rect x="-60" y="0" width="120" height="80" fill="white" stroke="#10B981" stroke-width="1" rx="5" ry="5"/>
+      <text x="0" y="20" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#065F46" text-anchor="middle">Site Preparation</text>
+      <text x="0" y="40" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">Clear site and prepare</text>
+      <text x="0" y="55" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">foundation area</text>
+      <rect x="-50" y="65" width="40" height="10" fill="#10B981" rx="5" ry="5"/>
+      <text x="-30" y="73" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">High</text>
+      
+      <!-- Card 2 -->
+      <rect x="-60" y="90" width="120" height="80" fill="white" stroke="#10B981" stroke-width="1" rx="5" ry="5"/>
+      <text x="0" y="110" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#065F46" text-anchor="middle">Material Ordering</text>
+      <text x="0" y="130" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">Order concrete, steel,</text>
+      <text x="0" y="145" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">and lumber</text>
+      <rect x="-50" y="155" width="40" height="10" fill="#059669" rx="5" ry="5"/>
+      <text x="-30" y="163" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">Medium</text>
+    </g>
+    
+    <!-- Task Cards - In Progress -->
+    <g transform="translate(-75, -90)">
+      <!-- Card 1 -->
+      <rect x="-60" y="0" width="120" height="80" fill="white" stroke="#10B981" stroke-width="1" rx="5" ry="5"/>
+      <text x="0" y="20" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#065F46" text-anchor="middle">Foundation Work</text>
+      <text x="0" y="40" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">Pouring concrete and</text>
+      <text x="0" y="55" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">setting rebar</text>
+      <rect x="-50" y="65" width="40" height="10" fill="#10B981" rx="5" ry="5"/>
+      <text x="-30" y="73" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">High</text>
+      
+      <!-- Card 2 -->
+      <rect x="-60" y="90" width="120" height="80" fill="white" stroke="#10B981" stroke-width="1" rx="5" ry="5"/>
+      <text x="0" y="110" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#065F46" text-anchor="middle">Framing</text>
+      <text x="0" y="130" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">Structural framing</text>
+      <text x="0" y="145" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">for first floor</text>
+      <rect x="-50" y="155" width="40" height="10" fill="#10B981" rx="5" ry="5"/>
+      <text x="-30" y="163" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">High</text>
+      
+      <!-- Card 3 -->
+      <rect x="-60" y="180" width="120" height="80" fill="white" stroke="#10B981" stroke-width="1" rx="5" ry="5"/>
+      <text x="0" y="200" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#065F46" text-anchor="middle">Electrical Rough-in</text>
+      <text x="0" y="220" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">Installing electrical</text>
+      <text x="0" y="235" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">wiring and boxes</text>
+      <rect x="-50" y="245" width="40" height="10" fill="#059669" rx="5" ry="5"/>
+      <text x="-30" y="253" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">Medium</text>
+    </g>
+    
+    <!-- Task Cards - Quality Check -->
+    <g transform="translate(75, -90)">
+      <!-- Card 1 -->
+      <rect x="-60" y="0" width="120" height="80" fill="white" stroke="#10B981" stroke-width="1" rx="5" ry="5"/>
+      <text x="0" y="20" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#065F46" text-anchor="middle">Plumbing Inspection</text>
+      <text x="0" y="40" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">Verify all plumbing</text>
+      <text x="0" y="55" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">meets code</text>
+      <rect x="-50" y="65" width="40" height="10" fill="#059669" rx="5" ry="5"/>
+      <text x="-30" y="73" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">Medium</text>
+    </g>
+    
+    <!-- Task Cards - Completed -->
+    <g transform="translate(225, -90)">
+      <!-- Card 1 -->
+      <rect x="-60" y="0" width="120" height="80" fill="white" stroke="#10B981" stroke-width="1" rx="5" ry="5"/>
+      <text x="0" y="20" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#065F46" text-anchor="middle">Site Survey</text>
+      <text x="0" y="40" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">Complete topographic</text>
+      <text x="0" y="55" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">survey of property</text>
+      <rect x="-50" y="65" width="40" height="10" fill="#10B981" rx="5" ry="5"/>
+      <text x="-30" y="73" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">High</text>
+      
+      <!-- Card 2 -->
+      <rect x="-60" y="90" width="120" height="80" fill="white" stroke="#10B981" stroke-width="1" rx="5" ry="5"/>
+      <text x="0" y="110" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#065F46" text-anchor="middle">Permits Acquired</text>
+      <text x="0" y="130" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">Building permits</text>
+      <text x="0" y="145" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">approved by city</text>
+      <rect x="-50" y="155" width="40" height="10" fill="#10B981" rx="5" ry="5"/>
+      <text x="-30" y="163" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">High</text>
+    </g>
+  </g>
+  
+  <!-- Progress Chart -->
+  <g transform="translate(150, 500)">
+    <!-- Chart Background -->
+    <rect x="-100" y="-50" width="200" height="100" rx="10" ry="10" fill="white" stroke="#10B981" stroke-width="2"/>
+    
+    <!-- Progress Bar -->
+    <rect x="-90" y="-20" width="180" height="20" rx="5" ry="5" fill="#D1FAE5"/>
+    <rect x="-90" y="-20" width="90" height="20" rx="5" ry="5" fill="#10B981"/>
+    
+    <!-- Progress Text -->
+    <text x="0" y="-30" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#065F46" text-anchor="middle">Project Progress</text>
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#065F46" text-anchor="middle">50%</text>
+    <text x="0" y="20" font-family="Arial, sans-serif" font-size="10" fill="#065F46" text-anchor="middle">On Schedule</text>
+  </g>
+  
+  <!-- Team Members -->
+  <g transform="translate(650, 500)">
+    <!-- Team Background -->
+    <rect x="-100" y="-50" width="200" height="100" rx="10" ry="10" fill="white" stroke="#10B981" stroke-width="2"/>
+    
+    <!-- Team Header -->
+    <text x="0" y="-30" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#065F46" text-anchor="middle">Team Members</text>
+    
+    <!-- Team Avatars -->
+    <circle cx="-60" cy="0" r="15" fill="#10B981"/>
+    <text x="-60" y="5" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">JD</text>
+    
+    <circle cx="-20" cy="0" r="15" fill="#10B981"/>
+    <text x="-20" y="5" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">MS</text>
+    
+    <circle cx="20" cy="0" r="15" fill="#10B981"/>
+    <text x="20" y="5" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">KL</text>
+    
+    <circle cx="60" cy="0" r="15" fill="#10B981"/>
+    <text x="60" y="5" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">RB</text>
+    
+    <!-- Team Count -->
+    <text x="0" y="30" font-family="Arial, sans-serif" font-size="12" fill="#065F46" text-anchor="middle">4 Active Members</text>
+  </g>
+  
+  <!-- Title -->
+  <g transform="translate(400, 50)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="30" font-weight="bold" fill="#065F46" text-anchor="middle">MatrixTwin Project Management</text>
+    <text x="0" y="30" font-family="Arial, sans-serif" font-size="16" fill="#10B981" text-anchor="middle">Streamlined Construction Project Tracking</text>
+  </g>
+</svg>

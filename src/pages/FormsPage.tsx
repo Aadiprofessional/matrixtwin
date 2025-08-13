@@ -222,7 +222,78 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
             content: [
               {
                 type: "text",
-                text: `Analyze this form image (page ${i + 1}) and extract all the form fields, their types, labels, and approximate positions. Return a JSON structure that represents the form with fields that can be used to recreate it. Include field types like 'text', 'number', 'date', 'checkbox', 'multipleChoice', 'select', 'signature', 'table', etc. For each field, include: id, type, label, settings (with appropriate defaults), and approximate position coordinates (x, y) in pixels relative to a standard A4 page (595x842). Also include a suggested form name and description.`
+                text: `Analyze this form image (page ${i + 1}) and extract all form fields with their properties. Return a JSON structure with the following format:
+
+{
+  "formName": "Descriptive form name",
+  "formDescription": "Brief description of the form purpose",
+  "fields": [
+    {
+      "id": "unique_field_id",
+      "type": "field_type",
+      "label": "Field Label",
+      "x": 50,
+      "y": 100,
+      "width": 300,
+      "height": 40,
+      "settings": {
+        "required": false,
+        "placeholder": "Enter text...",
+        "hideTitle": false,
+        "titleLayout": "horizontal",
+        // For select/checkbox/multipleChoice fields:
+        "options": ["Option 1", "Option 2", "Option 3"],
+        // For table fields:
+        "rows": 3,
+        "columns": 4,
+        "headers": ["Header 1", "Header 2", "Header 3", "Header 4"],
+        "data": [
+          ["Cell 1,1", "Cell 1,2", "Cell 1,3", "Cell 1,4"],
+          ["Cell 2,1", "Cell 2,2", "Cell 2,3", "Cell 2,4"]
+        ],
+        "showHeader": true,
+        // For number fields:
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "numberFormat": "integer",
+        // For text fields:
+        "inputType": "text",
+        "maxLength": 255,
+        "pattern": "",
+        // For date fields:
+        "dateFormat": "YYYY-MM-DD",
+        "includeTime": false,
+        // For file fields:
+        "maxSize": "10MB",
+        "allowedTypes": ["image/*", "application/pdf"]
+      }
+    }
+  ]
+}
+
+Field types to use:
+- "text": Single line text input
+- "textarea": Multi-line text input
+- "number": Numeric input
+- "date": Date picker
+- "select": Dropdown selection
+- "checkbox": Multiple selection checkboxes
+- "multipleChoice": Single selection radio buttons
+- "image": Image upload
+- "attachment": File upload
+- "signature": Digital signature
+- "layoutTable": Simple table layout
+- "dataTable": Data table with headers
+- "intervalData": Time interval data collection
+- "annotation": Text annotation/notes
+- "subform": Nested form component
+- "member": User/department selection
+- "approvalKit": Approval workflow
+
+For tables, extract the actual text content from cells and populate the data array. If it's a form table with empty cells, provide placeholder data that matches the table structure.
+
+Position coordinates should be relative to A4 page dimensions (595x842px). Estimate positions based on visual layout.`
               },
               {
                 type: "image_url",
@@ -243,7 +314,9 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
           body: JSON.stringify({
             model: "qwen-vl-max",
             messages: messages,
-            stream: false
+            stream: false,
+            temperature: 0.1, // Lower temperature for more consistent results
+            max_tokens: 4000
           })
         });
 
@@ -257,19 +330,114 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
         // Parse the AI response to extract form structure
         let pageFormData;
         try {
+          // Try to extract JSON from the response
           const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             pageFormData = JSON.parse(jsonMatch[0]);
-            if (pageFormData.fields) {
-              allFields.push(...pageFormData.fields.map((field: any) => ({
-                ...field,
-                id: `field-${Date.now()}-${Math.random()}`,
-                pageNumber: i + 1
-              })));
+            
+            // Validate and process the extracted data
+            if (pageFormData.fields && Array.isArray(pageFormData.fields)) {
+              const processedFields = pageFormData.fields.map((field: any, index: number) => {
+                // Ensure all required properties are present
+                const processedField = {
+                  id: field.id || `field-${Date.now()}-${index}`,
+                  type: field.type || 'text',
+                  label: field.label || `Field ${index + 1}`,
+                  x: Math.max(0, Math.min(field.x || 50, 500)),
+                  y: Math.max(0, Math.min(field.y || 50, 700)),
+                  width: Math.max(50, Math.min(field.width || 300, 500)),
+                  height: Math.max(20, Math.min(field.height || 40, 300)),
+                  pageNumber: i + 1,
+                  settings: {
+                    required: field.settings?.required || false,
+                    placeholder: field.settings?.placeholder || '',
+                    hideTitle: field.settings?.hideTitle || false,
+                    titleLayout: field.settings?.titleLayout || 'horizontal',
+                    ...field.settings
+                  }
+                };
+
+                // Process field-specific settings
+                switch (field.type) {
+                  case 'select':
+                  case 'checkbox':
+                  case 'multipleChoice':
+                    processedField.settings.options = field.settings?.options || ['Option 1', 'Option 2', 'Option 3'];
+                    break;
+                    
+                  case 'layoutTable':
+                  case 'dataTable':
+                    processedField.settings.rows = field.settings?.rows || 3;
+                    processedField.settings.columns = field.settings?.columns || 3;
+                    processedField.settings.headers = field.settings?.headers || [];
+                    processedField.settings.data = field.settings?.data || [];
+                    processedField.settings.showHeader = field.settings?.showHeader !== false;
+                    processedField.width = Math.max(400, processedField.width);
+                    processedField.height = Math.max(150, processedField.height);
+                    break;
+                    
+                  case 'number':
+                    processedField.settings.min = field.settings?.min;
+                    processedField.settings.max = field.settings?.max;
+                    processedField.settings.step = field.settings?.step || 1;
+                    processedField.settings.numberFormat = field.settings?.numberFormat || 'integer';
+                    break;
+                    
+                  case 'text':
+                    processedField.settings.inputType = field.settings?.inputType || 'text';
+                    processedField.settings.maxLength = field.settings?.maxLength;
+                    processedField.settings.pattern = field.settings?.pattern || '';
+                    break;
+                    
+                  case 'textarea':
+                    processedField.height = Math.max(80, processedField.height);
+                    processedField.settings.rows = field.settings?.rows || 3;
+                    break;
+                    
+                  case 'date':
+                    processedField.settings.dateFormat = field.settings?.dateFormat || 'YYYY-MM-DD';
+                    processedField.settings.includeTime = field.settings?.includeTime || false;
+                    break;
+                    
+                  case 'image':
+                  case 'attachment':
+                    processedField.settings.maxSize = field.settings?.maxSize || '10MB';
+                    processedField.settings.allowedTypes = field.settings?.allowedTypes || ['image/*'];
+                    processedField.height = Math.max(80, processedField.height);
+                    break;
+                    
+                  case 'signature':
+                    processedField.height = Math.max(80, processedField.height);
+                    break;
+                }
+
+                return processedField;
+              });
+
+              allFields.push(...processedFields);
             }
           }
         } catch (parseError) {
           console.error('Error parsing AI response:', parseError);
+          console.log('Raw AI response:', aiResponse);
+          
+          // Fallback: create a simple text field if parsing fails
+          allFields.push({
+            id: `field-${Date.now()}-fallback`,
+            type: 'text',
+            label: 'Generated Field',
+            x: 50,
+            y: 50 + (allFields.length * 60),
+            width: 300,
+            height: 40,
+            pageNumber: i + 1,
+            settings: {
+              required: false,
+              placeholder: 'Enter text...',
+              hideTitle: false,
+              titleLayout: 'horizontal'
+            }
+          });
         }
       }
 
@@ -277,14 +445,23 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
 
       // Create final form structure
       const formData = {
-        name: selectedFile.name.replace(/\.[^/.]+$/, "") + " - AI Generated Form",
-        description: `Form generated from uploaded ${selectedFile.type === 'application/pdf' ? 'PDF' : 'image'}`,
+        name: (allFields.length > 0 && allFields[0].formName) ? 
+              allFields[0].formName : 
+              selectedFile.name.replace(/\.[^/.]+$/, "") + " - AI Generated Form",
+        description: (allFields.length > 0 && allFields[0].formDescription) ? 
+                    allFields[0].formDescription : 
+                    `Form generated from uploaded ${selectedFile.type === 'application/pdf' ? 'PDF' : 'image'}`,
         fields: allFields.length > 0 ? allFields : [
           {
             id: `field-${Date.now()}`,
             type: 'text',
             label: 'Generated Field',
-            settings: { hideTitle: false, required: false, titleLayout: 'horizontal' },
+            settings: { 
+              hideTitle: false, 
+              required: false, 
+              titleLayout: 'horizontal',
+              placeholder: 'Enter text...'
+            },
             x: 50,
             y: 50,
             width: 300,
@@ -299,7 +476,7 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
 
     } catch (error) {
       console.error('Error generating form:', error);
-      alert('Failed to generate form. Please try again.');
+      alert(`Failed to generate form: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
     } finally {
       setIsGenerating(false);
       setProcessingPdf(false);
@@ -527,166 +704,188 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [resizeDirection, setResizeDirection] = useState<string>('');
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [initialPosition, setInitialPosition] = useState({ x: 0, y: 0 });
+  const [initialSize, setInitialSize] = useState({ width: 0, height: 0 });
   
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!wrapperRef.current) return;
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     
-    const parentRect = wrapperRef.current.parentElement?.getBoundingClientRect();
-    if (!parentRect) return;
+    // Select the field first
+    onSelect();
     
-    if (isResizing) {
-      const rect = wrapperRef.current.getBoundingClientRect();
-      
-      let newWidth = field.width || 200;
-      let newHeight = field.height || 40;
-      
-      if (resizeDirection.includes('right')) {
-        newWidth = Math.max(50, e.clientX - rect.left);
-      }
-      if (resizeDirection.includes('bottom')) {
-        newHeight = Math.max(20, e.clientY - rect.top);
-      }
-      if (resizeDirection.includes('left')) {
-        const deltaX = rect.left - e.clientX;
-        newWidth = Math.max(50, (field.width || 200) + deltaX);
-      }
-      if (resizeDirection.includes('top')) {
-        const deltaY = rect.top - e.clientY;
-        newHeight = Math.max(20, (field.height || 40) + deltaY);
-      }
-      
-      // Apply constraints to keep within parent bounds with better padding calculation
-      const padding = 24; // 12px padding on each side
-      const maxWidth = parentRect.width - (field.x || 0) - padding;
-      const maxHeight = parentRect.height - (field.y || 0) - padding;
-      
-      newWidth = Math.min(newWidth, maxWidth);
-      newHeight = Math.min(newHeight, maxHeight);
-      
-      wrapperRef.current.style.width = `${newWidth}px`;
-      wrapperRef.current.style.height = `${newHeight}px`;
-      
-    } else if (isDragging && onUpdatePosition) {
-      // Fixed drag positioning with proper boundary constraints
-      const padding = 24; // 12px padding on each side
-      const fieldWidth = field.width || 200;
-      const fieldHeight = field.height || 40;
-      
-      // Calculate canvas dimensions
-      const canvasWidth = parentRect.width - padding;
-      const canvasHeight = parentRect.height - padding;
-      
-      // Calculate new position
-      const newX = Math.max(0, Math.min(canvasWidth - fieldWidth, e.clientX - parentRect.left - dragOffset.x - 12));
-      const newY = Math.max(0, Math.min(canvasHeight - fieldHeight, e.clientY - parentRect.top - dragOffset.y - 12));
-      
-      // Apply position immediately for smooth dragging
-      wrapperRef.current.style.left = `${newX}px`;
-      wrapperRef.current.style.top = `${newY}px`;
-    }
-  }, [isResizing, isDragging, resizeDirection, field, dragOffset, onUpdatePosition]);
+    if (!onUpdatePosition) return;
+    
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setInitialPosition({ x: field.x || 0, y: field.y || 0 });
+    
+    document.body.style.cursor = 'grabbing';
+    document.body.style.userSelect = 'none';
+  }, [field.x, field.y, onSelect, onUpdatePosition]);
   
-  const handleMouseUp = useCallback(() => {
-    if (isResizing && wrapperRef.current) {
-      setIsResizing(false);
-      setResizeDirection('');
-      onUpdateSize(fieldId, wrapperRef.current.offsetWidth, wrapperRef.current.offsetHeight);
-    } else if (isDragging && wrapperRef.current && onUpdatePosition) {
-      setIsDragging(false);
-      const parentRect = wrapperRef.current.parentElement?.getBoundingClientRect();
-      if (parentRect) {
-        const rect = wrapperRef.current.getBoundingClientRect();
-        const newX = Math.max(0, rect.left - parentRect.left - 12); // Account for padding
-        const newY = Math.max(0, rect.top - parentRect.top - 12); // Account for padding
-        onUpdatePosition(fieldId, newX, newY);
-      }
-    }
-    
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
-    document.body.style.cursor = 'default';
-  }, [fieldId, onUpdateSize, onUpdatePosition, handleMouseMove, isResizing, isDragging]);
-
   const handleResizeMouseDown = useCallback((e: React.MouseEvent, direction: string) => {
     e.preventDefault();
     e.stopPropagation();
     
     setIsResizing(true);
     setResizeDirection(direction);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setInitialSize({ width: field.width || 200, height: field.height || 40 });
+    setInitialPosition({ x: field.x || 0, y: field.y || 0 });
     
-    // Set appropriate cursor
+    document.body.style.cursor = getResizeCursor(direction);
+    document.body.style.userSelect = 'none';
+  }, [field.width, field.height, field.x, field.y]);
+  
+  const getResizeCursor = (direction: string) => {
     const cursors: { [key: string]: string } = {
-      'top-left': 'nw-resize',
-      'top-right': 'ne-resize',
-      'bottom-left': 'sw-resize',
-      'bottom-right': 'se-resize',
-      'top': 'n-resize',
-      'bottom': 's-resize',
-      'left': 'w-resize',
-      'right': 'e-resize'
+      'nw': 'nw-resize',
+      'ne': 'ne-resize',
+      'sw': 'sw-resize',
+      'se': 'se-resize',
+      'n': 'n-resize',
+      's': 's-resize',
+      'w': 'w-resize',
+      'e': 'e-resize'
     };
-    document.body.style.cursor = cursors[direction] || 'default';
+    return cursors[direction] || 'default';
+  };
+  
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!wrapperRef.current) return;
     
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [handleMouseMove, handleMouseUp]);
-
-  const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    const deltaX = e.clientX - dragStart.x;
+    const deltaY = e.clientY - dragStart.y;
     
-    if (wrapperRef.current && onUpdatePosition) {
+    if (isDragging && onUpdatePosition) {
+      const parentRect = wrapperRef.current.parentElement?.getBoundingClientRect();
+      if (!parentRect) return;
+      
+      const newX = Math.max(0, Math.min(
+        parentRect.width - (field.width || 200) - 24,
+        initialPosition.x + deltaX
+      ));
+      const newY = Math.max(0, Math.min(
+        parentRect.height - (field.height || 40) - 24,
+        initialPosition.y + deltaY
+      ));
+      
+      // Update position immediately for smooth dragging
+      wrapperRef.current.style.left = `${newX}px`;
+      wrapperRef.current.style.top = `${newY}px`;
+      
+    } else if (isResizing) {
+      let newWidth = initialSize.width;
+      let newHeight = initialSize.height;
+      let newX = initialPosition.x;
+      let newY = initialPosition.y;
+      
+      switch (resizeDirection) {
+        case 'se':
+          newWidth = Math.max(50, initialSize.width + deltaX);
+          newHeight = Math.max(20, initialSize.height + deltaY);
+          break;
+        case 'sw':
+          newWidth = Math.max(50, initialSize.width - deltaX);
+          newHeight = Math.max(20, initialSize.height + deltaY);
+          newX = initialPosition.x + Math.min(deltaX, initialSize.width - 50);
+          break;
+        case 'ne':
+          newWidth = Math.max(50, initialSize.width + deltaX);
+          newHeight = Math.max(20, initialSize.height - deltaY);
+          newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
+          break;
+        case 'nw':
+          newWidth = Math.max(50, initialSize.width - deltaX);
+          newHeight = Math.max(20, initialSize.height - deltaY);
+          newX = initialPosition.x + Math.min(deltaX, initialSize.width - 50);
+          newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
+          break;
+        case 'e':
+          newWidth = Math.max(50, initialSize.width + deltaX);
+          break;
+        case 'w':
+          newWidth = Math.max(50, initialSize.width - deltaX);
+          newX = initialPosition.x + Math.min(deltaX, initialSize.width - 50);
+          break;
+        case 's':
+          newHeight = Math.max(20, initialSize.height + deltaY);
+          break;
+        case 'n':
+          newHeight = Math.max(20, initialSize.height - deltaY);
+          newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
+          break;
+      }
+      
+      // Apply changes immediately
+      wrapperRef.current.style.width = `${newWidth}px`;
+      wrapperRef.current.style.height = `${newHeight}px`;
+      wrapperRef.current.style.left = `${newX}px`;
+      wrapperRef.current.style.top = `${newY}px`;
+    }
+  }, [isDragging, isResizing, dragStart, initialPosition, initialSize, resizeDirection, field.width, field.height, onUpdatePosition]);
+  
+  const handleMouseUp = useCallback(() => {
+    if (isDragging && wrapperRef.current && onUpdatePosition) {
       const rect = wrapperRef.current.getBoundingClientRect();
       const parentRect = wrapperRef.current.parentElement?.getBoundingClientRect();
       
       if (parentRect) {
-        setDragOffset({
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top
-        });
-        
-        setIsDragging(true);
-        document.body.style.cursor = 'grabbing';
-        
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
+        const newX = rect.left - parentRect.left - 12; // Account for padding
+        const newY = rect.top - parentRect.top - 12;
+        onUpdatePosition(fieldId, Math.max(0, newX), Math.max(0, newY));
       }
     }
-  }, [handleMouseMove, handleMouseUp, onUpdatePosition]);
-  
-  // Add click handler for the field content to enable dragging
-  const handleFieldClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onSelect();
-  }, [onSelect]);
-  
-  // Add double-click handler to start dragging
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
     
-    if (onUpdatePosition) {
-      handleDragMouseDown(e);
+    if (isResizing && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      const parentRect = wrapperRef.current.parentElement?.getBoundingClientRect();
+      
+      if (parentRect) {
+        const newX = rect.left - parentRect.left - 12;
+        const newY = rect.top - parentRect.top - 12;
+        const newWidth = rect.width;
+        const newHeight = rect.height;
+        
+        onUpdateSize(fieldId, newWidth, newHeight);
+        if (onUpdatePosition) {
+          onUpdatePosition(fieldId, Math.max(0, newX), Math.max(0, newY));
+        }
+      }
     }
-  }, [handleDragMouseDown, onUpdatePosition]);
+    
+    setIsDragging(false);
+    setIsResizing(false);
+    setResizeDirection('');
+    document.body.style.cursor = 'default';
+    document.body.style.userSelect = 'auto';
+  }, [isDragging, isResizing, fieldId, onUpdateSize, onUpdatePosition]);
   
   useEffect(() => {
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'default';
-    };
-  }, [handleMouseMove, handleMouseUp]);
+    if (isDragging || isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
   
   return (
     <div 
       ref={wrapperRef} 
-      className={`absolute border-2 transition-all duration-200 ${
+      className={`absolute border-2 transition-all duration-200 group ${
         isSelected 
           ? 'border-ai-blue shadow-lg shadow-ai-blue/20' 
-          : 'border-transparent hover:border-ai-blue/50'
-      } ${isDragging ? 'cursor-grabbing' : 'cursor-move'}`}
+          : 'border-transparent hover:border-ai-blue/50 hover:shadow-md'
+      } ${isDragging ? 'cursor-grabbing z-50' : 'cursor-grab'} ${isResizing ? 'z-50' : ''}`}
       style={{ 
         width: field.width || 200,
         height: field.height || 40,
@@ -694,61 +893,71 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
         top: field.y || 0,
         zIndex: isSelected ? 10 : (field.zIndex || 1)
       }}
-      onClick={handleFieldClick}
-      onDoubleClick={handleDoubleClick}
+      onMouseDown={handleMouseDown}
     >
-      <div 
-        className="w-full h-full"
-        onMouseDown={handleDragMouseDown}
-      >
+      {/* Main content area */}
+      <div className="w-full h-full pointer-events-none">
         {children}
       </div>
       
+      {/* Hover instruction */}
+      {!isSelected && (
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-ai-blue/10 rounded">
+          <span className="text-ai-blue text-xs font-medium">Click to select & drag</span>
+        </div>
+      )}
+      
+      {/* Resize handles - only visible when selected */}
       {isSelected && (
         <>
-          {/* Corner resize handles */}
+          {/* Corner handles - larger and easier to grab */}
           <div 
-            className="absolute -top-1 -left-1 w-3 h-3 bg-ai-blue border border-white cursor-nw-resize z-20"
-            onMouseDown={(e) => handleResizeMouseDown(e, 'top-left')}
+            className="absolute -top-2 -left-2 w-4 h-4 bg-ai-blue border-2 border-white cursor-nw-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'nw')}
+            title="Resize northwest"
           />
           <div 
-            className="absolute -top-1 -right-1 w-3 h-3 bg-ai-blue border border-white cursor-ne-resize z-20"
-            onMouseDown={(e) => handleResizeMouseDown(e, 'top-right')}
+            className="absolute -top-2 -right-2 w-4 h-4 bg-ai-blue border-2 border-white cursor-ne-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'ne')}
+            title="Resize northeast"
           />
           <div 
-            className="absolute -bottom-1 -left-1 w-3 h-3 bg-ai-blue border border-white cursor-sw-resize z-20"
-            onMouseDown={(e) => handleResizeMouseDown(e, 'bottom-left')}
+            className="absolute -bottom-2 -left-2 w-4 h-4 bg-ai-blue border-2 border-white cursor-sw-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'sw')}
+            title="Resize southwest"
           />
           <div 
-            className="absolute -bottom-1 -right-1 w-3 h-3 bg-ai-blue border border-white cursor-se-resize z-20"
-            onMouseDown={(e) => handleResizeMouseDown(e, 'bottom-right')}
-          />
-          
-          {/* Edge resize handles */}
-          <div 
-            className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-ai-blue border border-white cursor-n-resize z-20"
-            onMouseDown={(e) => handleResizeMouseDown(e, 'top')}
-          />
-          <div 
-            className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-ai-blue border border-white cursor-s-resize z-20"
-            onMouseDown={(e) => handleResizeMouseDown(e, 'bottom')}
-          />
-          <div 
-            className="absolute -left-1 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-ai-blue border border-white cursor-w-resize z-20"
-            onMouseDown={(e) => handleResizeMouseDown(e, 'left')}
-          />
-          <div 
-            className="absolute -right-1 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-ai-blue border border-white cursor-e-resize z-20"
-            onMouseDown={(e) => handleResizeMouseDown(e, 'right')}
+            className="absolute -bottom-2 -right-2 w-4 h-4 bg-ai-blue border-2 border-white cursor-se-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'se')}
+            title="Resize southeast"
           />
           
-          {/* Drag handle */}
+          {/* Edge handles */}
           <div 
-            className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-ai-blue text-white px-2 py-1 rounded text-xs cursor-grab flex items-center z-20 hover:bg-ai-blue-light"
-            onMouseDown={handleDragMouseDown}
-          >
-            <RiDragMove2Line className="mr-1" />
-            Drag
+            className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-ai-blue border-2 border-white cursor-n-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'n')}
+            title="Resize north"
+          />
+          <div 
+            className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-ai-blue border-2 border-white cursor-s-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            onMouseDown={(e) => handleResizeMouseDown(e, 's')}
+            title="Resize south"
+          />
+          <div 
+            className="absolute -left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 bg-ai-blue border-2 border-white cursor-w-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'w')}
+            title="Resize west"
+          />
+          <div 
+            className="absolute -right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 bg-ai-blue border-2 border-white cursor-e-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            onMouseDown={(e) => handleResizeMouseDown(e, 'e')}
+            title="Resize east"
+          />
+          
+          {/* Move indicator */}
+          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-ai-blue text-white px-2 py-1 rounded text-xs pointer-events-none z-30">
+            <RiDragMove2Line className="inline mr-1" />
+            Drag to move
           </div>
         </>
       )}
@@ -927,6 +1136,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     const defaultWidth = type === 'layoutTable' || type === 'dataTable' ? 400 : 300;
     const defaultHeight = type === 'layoutTable' || type === 'dataTable' ? 200 : 
                           type === 'signature' ? 80 : 
+                          type === 'textarea' ? 80 :
                           type === 'image' || type === 'attachment' ? 120 : 40;
     
     // Calculate constraints based on current page dimensions
@@ -978,7 +1188,14 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     setIsDragging(false);
     
     try {
-      const data = JSON.parse(e.dataTransfer.getData('application/json'));
+      // Check if this is a new widget being dropped (has dataTransfer data)
+      const dataTransferData = e.dataTransfer.getData('application/json');
+      if (!dataTransferData) {
+        // This might be an existing widget being dragged, let the ResizableWrapper handle it
+        return;
+      }
+      
+      const data = JSON.parse(dataTransferData);
       const rect = e.currentTarget.getBoundingClientRect();
       const currentDimensions = getCurrentPageDimensions();
       
@@ -993,6 +1210,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       const fieldWidth = data.type === 'layoutTable' || data.type === 'dataTable' ? 400 : 300;
       const fieldHeight = data.type === 'layoutTable' || data.type === 'dataTable' ? 200 : 
                          data.type === 'signature' ? 80 : 
+                         data.type === 'textarea' ? 80 :
                          data.type === 'image' || data.type === 'attachment' ? 120 : 40;
       
       // Ensure the field is dropped within the canvas bounds
@@ -1012,7 +1230,16 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
-    setIsDragging(true);
+    
+    // Only set isDragging to true if this is a new widget being dragged from the palette
+    try {
+      const dataTransferData = e.dataTransfer.getData('application/json');
+      if (dataTransferData) {
+        setIsDragging(true);
+      }
+    } catch (error) {
+      // Ignore error, might be dragging existing widget
+    }
   };
   
   const handleDragLeave = (e: React.DragEvent) => {
@@ -1127,32 +1354,115 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   const handleAIFormGenerated = (formData: any) => {
     if (formData.fields && formData.fields.length > 0) {
       saveToHistory();
-      const newPage: FormPage = {
-        id: `page_${Date.now()}`,
-        fields: formData.fields.map((field: any) => ({
+      
+      // Process the form data to ensure all fields have proper structure
+      const processedFields = formData.fields.map((field: any) => {
+        const baseField = {
           id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: field.type || 'text',
           label: field.label || 'Generated Field',
-          settings: {
-            required: field.required || false,
-            placeholder: field.placeholder || '',
-            hideTitle: false,
-            titleLayout: 'horizontal',
-            options: field.options || [],
-            allowMultiple: false,
-            allowSearch: false,
-            maxSize: '10MB',
-            rows: 3,
-            columns: 3,
-            hiddenFrameLine: false,
-            ...field.settings
-          },
           width: field.width || 300,
           height: field.height || 40,
           x: field.x || 0,
           y: field.y || 0,
           zIndex: 1
-        })),
+        };
+
+        // Process settings based on field type
+        let settings: Record<string, any> = {
+          required: field.settings?.required || false,
+          placeholder: field.settings?.placeholder || '',
+          hideTitle: field.settings?.hideTitle || false,
+          titleLayout: field.settings?.titleLayout || 'horizontal',
+          ...field.settings
+        };
+
+        // Field-specific settings processing
+        switch (field.type) {
+          case 'select':
+          case 'checkbox':
+          case 'multipleChoice':
+            settings.options = field.settings?.options || ['Option 1', 'Option 2', 'Option 3'];
+            settings.allowMultiple = field.type === 'checkbox';
+            settings.allowSearch = field.settings?.allowSearch || false;
+            break;
+            
+          case 'layoutTable':
+          case 'dataTable':
+            settings.rows = field.settings?.rows || 3;
+            settings.columns = field.settings?.columns || 3;
+            settings.headers = field.settings?.headers || [];
+            settings.data = field.settings?.data || [];
+            settings.showHeader = field.settings?.showHeader !== false;
+            settings.hiddenFrameLine = field.settings?.hiddenFrameLine || false;
+            
+            // Ensure minimum table size
+            baseField.width = Math.max(400, baseField.width);
+            baseField.height = Math.max(150, baseField.height);
+            
+            // If headers are provided but data is empty, create empty data structure
+            if (settings.headers.length > 0 && settings.data.length === 0) {
+              settings.columns = settings.headers.length;
+              settings.data = Array.from({ length: settings.rows }, () => 
+                Array.from({ length: settings.columns }, () => '')
+              );
+            }
+            
+            // If data is provided, adjust rows/columns to match
+            if (settings.data.length > 0) {
+              settings.rows = settings.data.length;
+              settings.columns = Math.max(settings.columns, Math.max(...settings.data.map((row: any[]) => row.length)));
+            }
+            break;
+            
+          case 'number':
+            settings.min = field.settings?.min;
+            settings.max = field.settings?.max;
+            settings.step = field.settings?.step || 1;
+            settings.numberFormat = field.settings?.numberFormat || 'integer';
+            break;
+            
+          case 'text':
+            settings.inputType = field.settings?.inputType || 'text';
+            settings.maxLength = field.settings?.maxLength;
+            settings.pattern = field.settings?.pattern || '';
+            break;
+            
+          case 'textarea':
+            settings.rows = field.settings?.rows || 3;
+            baseField.height = Math.max(80, baseField.height);
+            break;
+            
+          case 'date':
+            settings.dateFormat = field.settings?.dateFormat || 'YYYY-MM-DD';
+            settings.includeTime = field.settings?.includeTime || false;
+            break;
+            
+          case 'image':
+          case 'attachment':
+            settings.maxSize = field.settings?.maxSize || '10MB';
+            settings.allowedTypes = field.settings?.allowedTypes || (field.type === 'image' ? ['image/*'] : ['*/*']);
+            baseField.height = Math.max(80, baseField.height);
+            break;
+            
+          case 'signature':
+            baseField.height = Math.max(80, baseField.height);
+            break;
+            
+          default:
+            // Keep default settings for other field types
+            break;
+        }
+
+        return {
+          ...baseField,
+          settings
+        };
+      });
+
+      const newPage: FormPage = {
+        id: `page_${Date.now()}`,
+        fields: processedFields,
         dimensions: {
           width: 595,
           height: 842,
@@ -1160,6 +1470,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           size: 'A4' as const
         }
       };
+      
       setFormPages(prev => [...prev, newPage]);
       setCurrentPageIndex(formPages.length);
     }
@@ -1193,7 +1504,23 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </div>
             )}
             <div className={`bg-gray-50 border border-gray-300 rounded p-1 text-sm ${field.settings.titleLayout === 'vertical' ? 'w-full' : 'w-20'}`}>
-              <span className="text-gray-500">0</span>
+              <span className="text-gray-500">{field.settings.placeholder || '0'}</span>
+            </div>
+          </div>
+        );
+
+      case 'textarea':
+        return (
+          <div className={`p-2 ${field.settings.titleLayout === 'vertical' ? 'flex flex-col gap-1' : 'flex items-center gap-2'}`}>
+            {!field.settings.hideTitle && (
+              <div className="font-medium text-sm text-gray-800 min-w-[80px]">
+                {field.label}{requiredMark}
+              </div>
+            )}
+            <div className={`bg-gray-50 border border-gray-300 rounded p-2 text-sm ${field.settings.titleLayout === 'vertical' ? 'w-full' : 'flex-grow'}`}>
+              <div className="text-gray-500 leading-relaxed" style={{ minHeight: `${(field.settings.rows || 3) * 1.2}em` }}>
+                {field.settings.placeholder || 'Enter multiple lines of text...'}
+              </div>
             </div>
           </div>
         );
@@ -1225,9 +1552,17 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             )}
             <div className={`bg-gray-50 border border-gray-300 rounded p-1 text-sm ${field.settings.titleLayout === 'vertical' ? 'w-full' : 'w-32'}`}>
               <div className="flex justify-between items-center">
-                <span className="text-gray-500">Select option</span>
+                <span className="text-gray-500">
+                  {field.settings.options && field.settings.options.length > 0 ? 
+                    field.settings.options[0] : 'Select option'}
+                </span>
                 <RiListOrdered className="text-gray-400 text-xs" />
               </div>
+              {field.settings.options && field.settings.options.length > 1 && (
+                <div className="text-xs text-gray-400 mt-1">
+                  +{field.settings.options.length - 1} more options
+                </div>
+              )}
             </div>
           </div>
         );
@@ -1241,12 +1576,26 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </div>
             )}
             <div className="space-y-1">
-              {field.settings.options.slice(0, 2).map((option: string, i: number) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="w-3 h-3 border border-gray-400 rounded bg-white flex-shrink-0"></div>
-                  <div className="text-sm text-gray-800">{option}</div>
+              {field.settings.options && field.settings.options.length > 0 ? (
+                field.settings.options.slice(0, Math.min(field.settings.options.length, 4)).map((option: string, i: number) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="w-3 h-3 border border-gray-400 rounded bg-white flex-shrink-0"></div>
+                    <div className="text-sm text-gray-800">{option}</div>
+                  </div>
+                ))
+              ) : (
+                field.settings.options.slice(0, 2).map((option: string, i: number) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="w-3 h-3 border border-gray-400 rounded bg-white flex-shrink-0"></div>
+                    <div className="text-sm text-gray-800">{option}</div>
+                  </div>
+                ))
+              )}
+              {field.settings.options && field.settings.options.length > 4 && (
+                <div className="text-xs text-gray-500 italic">
+                  +{field.settings.options.length - 4} more options
                 </div>
-              ))}
+              )}
             </div>
           </div>
         );
@@ -1260,12 +1609,26 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </div>
             )}
             <div className="space-y-1">
-              {field.settings.options.slice(0, 2).map((option: string, i: number) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full border border-gray-400 bg-white flex-shrink-0"></div>
-                  <div className="text-sm text-gray-800">{option}</div>
+              {field.settings.options && field.settings.options.length > 0 ? (
+                field.settings.options.slice(0, Math.min(field.settings.options.length, 4)).map((option: string, i: number) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full border border-gray-400 bg-white flex-shrink-0"></div>
+                    <div className="text-sm text-gray-800">{option}</div>
+                  </div>
+                ))
+              ) : (
+                field.settings.options.slice(0, 2).map((option: string, i: number) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full border border-gray-400 bg-white flex-shrink-0"></div>
+                    <div className="text-sm text-gray-800">{option}</div>
+                  </div>
+                ))
+              )}
+              {field.settings.options && field.settings.options.length > 4 && (
+                <div className="text-xs text-gray-500 italic">
+                  +{field.settings.options.length - 4} more options
                 </div>
-              ))}
+              )}
             </div>
           </div>
         );
@@ -1327,24 +1690,44 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 {field.settings.showHeader !== false && (
                   <thead className="bg-gray-100">
                     <tr>
-                      {Array.from({ length: field.settings.columns || 3 }).map((_, i) => (
-                        <th key={i} className="border border-gray-300 p-1 text-center">
-                          Header {i + 1}
-                        </th>
-                      ))}
+                      {field.settings.headers && field.settings.headers.length > 0 ? (
+                        field.settings.headers.map((header: string, i: number) => (
+                          <th key={i} className="border border-gray-300 p-1 text-center font-medium text-gray-800">
+                            {header}
+                          </th>
+                        ))
+                      ) : (
+                        Array.from({ length: field.settings.columns || 3 }).map((_, i) => (
+                          <th key={i} className="border border-gray-300 p-1 text-center text-gray-800">
+                            Header {i + 1}
+                          </th>
+                        ))
+                      )}
                     </tr>
                   </thead>
                 )}
                 <tbody>
-                  {Array.from({ length: field.settings.rows || 3 }).map((_, rowIndex) => (
-                    <tr key={rowIndex}>
-                      {Array.from({ length: field.settings.columns || 3 }).map((_, colIndex) => (
-                        <td key={colIndex} className="border border-gray-300 p-1 text-center text-gray-500">
-                          Cell {rowIndex + 1},{colIndex + 1}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
+                  {field.settings.data && field.settings.data.length > 0 ? (
+                    field.settings.data.map((row: string[], rowIndex: number) => (
+                      <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        {row.map((cell: string, colIndex: number) => (
+                          <td key={colIndex} className="border border-gray-300 p-1 text-center text-gray-800">
+                            {cell || `Data ${rowIndex + 1},${colIndex + 1}`}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : (
+                    Array.from({ length: field.settings.rows || 3 }).map((_, rowIndex) => (
+                      <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        {Array.from({ length: field.settings.columns || 3 }).map((_, colIndex) => (
+                          <td key={colIndex} className="border border-gray-300 p-1 text-center text-gray-500">
+                            Data {rowIndex + 1},{colIndex + 1}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1363,23 +1746,43 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               <table className="w-full text-xs">
                 <thead className="bg-gray-200">
                   <tr>
-                    {Array.from({ length: field.settings.columns || 3 }).map((_, i) => (
-                      <th key={i} className="border border-gray-300 p-1 text-center font-medium">
-                        Column {i + 1}
-                      </th>
-                    ))}
+                    {field.settings.headers && field.settings.headers.length > 0 ? (
+                      field.settings.headers.map((header: string, i: number) => (
+                        <th key={i} className="border border-gray-300 p-1 text-center font-medium text-gray-800">
+                          {header}
+                        </th>
+                      ))
+                    ) : (
+                      Array.from({ length: field.settings.columns || 3 }).map((_, i) => (
+                        <th key={i} className="border border-gray-300 p-1 text-center text-gray-800">
+                          Column {i + 1}
+                        </th>
+                      ))
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {Array.from({ length: field.settings.rows || 3 }).map((_, rowIndex) => (
-                    <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                      {Array.from({ length: field.settings.columns || 3 }).map((_, colIndex) => (
-                        <td key={colIndex} className="border border-gray-300 p-1 text-center text-gray-500">
-                          Data {rowIndex + 1},{colIndex + 1}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
+                  {field.settings.data && field.settings.data.length > 0 ? (
+                    field.settings.data.map((row: string[], rowIndex: number) => (
+                      <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        {row.map((cell: string, colIndex: number) => (
+                          <td key={colIndex} className="border border-gray-300 p-1 text-center text-gray-800">
+                            {cell || `Data ${rowIndex + 1},${colIndex + 1}`}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : (
+                    Array.from({ length: field.settings.rows || 3 }).map((_, rowIndex) => (
+                      <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        {Array.from({ length: field.settings.columns || 3 }).map((_, colIndex) => (
+                          <td key={colIndex} className="border border-gray-300 p-1 text-center text-gray-500">
+                            Data {rowIndex + 1},{colIndex + 1}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1530,6 +1933,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     type="text"
                     icon={<RiText className="mr-2" />}
                     label="Text Field"
+                  />
+                  <DraggableWidget 
+                    type="textarea"
+                    icon={<RiFileEditLine className="mr-2" />}
+                    label="Textarea"
                   />
                   <DraggableWidget 
                     type="number"
@@ -1684,6 +2092,127 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 AI Generate
               </Button>
               
+              {/* Demo Button for testing AI generation */}
+              <Button 
+                variant="ai-secondary" 
+                size="sm" 
+                onClick={() => {
+                  const demoFormData = {
+                    formName: "Demo Safety Inspection Form",
+                    formDescription: "A demonstration of AI-generated form with various field types",
+                    fields: [
+                      {
+                        id: "demo_text_1",
+                        type: "text",
+                        label: "Inspector Name",
+                        x: 50,
+                        y: 50,
+                        width: 300,
+                        height: 40,
+                        settings: {
+                          required: true,
+                          placeholder: "Enter inspector name",
+                          hideTitle: false,
+                          titleLayout: "horizontal"
+                        }
+                      },
+                      {
+                        id: "demo_date_1",
+                        type: "date",
+                        label: "Inspection Date",
+                        x: 400,
+                        y: 50,
+                        width: 150,
+                        height: 40,
+                        settings: {
+                          required: true,
+                          dateFormat: "YYYY-MM-DD",
+                          includeTime: false
+                        }
+                      },
+                      {
+                        id: "demo_textarea_1",
+                        type: "textarea",
+                        label: "General Comments",
+                        x: 50,
+                        y: 120,
+                        width: 500,
+                        height: 80,
+                        settings: {
+                          required: false,
+                          placeholder: "Enter general comments about the inspection",
+                          rows: 3
+                        }
+                      },
+                      {
+                        id: "demo_table_1",
+                        type: "dataTable",
+                        label: "Safety Checklist",
+                        x: 50,
+                        y: 220,
+                        width: 500,
+                        height: 200,
+                        settings: {
+                          rows: 4,
+                          columns: 4,
+                          headers: ["Item", "Status", "Priority", "Comments"],
+                          data: [
+                            ["Fire extinguisher check", "OK", "High", "All units functional"],
+                            ["Safety signage", "Needs attention", "Medium", "Replace worn signs"],
+                            ["Emergency exits", "OK", "High", "All clear and accessible"],
+                            ["First aid kit", "OK", "Medium", "Fully stocked"]
+                          ],
+                          showHeader: true
+                        }
+                      },
+                      {
+                        id: "demo_checkbox_1",
+                        type: "checkbox",
+                        label: "Areas Inspected",
+                        x: 50,
+                        y: 450,
+                        width: 250,
+                        height: 100,
+                        settings: {
+                          options: ["Main entrance", "Work areas", "Storage rooms", "Emergency exits", "Parking area"],
+                          required: true
+                        }
+                      },
+                      {
+                        id: "demo_select_1",
+                        type: "select",
+                        label: "Overall Rating",
+                        x: 350,
+                        y: 450,
+                        width: 200,
+                        height: 40,
+                        settings: {
+                          options: ["Excellent", "Good", "Fair", "Poor", "Critical"],
+                          required: true
+                        }
+                      },
+                      {
+                        id: "demo_signature_1",
+                        type: "signature",
+                        label: "Inspector Signature",
+                        x: 50,
+                        y: 580,
+                        width: 250,
+                        height: 80,
+                        settings: {
+                          required: true
+                        }
+                      }
+                    ]
+                  };
+                  handleAIFormGenerated(demoFormData);
+                }}
+                title="Generate a demo form to test AI functionality"
+                leftIcon={<RiFileEditLine />}
+              >
+                Demo Form
+              </Button>
+              
               {/* Preview Button */}
               <Button 
                 variant="ai-secondary" 
@@ -1719,6 +2248,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 className="relative w-full h-full p-6"
                 data-canvas="true"
                 style={{ minHeight: `${getCurrentPageDimensions().height - 48}px` }}
+                onClick={(e) => {
+                  // Only deselect if clicking on empty canvas (not on a widget)
+                  if (e.target === e.currentTarget) {
+                    setSelectedField(null);
+                  }
+                }}
               >
                 {/* Drop zone indicator */}
                 {isDragging && (
@@ -2552,48 +3087,68 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       
       {/* Enhanced Preview Modal */}
       {showFormPreview && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="w-full h-full bg-white flex flex-col">
-            {/* Preview Header */}
-            <div className="bg-gray-100 border-b border-gray-300 px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <h2 className="text-xl font-semibold text-gray-800">Form Preview</h2>
-                <div className="text-sm text-gray-600">
-                  Page {currentPageIndex + 1} of {formPages.length} • {getCurrentPageDimensions().width}×{getCurrentPageDimensions().height}px ({getCurrentPageDimensions().size} {getCurrentPageDimensions().orientation})
+            {/* Enhanced Preview Header */}
+            <div className="bg-gradient-to-r from-gray-800 to-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between shadow-lg">
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <RiEyeLine className="text-white text-lg" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-white">Form Preview</h2>
+                    <div className="text-sm text-gray-300">
+                      {getCurrentPageDimensions().width}×{getCurrentPageDimensions().height}px • {getCurrentPageDimensions().size} {getCurrentPageDimensions().orientation}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Page Counter */}
+                <div className="flex items-center gap-2 bg-gray-700/50 rounded-lg px-3 py-2">
+                  <span className="text-sm text-gray-300">Page</span>
+                  <span className="text-lg font-bold text-white">{currentPageIndex + 1}</span>
+                  <span className="text-sm text-gray-400">of {formPages.length}</span>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {/* Page Navigation */}
-                <button
-                  onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))}
-                  disabled={currentPageIndex === 0}
-                  className="flex items-center gap-1 px-3 py-2 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:text-gray-400 rounded text-sm font-medium transition-colors"
-                >
-                  <RiArrowLeftLine />
-                  Previous
-                </button>
-                <button
-                  onClick={() => setCurrentPageIndex(Math.min(formPages.length - 1, currentPageIndex + 1))}
-                  disabled={currentPageIndex === formPages.length - 1}
-                  className="flex items-center gap-1 px-3 py-2 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:text-gray-400 rounded text-sm font-medium transition-colors"
-                >
-                  Next
-                  <RiArrowRightLine />
-                </button>
+              
+              <div className="flex items-center gap-3">
+                {/* Enhanced Page Navigation */}
+                <div className="flex items-center gap-1 bg-gray-700/50 rounded-lg p-1">
+                  <button
+                    onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))}
+                    disabled={currentPageIndex === 0}
+                    className="flex items-center gap-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-800 disabled:text-gray-500 text-white rounded text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed"
+                    title="Previous Page"
+                  >
+                    <RiArrowLeftLine />
+                    Prev
+                  </button>
+                  <button
+                    onClick={() => setCurrentPageIndex(Math.min(formPages.length - 1, currentPageIndex + 1))}
+                    disabled={currentPageIndex === formPages.length - 1}
+                    className="flex items-center gap-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-800 disabled:text-gray-500 text-white rounded text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed"
+                    title="Next Page"
+                  >
+                    Next
+                    <RiArrowRightLine />
+                  </button>
+                </div>
                 
-                {/* Print Button */}
+                {/* Action Buttons */}
                 <button
                   onClick={() => window.print()}
-                  className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                  title="Print Form"
                 >
                   <RiPrinterLine />
                   Print
                 </button>
                 
-                {/* Close Button */}
                 <button
                   onClick={() => setShowFormPreview(false)}
-                  className="flex items-center gap-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                  title="Close Preview"
                 >
                   <RiCloseLine />
                   Close
@@ -2601,11 +3156,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </div>
             </div>
             
-            {/* Preview Content */}
-            <div className="flex-1 overflow-auto bg-gray-50 p-8">
+            {/* Enhanced Preview Content */}
+            <div className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 to-gray-100 p-8">
               <div className="flex justify-center">
                 <div 
-                  className="bg-white shadow-lg rounded-lg overflow-hidden print:shadow-none print:rounded-none"
+                  className="bg-white shadow-2xl rounded-xl overflow-hidden print:shadow-none print:rounded-none border border-gray-200 transform transition-all duration-300 hover:shadow-3xl"
                   style={{
                     width: `${getCurrentPageDimensions().width}px`,
                     minHeight: `${getCurrentPageDimensions().height}px`,
@@ -2616,16 +3171,21 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     {formPages[currentPageIndex].fields.length === 0 ? (
                       <div className="flex items-center justify-center h-full text-gray-400">
                         <div className="text-center">
-                          <RiFileTextLine className="text-6xl mb-4 mx-auto" />
-                          <p className="text-lg">No fields added to this page</p>
-                          <p className="text-sm mt-2">Add form fields to see the preview</p>
+                          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <RiFileTextLine className="text-4xl text-gray-400" />
+                          </div>
+                          <p className="text-xl font-medium text-gray-600">No fields added to this page</p>
+                          <p className="text-sm mt-2 text-gray-500">Add form fields to see the preview</p>
+                          <div className="mt-4 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
+                            💡 Tip: Use the "Demo Form" button to see an example
+                          </div>
                         </div>
                       </div>
                     ) : (
                       formPages[currentPageIndex].fields.map((field: FormField) => (
                         <div 
                           key={field.id}
-                          className="absolute"
+                          className="absolute transition-all duration-200 hover:z-10"
                           style={{ 
                             left: field.x || 0,
                             top: field.y || 0,
@@ -2633,7 +3193,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                             height: field.height || 40,
                           }}
                         >
-                          <div className="w-full h-full bg-white border border-gray-200 rounded">
+                          <div className="w-full h-full bg-white border border-gray-200 rounded shadow-sm hover:shadow-md transition-shadow duration-200">
                             {renderWidgetPreview(field)}
                           </div>
                         </div>
@@ -2644,25 +3204,39 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </div>
             </div>
             
-            {/* Preview Footer */}
-            <div className="bg-gray-100 border-t border-gray-300 px-6 py-3 flex items-center justify-between print:hidden">
-              <div className="text-sm text-gray-600">
-                {formPages[currentPageIndex].fields.length} field{formPages[currentPageIndex].fields.length !== 1 ? 's' : ''} on this page
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-sm text-gray-600">
-                  Zoom: 100%
+            {/* Enhanced Preview Footer */}
+            <div className="bg-gradient-to-r from-gray-800 to-gray-900 border-t border-gray-700 px-6 py-4 flex items-center justify-between print:hidden shadow-lg">
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2 text-gray-300">
+                  <RiApps2Line className="text-lg" />
+                  <span className="text-sm">
+                    {formPages[currentPageIndex].fields.length} field{formPages[currentPageIndex].fields.length !== 1 ? 's' : ''} on this page
+                  </span>
                 </div>
+                
+                <div className="flex items-center gap-2 text-gray-300">
+                  <RiLayoutLine className="text-lg" />
+                  <span className="text-sm">
+                    {getCurrentPageDimensions().size} {getCurrentPageDimensions().orientation}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 text-gray-300">
+                  <span className="text-sm">Zoom: 100%</span>
+                </div>
+                
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Page:</span>
+                  <span className="text-sm text-gray-300">Jump to page:</span>
                   <select 
                     value={currentPageIndex}
                     onChange={(e) => setCurrentPageIndex(parseInt(e.target.value))}
-                    className="px-2 py-1 border border-gray-300 rounded text-sm"
+                    className="px-3 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     {formPages.map((_, index) => (
                       <option key={index} value={index}>
-                        {index + 1}
+                        Page {index + 1}
                       </option>
                     ))}
                   </select>
@@ -2674,7 +3248,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       )}
       
       {/* Print Styles */}
-      <style jsx>{`
+      <style>{`
         @media print {
           .print\\:shadow-none {
             box-shadow: none !important;

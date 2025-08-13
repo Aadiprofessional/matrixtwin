@@ -47,15 +47,8 @@ const getAuthToken = (): string | null => {
   const token = localStorage.getItem('token');
   console.log('Retrieved token from localStorage:', token ? `${token.substring(0, 20)}...` : 'null');
   
-  if (token) {
-    const isValid = validateToken(token);
-    if (!isValid) {
-      console.warn('Token validation failed - removing invalid token');
-      localStorage.removeItem('token');
-      return null;
-    }
-  }
-  
+  // Don't validate token here - let the server handle validation
+  // This prevents automatic logout on token validation failures
   return token;
 };
 
@@ -83,16 +76,14 @@ const createAuthHeaders = (): HeadersInit => {
   return headers;
 };
 
-// Handle token expiration
+// Handle token expiration by calling forceReLogin
 const handleTokenExpiration = (): void => {
-  console.warn('Token has expired or is invalid - clearing authentication');
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
+  console.warn('Token has expired or is invalid - forcing re-login');
   
-  // Redirect to login page
-  if (window.location.pathname !== '/login') {
-    window.location.href = '/login';
-  }
+  // Try to get the forceReLogin function from the auth context
+  // This is a bit of a hack, but it works for forcing re-login
+  const event = new CustomEvent('forceReLogin');
+  window.dispatchEvent(event);
 };
 
 // Generic API request function
@@ -129,9 +120,9 @@ export const apiRequest = async <T = any>(
       
       console.error('API Error Response:', errorData);
       
-      // If it's a 401, handle token expiration
-      if (response.status === 401) {
-        console.error('Authentication failed - token may be expired or invalid');
+      // If it's a 401 and the error mentions token, handle token expiration
+      if (response.status === 401 && errorData.message?.includes('Token')) {
+        console.error('Token is invalid - triggering re-login');
         handleTokenExpiration();
       }
       
@@ -286,32 +277,6 @@ export const api = {
       method: 'DELETE',
     }),
 
-  // Cleansing methods
-  createCleansingEntry: (data: any) =>
-    apiRequest('/cleansing/create', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  getCleansingEntries: (userId: string, projectId?: string) => {
-    const params = projectId ? `?projectId=${projectId}` : '';
-    return apiRequest(`/cleansing/list/${userId}${params}`);
-  },
-
-  getCleansingEntry: (entryId: string) =>
-    apiRequest(`/cleansing/${entryId}`),
-
-  updateCleansingEntry: (entryId: string, data: any) =>
-    apiRequest(`/cleansing/${entryId}/update`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-
-  deleteCleansingEntry: (entryId: string) =>
-    apiRequest(`/cleansing/${entryId}`, {
-      method: 'DELETE',
-    }),
-
   // Diary methods
   createDiaryEntry: (data: any) =>
     apiRequest('/diary/create', {
@@ -337,10 +302,4 @@ export const api = {
     apiRequest(`/diary/${entryId}`, {
       method: 'DELETE',
     }),
-
-  // Debug methods
-  debugAuth,
-  testAuth,
 };
-
-export default api;

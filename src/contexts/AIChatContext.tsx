@@ -178,24 +178,64 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     const aiMessageId = (Date.now() + 1).toString();
     
     try {
-      // Prepare the message content for the API
-      let promptText = messageText || "Please analyze this image in detail for my construction project.";
+      // Get current chat messages from state
+      const currentChatData = chatHistory.find(chat => chat.id === currentChatId);
+      const currentMessages = currentChatData ? currentChatData.messages : [];
       
-      // If there's an image, include it in the prompt
-      if (imageBase64) {
-        promptText = `${promptText}\n\nImage: ${imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`}`;
+      // Prepare messages for the API
+      const messages = [];
+      
+      // Add context from previous messages (last 5 messages for context)
+      const recentMessages = currentMessages.slice(-5);
+      for (const msg of recentMessages) {
+        if (msg.sender === 'user') {
+          const content = [];
+          content.push({
+            type: "text",
+            text: msg.content
+          });
+          
+          if (msg.imageUrl) {
+            content.push({
+              type: "image_url",
+              image_url: {
+                url: msg.imageUrl
+              }
+            });
+          }
+          
+          messages.push({
+            role: "user",
+            content: content
+          });
+        } else if (msg.sender === 'ai') {
+          messages.push({
+            role: "assistant",
+            content: msg.content
+          });
+        }
       }
-
-      // Prepare the request data for the new Dashscope API with streaming
-      const requestData = {
-        input: {
-          prompt: promptText
-        },
-        parameters: {
-          incremental_output: true
-        },
-        debug: {}
-      };
+      
+      // Add the current user message
+      const currentContent = [];
+      currentContent.push({
+        type: "text",
+        text: messageText || "Please analyze this image in detail."
+      });
+      
+      if (imageBase64) {
+        currentContent.push({
+          type: "image_url",
+          image_url: {
+            url: imageBase64
+          }
+        });
+      }
+      
+      messages.push({
+        role: "user",
+        content: currentContent
+      });
 
       // Create AI message placeholder
       const aiMessage: Message = {
@@ -209,27 +249,37 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
       // Add the placeholder AI message
       updateChatWithMessage(aiMessage);
       
-      // Make the streaming request to the new Dashscope API
-      const response = await fetch('https://dashscope.aliyuncs.com/api/v1/apps/33b3f866ff054f2eb98d17c174239fc8/completion', {
+      console.log('🚀 Sending request to API...');
+      
+      // Make the streaming request to the Dashscope API
+      const response = await fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer sk-6b53808e778c4e11a9928d6416ae7e3e',
+          'Authorization': 'Bearer sk-0d874843ff2542c38940adcbeb2b2cc4',
           'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-          'X-DashScope-SSE': 'enable'
         },
-        body: JSON.stringify(requestData)
+        body: JSON.stringify({
+          model: "qwen-vl-max",
+          messages: messages,
+          stream: true
+        })
       });
 
+      console.log('📊 API Response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`API responded with ${response.status}: ${response.statusText}`);
+        console.error('❌ API request failed:', response.status, response.statusText);
+        throw new Error(`API call failed: ${response.status} ${response.statusText}`);
       }
 
       // Handle streaming response
-      const reader = response.body!.getReader();
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body reader available');
+      }
+
+      let fullContent = '';
       const decoder = new TextDecoder();
-      let buffer = '';
-      let accumulatedContent = '';
 
       const processStream = async () => {
         try {
@@ -237,17 +287,14 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
             const { done, value } = await reader.read();
             
             if (done) {
-              // Mark the message as complete
-              updateMessageContent(aiMessageId, accumulatedContent, true);
+              console.log('✅ Stream completed');
+              updateMessageContent(aiMessageId, fullContent, true);
               break;
             }
 
             // Decode the chunk
-            buffer += decoder.decode(value, { stream: true });
-            
-            // Process complete lines
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
 
             for (const line of lines) {
               if (line.trim() === '') continue;
@@ -256,41 +303,41 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
                 const data = line.slice(6).trim();
                 
                 if (data === '[DONE]') {
-                  updateMessageContent(aiMessageId, accumulatedContent, true);
+                  console.log('🏁 Received [DONE] signal');
+                  updateMessageContent(aiMessageId, fullContent, true);
                   return;
                 }
 
                 try {
                   const parsed = JSON.parse(data);
+                  console.log('📦 Parsed chunk:', parsed);
                   
-                  // Handle the response format from your API - accumulate content properly
-                  if (parsed.output && parsed.output.text) {
-                    // If it's incremental, append the new content
-                    if (parsed.output.text.startsWith(accumulatedContent)) {
-                      accumulatedContent = parsed.output.text;
-                    } else {
-                      // If it's a new chunk, append it
-                      accumulatedContent += parsed.output.text;
+                  // Handle the response format from Dashscope API
+                  if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta) {
+                    const delta = parsed.choices[0].delta;
+                    if (delta.content) {
+                      fullContent += delta.content;
+                      // Update the message content in real-time
+                      updateMessageContent(aiMessageId, fullContent, false);
                     }
-                    // Update the message content in real-time
-                    updateMessageContent(aiMessageId, accumulatedContent, false);
                   }
                 } catch (parseError) {
-                  console.error('Error parsing streaming data:', parseError);
+                  console.error('❌ Error parsing streaming data:', parseError);
+                  console.log('Raw data:', data);
                 }
               }
             }
           }
         } catch (streamError) {
-          console.error('Error processing stream:', streamError);
-          updateMessageContent(aiMessageId, accumulatedContent || "I'm sorry, there was an error processing your request. Please try again.", true);
+          console.error('❌ Error processing stream:', streamError);
+          updateMessageContent(aiMessageId, fullContent || "I'm sorry, there was an error processing your request. Please try again.", true);
         }
       };
 
       await processStream();
       
     } catch (error) {
-      console.error('Error getting AI response:', error);
+      console.error('❌ Error getting AI response:', error);
       
       // Update the AI message with error content
       updateMessageContent(aiMessageId, "I'm sorry, there was an error processing your request. Please try again later.", true);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Turnstile } from '../../components/ui/Turnstile';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
@@ -27,6 +28,7 @@ const Signup: React.FC = () => {
   const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
   
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -47,6 +49,12 @@ const Signup: React.FC = () => {
       return;
     }
     
+    if (!turnstileToken) {
+      setError('Please complete the CAPTCHA verification');
+      setIsLoading(false);
+      return;
+    }
+    
     try {
       const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/signup', {
         method: 'POST',
@@ -56,7 +64,8 @@ const Signup: React.FC = () => {
         body: JSON.stringify({
           name,
           email,
-          password
+          password,
+          turnstileToken
         }),
       });
 
@@ -309,6 +318,15 @@ const Signup: React.FC = () => {
                       </IconContext.Provider>
                     </button>
                   </div>
+                  
+                  <div className="mt-4">
+                    <Turnstile 
+                      siteKey={process.env.REACT_APP_TURNSTILE_SITE_KEY || "0x4AAAAAABrRlVmhV5uIuLDZ"}
+                      onVerify={(token) => setTurnstileToken(token)}
+                      theme="dark"
+                      className="flex justify-center"
+                    />
+                  </div>
                 </div>
                 
                 {error && (
@@ -348,4 +366,4 @@ const Signup: React.FC = () => {
   );
 };
 
-export default Signup; 
+export default Signup;

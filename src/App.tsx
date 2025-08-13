@@ -15,6 +15,10 @@ import { Layout } from './components/layout/Layout';
 import ScrollToTop from './components/ScrollToTop';
 import { PermissionErrorModal } from './components/ui/PermissionErrorModal';
 
+// Debug utilities
+import './utils/authDebug';
+import './utils/tokenManager';
+
 // Pages
 import Login from './pages/auth/Login';
 import Signup from './pages/auth/Signup';
@@ -22,27 +26,29 @@ import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
-import RfiPage from './pages/RfiPage';
 import DiaryPage from './pages/DiaryPage';
 import SafetyPage from './pages/SafetyPage';
 import LabourPage from './pages/LabourPage';
 import CleansingPage from './pages/CleansingPage';
+import RfiPage from './pages/RfiPage';
 import FormsPage from './pages/FormsPage';
-import SettingsPage from './pages/SettingsPage';
-import TaskPage from './pages/TaskPage';
 import TeamPage from './pages/TeamPage';
+import SettingsPage from './pages/SettingsPage';
+import NotFoundPage from './pages/NotFoundPage';
+import TaskPage from './pages/TaskPage';
 import ReportsPage from './pages/ReportsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
-import NotFoundPage from './pages/NotFoundPage';
-import AskAIPage from './pages/AskAIPage';
-import VoiceCallPage from './pages/VoiceCallPage';
 import DigitalTwinsPage from './pages/DigitalTwinsPage';
-import ModelViewerPage from './pages/ModelViewerPage';
-import ModelUploadPage from './pages/ModelUploadPage';
-import IoTDashboardPage from './pages/IoTDashboardPage';
 import DigitalTwinsAnalyticsPage from './pages/DigitalTwinsAnalyticsPage';
 import DigitalTwinsControlPage from './pages/DigitalTwinsControlPage';
+import ModelViewerPage from './pages/ModelViewerPage';
+import ModelUploadPage from './pages/ModelUploadPage';
 import CreateRolePage from './pages/CreateRolePage';
+import IoTDashboardPage from './pages/IoTDashboardPage';
+import SmartLockTestPage from './pages/SmartLockTestPage';
+import VoiceCallPage from './pages/VoiceCallPage';
+import AskAIPage from './pages/AskAIPage';
+import HomePage from './pages/HomePage';
 
 
 // Protected route wrapper
@@ -98,6 +104,9 @@ const AppRoutes: React.FC = () => {
     <>
       <ScrollToTop />
       <Routes>
+        {/* Landing page */}
+        <Route path="/" element={<HomePage />} />
+        
         {/* Auth routes */}
         <Route 
           path="/login" 
@@ -118,7 +127,7 @@ const AppRoutes: React.FC = () => {
 
         {/* Protected routes */}
         <Route
-          path="/"
+          path="/dashboard-home"
           element={
             <ProtectedRoute>
               <Navigate to="/projects" />
@@ -364,7 +373,7 @@ const AppRoutes: React.FC = () => {
 function App() {
   return (
     <IconContext.Provider value={{ className: 'react-icons' }}>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AppProviders>
           <AppRoutes />
         </AppProviders>
@@ -373,4 +382,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

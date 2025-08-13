@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <!-- Background with gradient -->
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6B7280" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#9CA3AF" stop-opacity="0.3"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg-gradient)" rx="20" ry="20"/>
+  
+  <!-- Construction Site -->
+  <g transform="translate(400, 350)">
+    <!-- Ground -->
+    <rect x="-350" y="0" width="700" height="100" fill="#D1D5DB"/>
+    
+    <!-- Building Structure (Incomplete) -->
+    <rect x="-200" y="-200" width="400" height="200" fill="#9CA3AF" opacity="0.8"/>
+    
+    <!-- Scaffolding -->
+    <g stroke="#6B7280" stroke-width="5">
+      <!-- Vertical Supports -->
+      <line x1="-220" y1="-220" x2="-220" y2="0"/>
+      <line x1="-120" y1="-220" x2="-120" y2="0"/>
+      <line x1="-20" y1="-220" x2="-20" y2="0"/>
+      <line x1="80" y1="-220" x2="80" y2="0"/>
+      <line x1="180" y1="-220" x2="180" y2="0"/>
+      <line x1="220" y1="-220" x2="220" y2="0"/>
+      
+      <!-- Horizontal Supports -->
+      <line x1="-220" y1="-220" x2="220" y2="-220"/>
+      <line x1="-220" y1="-170" x2="220" y2="-170"/>
+      <line x1="-220" y1="-120" x2="220" y2="-120"/>
+      <line x1="-220" y1="-70" x2="220" y2="-70"/>
+      <line x1="-220" y1="-20" x2="220" y2="-20"/>
+    </g>
+    
+    <!-- Construction Crane -->
+    <g transform="translate(-300, -100)">
+      <!-- Base -->
+      <rect x="-20" y="80" width="40" height="20" fill="#4B5563"/>
+      
+      <!-- Tower -->
+      <rect x="-10" y="-100" width="20" height="180" fill="#4B5563"/>
+      
+      <!-- Arm -->
+      <rect x="-10" y="-110" width="200" height="10" fill="#4B5563"/>
+      
+      <!-- Counterweight -->
+      <rect x="-60" y="-110" width="50" height="20" fill="#6B7280"/>
+      
+      <!-- Cable -->
+      <line x1="150" y1="-110" x2="150" y2="-50" stroke="#4B5563" stroke-width="2"/>
+      
+      <!-- Load -->
+      <rect x="140" y="-50" width="20" height="20" fill="#6B7280"/>
+    </g>
+  </g>
+  
+  <!-- Paper Documents -->
+  <g transform="translate(650, 150)">
+    <!-- Stack of Papers -->
+    <rect x="-40" y="-30" width="80" height="100" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1"/>
+    <rect x="-35" y="-35" width="80" height="100" fill="#F9FAFB" stroke="#9CA3AF" stroke-width="1"/>
+    <rect x="-30" y="-40" width="80" height="100" fill="#FFFFFF" stroke="#9CA3AF" stroke-width="1"/>
+    
+    <!-- Lines on Top Paper -->
+    <line x1="-20" y1="-30" x2="40" y2="-30" stroke="#9CA3AF" stroke-width="1"/>
+    <line x1="-20" y1="-20" x2="40" y2="-20" stroke="#9CA3AF" stroke-width="1"/>
+    <line x1="-20" y1="-10" x2="40" y2="-10" stroke="#9CA3AF" stroke-width="1"/>
+    <line x1="-20" y1="0" x2="40" y2="0" stroke="#9CA3AF" stroke-width="1"/>
+    <line x1="-20" y1="10" x2="40" y2="10" stroke="#9CA3AF" stroke-width="1"/>
+    <line x1="-20" y1="20" x2="40" y2="20" stroke="#9CA3AF" stroke-width="1"/>
+    <line x1="-20" y1="30" x2="40" y2="30" stroke="#9CA3AF" stroke-width="1"/>
+    <line x1="-20" y1="40" x2="40" y2="40" stroke="#9CA3AF" stroke-width="1"/>
+  </g>
+  
+  <!-- Disconnected Systems -->
+  <g transform="translate(150, 150)">
+    <!-- System 1 -->
+    <rect x="-60" y="-60" width="120" height="80" fill="#E5E7EB" stroke="#9CA3AF" stroke-width="2" rx="5" ry="5"/>
+    <text x="0" y="-20" font-family="Arial, sans-serif" font-size="14" fill="#4B5563" text-anchor="middle">Planning</text>
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="14" fill="#4B5563" text-anchor="middle">System</text>
+    <line x1="-40" y1="20" x2="40" y2="20" stroke="#9CA3AF" stroke-width="1"/>
+    <line x1="-40" y1="30" x2="40" y2="30" stroke="#9CA3AF" stroke-width="1"/>
+    <line x1="-40" y1="40" x2="20" y2="40" stroke="#9CA3AF" stroke-width="1"/>
+    
+    <!-- System 2 -->
+    <rect x="-60" y="60" width="120" height="80" fill="#E5E7EB" stroke="#9CA3AF" stroke-width="2" rx="5" ry="5"/>
+    <text x="0" y="100" font-family="Arial, sans-serif" font-size="14" fill="#4B5563" text-anchor="middle">Scheduling</text>
+    <text x="0" y="120" font-family="Arial, sans-serif" font-size="14" fill="#4B5563" text-anchor="middle">System</text>
+    <line x1="-40" y1="80" x2="40" y2="80" stroke="#9CA3AF" stroke-width="1"/>
+    <line x1="-40" y1="90" x2="40" y2="90" stroke="#9CA3AF" stroke-width="1"/>
+    <line x1="-40" y1="130" x2="20" y2="130" stroke="#9CA3AF" stroke-width="1"/>
+  </g>
+  
+  <!-- Broken Connection Lines -->
+  <g stroke="#9CA3AF" stroke-width="2" stroke-dasharray="5,5">
+    <line x1="150" y1="190" x2="150" y2="210" stroke-dasharray="5,10"/>
+    <line x1="210" y1="150" x2="250" y2="150" stroke-dasharray="10,10"/>
+    <line x1="90" y1="150" x2="50" y2="150" stroke-dasharray="10,10"/>
+  </g>
+  
+  <!-- Frustrated Worker -->
+  <g transform="translate(400, 150)">
+    <!-- Head -->
+    <circle cx="0" cy="-20" r="20" fill="#F3F4F6"/>
+    
+    <!-- Body -->
+    <rect x="-15" y="0" width="30" height="40" fill="#F3F4F6"/>
+    
+    <!-- Arms -->
+    <line x1="-15" y1="10" x2="-40" y2="-10" stroke="#F3F4F6" stroke-width="10" stroke-linecap="round"/>
+    <line x1="15" y1="10" x2="40" y2="-10" stroke="#F3F4F6" stroke-width="10" stroke-linecap="round"/>
+    
+    <!-- Legs -->
+    <line x1="-10" y1="40" x2="-20" y2="80" stroke="#F3F4F6" stroke-width="10" stroke-linecap="round"/>
+    <line x1="10" y1="40" x2="20" y2="80" stroke="#F3F4F6" stroke-width="10" stroke-linecap="round"/>
+    
+    <!-- Hard Hat -->
+    <path d="M-20,-30 A20,10 0 0,1 20,-30" fill="#FCD34D" stroke="#F59E0B" stroke-width="2"/>
+    
+    <!-- Face -->
+    <line x1="-10" y1="-25" x2="-5" y2="-25" stroke="#4B5563" stroke-width="2"/>
+    <line x1="5" y1="-25" x2="10" y2="-25" stroke="#4B5563" stroke-width="2"/>
+    <path d="M-5,-15 A5,5 0 0,0 5,-15" stroke="#4B5563" stroke-width="2" fill="none" transform="rotate(180 0 -15)"/>
+  </g>
+  
+  <!-- Title -->
+  <g transform="translate(400, 50)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="30" font-weight="bold" fill="#4B5563" text-anchor="middle">Traditional Construction</text>
+    <text x="0" y="30" font-family="Arial, sans-serif" font-size="16" fill="#6B7280" text-anchor="middle">Disconnected Systems &amp; Manual Processes</text>
+  </g>
+</svg>
