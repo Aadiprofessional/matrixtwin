@@ -39,7 +39,25 @@
     "signupSuccess": "Registrierung erfolgreich",
     "redirecting": "Weiterleitung zum Dashboard...",
     "2fa": "Zwei-Faktor-Authentifizierung",
-    "enterCode": "Geben Sie den Bestätigungscode ein, der an Ihr Gerät gesendet wurde"
+    "enterCode": "Geben Sie den Bestätigungscode ein, der an Ihr Gerät gesendet wurde",
+    "role": "Ihre Rolle",
+    "roleDescription": "Wählen Sie die Rolle, die Ihre Position am besten beschreibt",
+    "createNewPassword": "Neues Passwort erstellen",
+    "newPassword": "Neues Passwort",
+    "confirmNewPassword": "Neues Passwort bestätigen",
+    "welcomeBack": "Willkommen zurück",
+    "signInToContinue": "Melden Sie sich an, um fortzufahren",
+    "dontHaveAccount": "Noch kein Konto?",
+    "signIn": "Anmelden",
+    "signingIn": "Anmeldung läuft...",
+    "twoFactorAuth": "Zwei-Faktor-Authentifizierung",
+    "enterVerificationCode": "Geben Sie den Bestätigungscode ein",
+    "verificationCode": "Bestätigungscode",
+    "verifying": "Überprüfung läuft...",
+    "verify": "Überprüfen",
+    "backToLogin": "Zurück zur Anmeldung",
+    "lightMode": "Heller Modus",
+    "darkMode": "Dunkler Modus"
   },
   "roles": {
     "admin": "Administrator",
@@ -331,4 +349,4 @@
     "noMembersFoundUser": "Es sind derzeit keine Teammitglieder für Sie zur Ansicht verfügbar.",
     "addFirstTeamMember": "Erstes Teammitglied hinzufügen"
   }
-} 
+}

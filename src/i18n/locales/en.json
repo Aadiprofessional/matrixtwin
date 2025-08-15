@@ -47,7 +47,20 @@
     "roleDescription": "Select the role that best describes your position",
     "createNewPassword": "Create New Password",
     "newPassword": "New Password",
-    "confirmNewPassword": "Confirm New Password"
+    "confirmNewPassword": "Confirm New Password",
+    "welcomeBack": "Welcome Back",
+    "signInToContinue": "Sign in to continue",
+    "dontHaveAccount": "Don't have an account?",
+    "signIn": "Sign In",
+    "signingIn": "Signing In...",
+    "twoFactorAuth": "Two-Factor Authentication",
+    "enterVerificationCode": "Enter the verification code",
+    "verificationCode": "Verification Code",
+    "verifying": "Verifying...",
+    "verify": "Verify",
+    "backToLogin": "Back to Login",
+    "lightMode": "Light Mode",
+    "darkMode": "Dark Mode"
   },
   "roles": {
     "admin": "Administrator",
@@ -378,4 +391,4 @@
     "hint": "Click the microphone to start speaking",
     "switchToText": "Switch to Text Chat"
   }
-} 
+}

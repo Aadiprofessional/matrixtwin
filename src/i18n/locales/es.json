@@ -39,7 +39,25 @@
     "signupSuccess": "Registro exitoso",
     "redirecting": "Redirigiendo al Panel de Control...",
     "2fa": "Autenticación de Dos Factores",
-    "enterCode": "Ingrese el código de verificación enviado a su dispositivo"
+    "enterCode": "Ingrese el código de verificación enviado a su dispositivo",
+    "role": "Tu Rol",
+    "roleDescription": "Selecciona el rol que mejor describe tu posición",
+    "createNewPassword": "Crear Nueva Contraseña",
+    "newPassword": "Nueva Contraseña",
+    "confirmNewPassword": "Confirmar Nueva Contraseña",
+    "welcomeBack": "Bienvenido de Nuevo",
+    "signInToContinue": "Inicia sesión para continuar",
+    "dontHaveAccount": "¿No tienes cuenta?",
+    "signIn": "Iniciar Sesión",
+    "signingIn": "Iniciando Sesión...",
+    "twoFactorAuth": "Autenticación de Dos Factores",
+    "enterVerificationCode": "Ingresa el código de verificación",
+    "verificationCode": "Código de Verificación",
+    "verifying": "Verificando...",
+    "verify": "Verificar",
+    "backToLogin": "Volver al Inicio de Sesión",
+    "lightMode": "Modo Claro",
+    "darkMode": "Modo Oscuro"
   },
   "roles": {
     "admin": "Administrador",
@@ -331,4 +349,4 @@
     "noMembersFoundUser": "No hay miembros del equipo disponibles para que usted vea en este momento.",
     "addFirstTeamMember": "Añadir Primer Miembro del Equipo"
   }
-} 
+}

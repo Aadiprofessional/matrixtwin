@@ -322,8 +322,8 @@ const Signup: React.FC = () => {
                   <div className="mt-4">
                     <Turnstile 
                       siteKey={process.env.REACT_APP_TURNSTILE_SITE_KEY || "0x4AAAAAABrRlVmhV5uIuLDZ"}
-                      onVerify={(token) => setTurnstileToken(token)}
-                      theme="dark"
+                      onSuccess={(token) => setTurnstileToken(token)}
+                      options={{ theme: "dark" }}
                       className="flex justify-center"
                     />
                   </div>

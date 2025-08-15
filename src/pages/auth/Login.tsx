@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Turnstile } from '../../components/ui/Turnstile';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import * as RiIcons from 'react-icons/ri';
 import { IconContext } from 'react-icons';
+import { Turnstile } from '@marsidev/react-turnstile';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -31,14 +31,36 @@ const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showTokenExpiredMessage, setShowTokenExpiredMessage] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertMessage, setAlertMessage] = useState('');
+  const turnstileRef = useRef<any>(null);
   
   const { setUser, setIsAuthenticated, verifyTwoFactor, isAuthenticated } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Check if we're in localhost/development environment
+  const isLocalhost = window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1' || 
+                     window.location.hostname === '0.0.0.0';
 
+  // Handle pre-filled credentials from signup
   useEffect(() => {
+    const state = location.state as any;
+    if (state?.email) {
+      setEmail(state.email);
+    }
+    if (state?.password) {
+      setPassword(state.password);
+    }
+    if (state?.showEmailVerificationAlert && state?.alertMessage) {
+      setShowAlert(true);
+      setAlertMessage(state.alertMessage);
+    }
+    
     // Check if user was redirected here due to token expiration
     const urlParams = new URLSearchParams(window.location.search);
     const tokenExpired = urlParams.get('tokenExpired');
@@ -47,10 +69,28 @@ const Login: React.FC = () => {
       // Clear the URL parameter
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, []);
+  }, [location.state]);
 
-  // Add this new useEffect at the top of the component
+  // If user is already logged in, redirect to dashboard
   useEffect(() => {
+    // Check for OAuth redirect parameters in URL
+    const hasOAuthParams = window.location.hash.includes('access_token') || 
+                          window.location.search.includes('access_token');
+    
+    // If we detect OAuth parameters, we're in a redirect flow
+    if (hasOAuthParams) {
+      console.log('Detected OAuth redirect parameters, checking session...');
+      // We'll let the AuthContext handle the session setup
+      // Just show loading state until that's complete
+      setIsLoading(true);
+      return;
+    }
+    
+    if (isAuthenticated) {
+      console.log('User detected, redirecting to dashboard');
+      navigate('/projects');
+    }
+    
     // Only clear auth data if user is not already authenticated
     if (!isAuthenticated) {
       console.log('Clearing existing auth data for fresh login...');
@@ -73,7 +113,7 @@ const Login: React.FC = () => {
         }
       }, 500);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, navigate]);
   
   // Check for password reset confirmation
   useEffect(() => {
@@ -109,20 +149,24 @@ const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.clear(); // Start with clean console
     
+    if (!email || !password) {
+      setError(t('auth.emailRequired') + ' and ' + t('auth.passwordRequired'));
+      return;
+    }
+
+    // Skip Turnstile validation for localhost
+    if (!isLocalhost && !turnstileToken) {
+      setError('Please complete the Turnstile verification');
+      return;
+    }
+
     try {
       console.log('Login attempt starting with:', email);
       
       // Clear any previous errors
       setError(null);
       setIsLoading(true);
-      
-      if (!turnstileToken) {
-        setError('Please complete the CAPTCHA verification');
-        setIsLoading(false);
-        return;
-      }
       
       // Make API call to the remote server (same as other pages)
       const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/login', {
@@ -174,6 +218,12 @@ const Login: React.FC = () => {
       console.error('Login failed with error:', error);
       setError(error.message);
       setLoginSuccess(false);
+      
+      // Reset Turnstile on error (only if not localhost)
+      if (!isLocalhost && turnstileRef.current) {
+        turnstileRef.current.reset();
+        setTurnstileToken(null);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -237,6 +287,18 @@ const Login: React.FC = () => {
     i18n.changeLanguage(newLang);
     document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
   };
+  
+  const handleTurnstileSuccess = (token: string) => {
+    setTurnstileToken(token);
+    if (error && token) {
+      setError('');
+    }
+  };
+
+  const handleTurnstileError = () => {
+    setTurnstileToken(null);
+    setError('Turnstile verification failed. Please try again.');
+  };
 
   if (showTwoFactor) {
     return (
@@ -266,10 +328,10 @@ const Login: React.FC = () => {
                 <div className="text-center mb-8">
                   <img src={MatrixAILogo} alt="MatrixAI Logo" className="h-16 mx-auto mb-4" />
                   <h1 className="text-3xl font-bold text-white mb-2">
-                    {t('twoFactorAuth')}
+                    {t('auth.twoFactorAuth')}
                   </h1>
                   <p className="text-white/80">
-                    {t('enterVerificationCode')}
+                    {t('auth.enterVerificationCode')}
                   </p>
                 </div>
 
@@ -277,7 +339,7 @@ const Login: React.FC = () => {
                   <div>
                     <Input
                       type="text"
-                      placeholder={t('verificationCode')}
+                      placeholder={t('auth.verificationCode')}
                       value={twoFactorCode}
                       onChange={(e) => setTwoFactorCode(e.target.value)}
                       className="bg-white/10 border-white/20 text-white placeholder-white/60"
@@ -296,7 +358,7 @@ const Login: React.FC = () => {
                     className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
                     disabled={isLoading}
                   >
-                    {isLoading ? t('verifying') : t('verify')}
+                    {isLoading ? t('auth.verifying') : t('auth.verify')}
                   </Button>
                 </form>
 
@@ -305,7 +367,7 @@ const Login: React.FC = () => {
                     onClick={() => setShowTwoFactor(false)}
                     className="text-white/80 hover:text-white text-sm"
                   >
-                    {t('backToLogin')}
+                    {t('auth.backToLogin')}
                   </button>
                 </div>
               </div>
@@ -343,7 +405,7 @@ const Login: React.FC = () => {
         <button
           onClick={toggleDarkMode}
           className="p-2 rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-colors"
-          title={darkMode ? t('lightMode') : t('darkMode')}
+          title={darkMode ? t('auth.lightMode') : t('auth.darkMode')}
         >
           {darkMode ? <RiIcons.RiSunLine className="w-5 h-5" /> : <RiIcons.RiMoonLine className="w-5 h-5" />}
         </button>
@@ -361,10 +423,10 @@ const Login: React.FC = () => {
               <div className="text-center mb-8">
                 <img src={MatrixAILogo} alt="MatrixAI Logo" className="h-16 mx-auto mb-4" />
                 <h1 className="text-3xl font-bold text-white mb-2">
-                  {t('welcomeBack')}
+                  {t('auth.welcomeBack')}
                 </h1>
                 <p className="text-white/80">
-                  {t('signInToContinue')}
+                  {t('auth.signInToContinue')}
                 </p>
               </div>
 
@@ -382,7 +444,7 @@ const Login: React.FC = () => {
                 <div>
                   <Input
                     type="email"
-                    placeholder={t('email')}
+                    placeholder={t('auth.email')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="bg-white/10 border-white/20 text-white placeholder-white/60"
@@ -393,7 +455,7 @@ const Login: React.FC = () => {
                 <div className="relative">
                   <Input
                     type={showPassword ? 'text' : 'password'}
-                    placeholder={t('password')}
+                    placeholder={t('auth.password')}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="bg-white/10 border-white/20 text-white placeholder-white/60 pr-12"
@@ -416,14 +478,14 @@ const Login: React.FC = () => {
                       onChange={(e) => setRememberMe(e.target.checked)}
                       className="mr-2 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500"
                     />
-                    {t('rememberMe')}
+                    {t('auth.rememberMe')}
                   </label>
                   <button
                     type="button"
                     onClick={handlePasswordReset}
                     className="text-white/80 hover:text-white text-sm"
                   >
-                    {t('forgotPassword')}
+                    {t('auth.forgotPassword')}
                   </button>
                 </div>
 
@@ -435,32 +497,58 @@ const Login: React.FC = () => {
 
                 {loginSuccess && (
                   <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-3">
-                    <p className="text-green-200 text-sm">{t('loginSuccessful')}</p>
+                    <p className="text-green-200 text-sm">{t('auth.loginSuccessful')}</p>
                   </div>
                 )}
 
-                <div className="mt-4 flex justify-center">
-                  <Turnstile 
-                    siteKey={process.env.REACT_APP_TURNSTILE_SITE_KEY || "0x4AAAAAABrRlVmhV5uIuLDZ"}
-                    onVerify={(token) => setTurnstileToken(token)}
-                    theme="dark"
-                  />
-                </div>
+                {/* Turnstile - Only show in production */}
+                {!isLocalhost && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    transition={{ delay: 0.65, duration: 0.5 }} 
+                    className="mt-6 flex justify-center"
+                  >
+                    <Turnstile 
+                      ref={turnstileRef} 
+                      siteKey={process.env.REACT_APP_TURNSTILE_SITE_KEY || "0x4AAAAAABrRlVmhV5uIuLDZ"}
+                      onSuccess={handleTurnstileSuccess} 
+                      onError={handleTurnstileError} 
+                      options={{ 
+                        theme: darkMode ? 'dark' : 'light' 
+                      }} 
+                    />
+                  </motion.div>
+                )}
+                
+                {/* Development notice for localhost */}
+                {isLocalhost && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    transition={{ delay: 0.65, duration: 0.5 }} 
+                    className="mt-6 flex justify-center"
+                  >
+                    <div className="text-sm text-yellow-400 bg-yellow-900/20 px-3 py-2 rounded-lg border border-yellow-500/30">
+                      Development Mode: Turnstile bypassed for localhost
+                    </div>
+                  </motion.div>
+                )}
 
                 <Button
                   type="submit"
                   className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
                   disabled={isLoading}
                 >
-                  {isLoading ? t('signingIn') : t('signIn')}
+                  {isLoading ? t('auth.signingIn') : t('auth.signIn')}
                 </Button>
               </form>
 
               <div className="mt-6 text-center">
                 <p className="text-white/80 text-sm">
-                  {t('dontHaveAccount')}{' '}
+                  {t('auth.dontHaveAccount')}{' '}
                   <Link to="/signup" className="text-blue-400 hover:text-blue-300">
-                    {t('signUp')}
+                    {t('auth.signup')}
                   </Link>
                 </p>
               </div>

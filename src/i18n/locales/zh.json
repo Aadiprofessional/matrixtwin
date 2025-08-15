@@ -39,7 +39,25 @@
     "signupSuccess": "注册成功",
     "redirecting": "正在跳转到仪表板...",
     "2fa": "双因素认证",
-    "enterCode": "输入发送到您设备的验证码"
+    "enterCode": "输入发送到您设备的验证码",
+    "role": "您的角色",
+    "roleDescription": "选择最能描述您职位的角色",
+    "createNewPassword": "创建新密码",
+    "newPassword": "新密码",
+    "confirmNewPassword": "确认新密码",
+    "welcomeBack": "欢迎回来",
+    "signInToContinue": "登录以继续",
+    "dontHaveAccount": "没有账号？",
+    "signIn": "登录",
+    "signingIn": "正在登录...",
+    "twoFactorAuth": "双因素认证",
+    "enterVerificationCode": "输入验证码",
+    "verificationCode": "验证码",
+    "verifying": "正在验证...",
+    "verify": "验证",
+    "backToLogin": "返回登录",
+    "lightMode": "浅色模式",
+    "darkMode": "深色模式"
   },
   "roles": {
     "admin": "管理员",
@@ -331,4 +349,4 @@
     "noMembersFoundUser": "当前没有可供您查看的团队成员。",
     "addFirstTeamMember": "添加第一个团队成员"
   }
-} 
+}

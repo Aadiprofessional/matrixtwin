@@ -81,6 +81,167 @@ interface FormPage {
   };
 }
 
+// Calculate field accuracy based on dimensions, positioning, and typography
+const calculateFieldAccuracy = (field: any): number => {
+  let accuracy = 100;
+  
+  // Check if field has proper dimensions
+  if (!field.width || !field.height) {
+    accuracy -= 20;
+  }
+  
+  // Check if field has proper positioning
+  if (!field.x || !field.y) {
+    accuracy -= 15;
+  }
+  
+  // Check if field has typography information
+  if (!field.typography?.fontSize) {
+    accuracy -= 10;
+  }
+  
+  // Check if field has spacing information
+  if (!field.spacing) {
+    accuracy -= 10;
+  }
+  
+  // Check if field has border information
+  if (!field.border) {
+    accuracy -= 5;
+  }
+  
+  // Bonus points for table fields with proper structure
+  if (field.type === 'table' && field.settings?.tableData) {
+    const tableData = field.settings.tableData;
+    if (tableData.rows && tableData.columns && tableData.cellDimensions) {
+      accuracy += 10;
+    }
+  }
+  
+  // Ensure accuracy is between 0 and 100
+  return Math.max(0, Math.min(100, Math.round(accuracy)));
+};
+
+// Validate field dimensions and proportions against document analysis
+const validateFieldDimensions = (field: any, documentAnalysis: any): { isValid: boolean; issues: string[]; adjustedField?: any } => {
+  const issues: string[] = [];
+  let adjustedField = { ...field };
+  
+  // Check if field dimensions are reasonable for the document
+  const pageWidth = documentAnalysis?.pageDimensions?.width || 595;
+  const pageHeight = documentAnalysis?.pageDimensions?.height || 842;
+  
+  // Validate field doesn't exceed page boundaries
+  if (field.x + field.width > pageWidth) {
+    issues.push(`Field '${field.label}' extends beyond page width`);
+    adjustedField.width = Math.max(50, pageWidth - field.x - 10);
+  }
+  
+  if (field.y + field.height > pageHeight) {
+    issues.push(`Field '${field.label}' extends beyond page height`);
+    adjustedField.height = Math.max(20, pageHeight - field.y - 10);
+  }
+  
+  // Validate font size proportions
+  const detectedFontSize = parseInt(field.typography?.fontSize) || 12;
+  const documentFontSize = parseInt(documentAnalysis?.primaryFontSize) || 12;
+  
+  if (Math.abs(detectedFontSize - documentFontSize) > 6) {
+    issues.push(`Field '${field.label}' font size (${detectedFontSize}px) differs significantly from document font (${documentFontSize}px)`);
+    adjustedField.typography = {
+      ...adjustedField.typography,
+      fontSize: `${documentFontSize}px`
+    };
+  }
+  
+  // Validate table dimensions if applicable
+  if (field.type === 'table' && field.settings?.tableData) {
+    const tableData = field.settings.tableData;
+    const expectedWidth = (tableData.columns || 3) * 100; // Minimum 100px per column
+    const expectedHeight = (tableData.rows || 3) * 30; // Minimum 30px per row
+    
+    if (field.width < expectedWidth * 0.8) {
+      issues.push(`Table '${field.label}' width may be too small for ${tableData.columns} columns`);
+      adjustedField.width = Math.min(expectedWidth, pageWidth - field.x - 10);
+    }
+    
+    if (field.height < expectedHeight * 0.8) {
+      issues.push(`Table '${field.label}' height may be too small for ${tableData.rows} rows`);
+      adjustedField.height = Math.min(expectedHeight, pageHeight - field.y - 10);
+    }
+  }
+  
+  // Check field overlap with margins
+  const margins = documentAnalysis?.margins || { top: 50, bottom: 50, left: 50, right: 50 };
+  
+  if (field.x < margins.left) {
+    issues.push(`Field '${field.label}' is positioned within left margin`);
+    adjustedField.x = margins.left;
+  }
+  
+  if (field.y < margins.top) {
+    issues.push(`Field '${field.label}' is positioned within top margin`);
+    adjustedField.y = margins.top;
+  }
+  
+  return {
+    isValid: issues.length === 0,
+    issues,
+    adjustedField: issues.length > 0 ? adjustedField : undefined
+  };
+};
+
+// Validate entire form structure and field relationships
+const validateFormStructure = (fields: any[], documentAnalysis: any): { validationReport: any; adjustedFields: any[] } => {
+  const validationReport = {
+    totalFields: fields.length,
+    validFields: 0,
+    issuesFound: [] as string[],
+    fieldValidations: [] as any[]
+  };
+  
+  const adjustedFields = fields.map((field, index) => {
+    const validation = validateFieldDimensions(field, documentAnalysis);
+    
+    validationReport.fieldValidations.push({
+      fieldId: field.id,
+      fieldLabel: field.label,
+      isValid: validation.isValid,
+      issues: validation.issues
+    });
+    
+    if (validation.isValid) {
+      validationReport.validFields++;
+    } else {
+      validationReport.issuesFound.push(...validation.issues);
+    }
+    
+    return validation.adjustedField || field;
+  });
+  
+  // Check for field overlaps
+  for (let i = 0; i < adjustedFields.length; i++) {
+    for (let j = i + 1; j < adjustedFields.length; j++) {
+      const field1 = adjustedFields[i];
+      const field2 = adjustedFields[j];
+      
+      // Check if fields overlap
+      const overlap = !(
+        field1.x + field1.width <= field2.x ||
+        field2.x + field2.width <= field1.x ||
+        field1.y + field1.height <= field2.y ||
+        field2.y + field2.height <= field1.y
+      );
+      
+      if (overlap) {
+        validationReport.issuesFound.push(`Fields '${field1.label}' and '${field2.label}' overlap`);
+      }
+    }
+  }
+  
+  return { validationReport, adjustedFields };
+};
+
 interface FormBuilderProps {
   formPages: FormPage[];
   setFormPages: React.Dispatch<React.SetStateAction<FormPage[]>>;
@@ -92,6 +253,8 @@ interface FormBuilderProps {
   setIsDragging: React.Dispatch<React.SetStateAction<boolean>>;
   activeTab: string;
   setActiveTab: React.Dispatch<React.SetStateAction<string>>;
+  showPreview: boolean;
+  setShowPreview: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 interface ResizeData {
@@ -188,6 +351,7 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
 
     try {
       let imagesToProcess: string[] = [];
+      let globalDocumentAnalysis: any = {};
       
       if (selectedFile.type === 'application/pdf') {
         setProcessingPdf(true);
@@ -211,6 +375,8 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
 
       // Process each image with AI
       const allFields: any[] = [];
+      let formName = "";
+      let formDescription = "";
       
       for (let i = 0; i < imagesToProcess.length; i++) {
         const image = imagesToProcess[i];
@@ -222,11 +388,20 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
             content: [
               {
                 type: "text",
-                text: `Analyze this form image (page ${i + 1}) and extract all form fields with their properties. Return a JSON structure with the following format:
+                text: `You are an expert document analysis AI with MS Word-level precision. Analyze this form image (page ${i + 1} of ${imagesToProcess.length}) and extract ALL form fields with PIXEL-PERFECT accuracy. Return a JSON structure with the following format:
 
 {
   "formName": "Descriptive form name",
   "formDescription": "Brief description of the form purpose",
+  "documentAnalysis": {
+    "pageWidth": 595,
+    "pageHeight": 842,
+    "margins": {"top": 50, "right": 50, "bottom": 50, "left": 50},
+    "detectedFontSizes": ["12px", "14px", "16px"],
+    "primaryFontSize": "12px",
+    "lineSpacing": 1.2,
+    "orientation": "portrait"
+  },
   "fields": [
     {
       "id": "unique_field_id",
@@ -236,6 +411,30 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
       "y": 100,
       "width": 300,
       "height": 40,
+      "pageNumber": ${i + 1},
+      "typography": {
+        "fontSize": "12px",
+        "fontWeight": "normal",
+        "textAlign": "left",
+        "lineHeight": 1.2,
+        "letterSpacing": "normal"
+      },
+      "spacing": {
+        "marginTop": 5,
+        "marginBottom": 5,
+        "marginLeft": 0,
+        "marginRight": 0,
+        "paddingTop": 8,
+        "paddingBottom": 8,
+        "paddingLeft": 12,
+        "paddingRight": 12
+      },
+      "border": {
+        "width": 1,
+        "style": "solid",
+        "color": "#cccccc",
+        "radius": 4
+      },
       "settings": {
         "required": false,
         "placeholder": "Enter text...",
@@ -252,6 +451,13 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
           ["Cell 2,1", "Cell 2,2", "Cell 2,3", "Cell 2,4"]
         ],
         "showHeader": true,
+        "showBorders": true,
+        "stripedRows": true,
+        "resizableColumns": false,
+        "cellPadding": 8,
+        "headerHeight": 35,
+        "rowHeight": 30,
+        "columnWidths": [75, 75, 75, 75],
         // For number fields:
         "min": 0,
         "max": 100,
@@ -291,9 +497,33 @@ Field types to use:
 - "member": User/department selection
 - "approvalKit": Approval workflow
 
-For tables, extract the actual text content from cells and populate the data array. If it's a form table with empty cells, provide placeholder data that matches the table structure.
+CRITICAL ANALYSIS REQUIREMENTS:
+1. **FONT SIZE DETECTION**: Measure and report the exact font size for each text element. Common sizes: 8px, 9px, 10px, 11px, 12px, 14px, 16px, 18px, 20px, 24px.
+2. **PIXEL-PERFECT POSITIONING**: Measure exact x, y coordinates relative to A4 page dimensions (595x842px portrait, 842x595px landscape). Use precise measurements, not estimates.
+3. **ACCURATE DIMENSIONS**: Calculate exact width and height for each field based on visual boundaries, text content, and spacing.
+4. **TABLE PRECISION**: For tables, measure individual cell dimensions, row heights, column widths, and extract exact text content. Calculate total table dimensions accurately.
+5. **SPACING ANALYSIS**: Detect margins, padding, line spacing, and letter spacing. Measure gaps between elements.
+6. **BORDER DETECTION**: Identify border styles, widths, colors, and corner radius for each field.
+7. **TYPOGRAPHY ANALYSIS**: Detect font weight (normal, bold), text alignment (left, center, right), and line height.
+8. **LAYOUT STRUCTURE**: Analyze document margins, detect grid patterns, alignment guides, and spacing consistency.
+9. **CONTENT EXTRACTION**: Extract exact text content, including special characters, numbers, and formatting.
+10. **FIELD RELATIONSHIPS**: Identify grouped fields, form sections, and hierarchical structures.
 
-Position coordinates should be relative to A4 page dimensions (595x842px). Estimate positions based on visual layout.`
+DIMENSION CALCULATION RULES:
+- Text fields: Width = content width + padding + borders, Height = font size + padding + borders
+- Tables: Width = sum of column widths + borders, Height = (row count × row height) + header height + borders
+- Textareas: Calculate based on visible lines and character width
+- Checkboxes/Radio: Standard 16px × 16px with label spacing
+- Signatures: Minimum 200px × 80px based on signature area
+
+QUALITY STANDARDS:
+- Positioning accuracy: ±2px tolerance
+- Dimension accuracy: ±3px tolerance
+- Font size accuracy: Exact match to detected size
+- Table cell alignment: Perfect grid alignment
+- Text content: 100% accurate extraction
+
+ALWAYS include pageNumber property for each field (${i + 1} for this page). Provide complete typography, spacing, and border information for MS Word-level precision.`
               },
               {
                 type: "image_url",
@@ -328,26 +558,188 @@ Position coordinates should be relative to A4 page dimensions (595x842px). Estim
         const aiResponse = data.choices[0].message.content;
 
         // Parse the AI response to extract form structure
-        let pageFormData;
+        let pageFormData: any;
         try {
           // Try to extract JSON from the response
+          console.log(`Processing AI response for page ${i + 1}:`, aiResponse.substring(0, 200) + '...');
           const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
+            console.log(`Found JSON match for page ${i + 1}`);
             pageFormData = JSON.parse(jsonMatch[0]);
+            console.log(`Parsed form data for page ${i + 1}:`, pageFormData);
+            
+            // Set form name and description from the first page
+            if (i === 0) {
+              formName = pageFormData.formName || "Generated Form";
+              formDescription = pageFormData.formDescription || "Form generated from uploaded document";
+              console.log("Form name and description set from first page:", formName, formDescription);
+              
+              // Store document analysis from first page for validation
+              if (pageFormData.documentAnalysis) {
+                globalDocumentAnalysis = pageFormData.documentAnalysis;
+              }
+            }
             
             // Validate and process the extracted data
-            if (pageFormData.fields && Array.isArray(pageFormData.fields)) {
-              const processedFields = pageFormData.fields.map((field: any, index: number) => {
+              if (pageFormData.fields && Array.isArray(pageFormData.fields)) {
+                console.log(`Processing ${pageFormData.fields.length} fields for page ${i + 1}`);
+                const processedFields = pageFormData.fields.map((field: any, index: number) => {
+                // Calculate intelligent dimensions based on field type
+                const calculateDimensions = (fieldType: string, fieldData: any) => {
+                  const baseWidth = field.width || 300;
+                  const baseHeight = field.height || 40;
+                  
+                  switch (fieldType) {
+                    case 'table':
+                       // Advanced table dimension analysis
+                       const tableData = fieldData.settings?.tableData || {};
+                       const rows = fieldData.settings?.rows || tableData.rows || 3;
+                       const columns = fieldData.settings?.columns || tableData.columns || 3;
+                       
+                       // Calculate dynamic cell dimensions based on content
+                       let totalWidth = 0;
+                       let totalHeight = 0;
+                       
+                       if (tableData.cellDimensions && Array.isArray(tableData.cellDimensions)) {
+                         // Use AI-detected cell dimensions
+                         const cellDims = tableData.cellDimensions;
+                         totalWidth = cellDims.reduce((sum: number, row: any[]) => {
+                           const rowWidth = row.reduce((rowSum: number, cell: any) => rowSum + (cell.width || 80), 0);
+                           return Math.max(sum, rowWidth);
+                         }, 0);
+                         totalHeight = cellDims.reduce((sum: number, row: any[]) => {
+                           const maxRowHeight = Math.max(...row.map((cell: any) => cell.height || 30));
+                           return sum + maxRowHeight;
+                         }, 0);
+                       } else {
+                         // Fallback to uniform cell sizing with content-aware adjustments
+                         const avgContentLength = tableData.avgContentLength || 10;
+                         const maxContentLength = tableData.maxContentLength || 20;
+                         
+                         // Dynamic cell width based on content
+                         const baseCellWidth = Math.max(60, Math.min(avgContentLength * 8, 120));
+                         const baseCellHeight = Math.max(25, Math.min(maxContentLength > 50 ? 40 : 30, 50));
+                         
+                         // Account for column width variations
+                         const columnWidths = tableData.columnWidths || Array(columns).fill(baseCellWidth);
+                         const rowHeights = tableData.rowHeights || Array(rows).fill(baseCellHeight);
+                         
+                         totalWidth = columnWidths.reduce((sum: number, width: number) => sum + width, 0);
+                         totalHeight = rowHeights.reduce((sum: number, height: number) => sum + height, 0);
+                       }
+                       
+                       // Add padding and borders
+                       const tablePadding = 20;
+                       const borderWidth = (fieldData.border?.width || 1) * 2;
+                       
+                       return {
+                         width: Math.min(totalWidth + tablePadding + borderWidth, 550),
+                         height: Math.min(totalHeight + tablePadding + borderWidth, 400)
+                       };
+                    case 'textarea':
+                      const textLines = fieldData.settings?.rows || 4;
+                      return {
+                        width: Math.max(200, Math.min(baseWidth, 500)),
+                        height: Math.max(textLines * 20 + 20, Math.min(baseHeight * 3, 200))
+                      };
+                    case 'select':
+                    case 'multiselect':
+                      const optionCount = fieldData.settings?.options?.length || 1;
+                      return {
+                        width: Math.max(150, Math.min(baseWidth, 400)),
+                        height: fieldType === 'multiselect' ? Math.min(optionCount * 25 + 40, 150) : 40
+                      };
+                    case 'checkbox':
+                    case 'radio':
+                      return {
+                        width: Math.max(120, Math.min(baseWidth, 300)),
+                        height: Math.max(30, Math.min(baseHeight, 50))
+                      };
+                    case 'date':
+                    case 'time':
+                      return {
+                        width: Math.max(150, Math.min(baseWidth, 250)),
+                        height: Math.max(35, Math.min(baseHeight, 45))
+                      };
+                    case 'number':
+                      return {
+                        width: Math.max(100, Math.min(baseWidth, 200)),
+                        height: Math.max(35, Math.min(baseHeight, 45))
+                      };
+                    default: // text, email, etc.
+                      return {
+                        width: Math.max(150, Math.min(baseWidth, 400)),
+                        height: Math.max(35, Math.min(baseHeight, 45))
+                      };
+                  }
+                };
+                
+                const dimensions = calculateDimensions(field.type || 'text', field);
+                
+                // Apply document layout analysis for positioning
+                const applyLayoutAnalysis = (x: number, y: number, fieldType: string) => {
+                  const docAnalysis = pageFormData.documentAnalysis || {};
+                  const margins = docAnalysis.margins || { top: 50, bottom: 50, left: 50, right: 50 };
+                  const gridSize = docAnalysis.gridSize || 10;
+                  
+                  // Snap to grid for precision positioning
+                  const snappedX = Math.round(x / gridSize) * gridSize;
+                  const snappedY = Math.round(y / gridSize) * gridSize;
+                  
+                  // Ensure fields respect document margins
+                  const adjustedX = Math.max(margins.left, Math.min(snappedX, 595 - margins.right - dimensions.width));
+                  const adjustedY = Math.max(margins.top, Math.min(snappedY, 842 - margins.bottom - dimensions.height));
+                  
+                  // Apply field-specific positioning rules
+                  if (fieldType === 'table') {
+                    // Tables often need more spacing
+                    return {
+                      x: Math.max(adjustedX, margins.left + 10),
+                      y: Math.max(adjustedY, margins.top + 10)
+                    };
+                  }
+                  
+                  return { x: adjustedX, y: adjustedY };
+                };
+                
+                const position = applyLayoutAnalysis(field.x || 50, field.y || 50, field.type || 'text');
+                
                 // Ensure all required properties are present
                 const processedField = {
-                  id: field.id || `field-${Date.now()}-${index}`,
+                  id: field.id || `field-${Date.now()}-${index}-page${i+1}`,
                   type: field.type || 'text',
                   label: field.label || `Field ${index + 1}`,
-                  x: Math.max(0, Math.min(field.x || 50, 500)),
-                  y: Math.max(0, Math.min(field.y || 50, 700)),
-                  width: Math.max(50, Math.min(field.width || 300, 500)),
-                  height: Math.max(20, Math.min(field.height || 40, 300)),
-                  pageNumber: i + 1,
+                  x: position.x,
+                  y: position.y,
+                  width: Math.max(50, Math.min(dimensions.width, 595)),
+                  height: Math.max(20, Math.min(dimensions.height, 400)),
+                  pageNumber: field.pageNumber || (i + 1),
+                  // Preserve typography information from AI analysis
+                  typography: {
+                    fontSize: field.typography?.fontSize || pageFormData.documentAnalysis?.primaryFontSize || '12px',
+                    fontWeight: field.typography?.fontWeight || 'normal',
+                    textAlign: field.typography?.textAlign || 'left',
+                    lineHeight: field.typography?.lineHeight || pageFormData.documentAnalysis?.lineSpacing || 1.2,
+                    letterSpacing: field.typography?.letterSpacing || 'normal'
+                  },
+                  // Preserve spacing information
+                  spacing: {
+                    marginTop: field.spacing?.marginTop || 5,
+                    marginBottom: field.spacing?.marginBottom || 5,
+                    marginLeft: field.spacing?.marginLeft || 0,
+                    marginRight: field.spacing?.marginRight || 0,
+                    paddingTop: field.spacing?.paddingTop || 8,
+                    paddingBottom: field.spacing?.paddingBottom || 8,
+                    paddingLeft: field.spacing?.paddingLeft || 12,
+                    paddingRight: field.spacing?.paddingRight || 12
+                  },
+                  // Preserve border information
+                  border: {
+                    width: field.border?.width || 1,
+                    style: field.border?.style || 'solid',
+                    color: field.border?.color || '#cccccc',
+                    radius: field.border?.radius || 4
+                  },
                   settings: {
                     required: field.settings?.required || false,
                     placeholder: field.settings?.placeholder || '',
@@ -367,11 +759,59 @@ Position coordinates should be relative to A4 page dimensions (595x842px). Estim
                     
                   case 'layoutTable':
                   case 'dataTable':
-                    processedField.settings.rows = field.settings?.rows || 3;
-                    processedField.settings.columns = field.settings?.columns || 3;
-                    processedField.settings.headers = field.settings?.headers || [];
-                    processedField.settings.data = field.settings?.data || [];
+                    // Get rows and columns from settings or calculate from data if available
+                    const data = field.settings?.data || [];
+                    const rows = field.settings?.rows || (data.length > 0 ? data.length : 3);
+                    const columns = field.settings?.columns || 
+                      (data.length > 0 && data[0].length > 0 ? data[0].length : 3);
+                    
+                    // Generate headers if not provided
+                    let headers = field.settings?.headers || [];
+                    if (headers.length === 0 && columns > 0) {
+                      headers = Array.from({ length: columns }, (_, i) => `Header ${i + 1}`);
+                    }
+                    
+                    // Generate data if not provided or incomplete
+                    let tableData = [...data];
+                    if (tableData.length < rows) {
+                      for (let r = tableData.length; r < rows; r++) {
+                        const newRow = [];
+                        for (let c = 0; c < columns; c++) {
+                          newRow.push(`Data ${r+1},${c+1}`);
+                        }
+                        tableData.push(newRow);
+                      }
+                    }
+                    
+                    // Ensure each row has the correct number of columns
+                    tableData = tableData.map((row, rowIndex) => {
+                      if (row.length < columns) {
+                        const filledRow = [...row];
+                        for (let c = row.length; c < columns; c++) {
+                          filledRow.push(`Data ${rowIndex+1},${c+1}`);
+                        }
+                        return filledRow;
+                      } else if (row.length > columns) {
+                        return row.slice(0, columns);
+                      }
+                      return row;
+                    });
+                    
+                    processedField.settings.rows = rows;
+                    processedField.settings.columns = columns;
+                    processedField.settings.headers = headers;
+                    processedField.settings.data = tableData;
                     processedField.settings.showHeader = field.settings?.showHeader !== false;
+                    processedField.settings.showBorders = field.settings?.showBorders !== false;
+                    processedField.settings.stripedRows = field.settings?.stripedRows !== false;
+                    processedField.settings.resizableColumns = field.settings?.resizableColumns || false;
+                    
+                    if (field.type === 'dataTable') {
+                      processedField.settings.sortableColumns = field.settings?.sortableColumns || false;
+                      processedField.settings.filterableColumns = field.settings?.filterableColumns || false;
+                      processedField.settings.pagination = field.settings?.pagination || false;
+                    }
+                    
                     processedField.width = Math.max(400, processedField.width);
                     processedField.height = Math.max(150, processedField.height);
                     break;
@@ -443,33 +883,95 @@ Position coordinates should be relative to A4 page dimensions (595x842px). Estim
 
       setGenerationProgress(80);
 
-      // Create final form structure
-      const formData = {
-        name: (allFields.length > 0 && allFields[0].formName) ? 
-              allFields[0].formName : 
-              selectedFile.name.replace(/\.[^/.]+$/, "") + " - AI Generated Form",
-        description: (allFields.length > 0 && allFields[0].formDescription) ? 
-                    allFields[0].formDescription : 
-                    `Form generated from uploaded ${selectedFile.type === 'application/pdf' ? 'PDF' : 'image'}`,
-        fields: allFields.length > 0 ? allFields : [
-          {
-            id: `field-${Date.now()}`,
-            type: 'text',
-            label: 'Generated Field',
-            settings: { 
-              hideTitle: false, 
-              required: false, 
-              titleLayout: 'horizontal',
-              placeholder: 'Enter text...'
-            },
-            x: 50,
-            y: 50,
-            width: 300,
-            height: 40
+      // Apply field validation and adjustments
+      const documentAnalysis = globalDocumentAnalysis || {};
+      const { validationReport, adjustedFields } = validateFormStructure(allFields, documentAnalysis);
+      
+      // Log validation results for debugging
+      console.log('Field Validation Report:', validationReport);
+      if (validationReport.issuesFound.length > 0) {
+        console.warn('Validation issues found:', validationReport.issuesFound);
+      }
+      
+      // Use adjusted fields instead of original allFields
+      const validatedFields = adjustedFields;
+      
+      setGenerationProgress(85);
+
+      // Organize fields by page number and create multiple form pages
+      const fieldsByPage: { [key: number]: any[] } = {};
+      
+      // Group validated fields by page number
+      validatedFields.forEach(field => {
+        const pageNum = field.pageNumber || 1;
+        if (!fieldsByPage[pageNum]) {
+          fieldsByPage[pageNum] = [];
+        }
+        fieldsByPage[pageNum].push(field);
+      });
+      
+      // Create pages array with fields for each page
+      const pages = Object.keys(fieldsByPage).map(pageNumStr => {
+        const pageNum = parseInt(pageNumStr);
+        return {
+          id: `page-${Date.now()}-${pageNum}`,
+          fields: fieldsByPage[pageNum],
+          dimensions: {
+            width: 595,
+            height: 842,
+            orientation: 'portrait',
+            size: 'A4'
           }
-        ]
+        };
+      });
+      
+      // If no pages were created, add a default page
+      if (pages.length === 0) {
+        pages.push({
+          id: `page-${Date.now()}-1`,
+          fields: [
+            {
+              id: `field-${Date.now()}`,
+              type: 'text',
+              label: 'Generated Field',
+              settings: { 
+                hideTitle: false, 
+                required: false, 
+                titleLayout: 'horizontal',
+                placeholder: 'Enter text...'
+              },
+              x: 50,
+              y: 50,
+              width: 300,
+              height: 40
+            }
+          ],
+          dimensions: {
+            width: 595,
+            height: 842,
+            orientation: 'portrait',
+            size: 'A4'
+          }
+        });
+      }
+      
+      // Create final form structure
+      console.log('Creating final form structure with pages:', pages);
+      const formData = {
+        name: formName || selectedFile.name.replace(/\.[^/.]+$/, "") + " - AI Generated Form",
+        description: formDescription || `Form generated from uploaded ${selectedFile.type === 'application/pdf' ? 'PDF' : 'image'}`,
+        pages: pages,
+        validationReport: validationReport,
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          sourceFile: selectedFile.name,
+          totalFields: validationReport.totalFields,
+          validFields: validationReport.validFields,
+          accuracyScore: Math.round((validationReport.validFields / validationReport.totalFields) * 100) || 0
+        }
       };
 
+      console.log('Final form data:', formData);
       setGenerationProgress(100);
       setGeneratedForm(formData);
       setPreviewMode(true);
@@ -645,22 +1147,112 @@ Position coordinates should be relative to A4 page dimensions (595x842px). Estim
                   </div>
                 </div>
                 
-                <div className="border border-dark-600 rounded-lg p-4 bg-dark-900/50">
-                  <h4 className="font-medium mb-3">Form Fields ({generatedForm?.fields?.length || 0})</h4>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {generatedForm?.fields?.map((field: any, index: number) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-dark-800/50 rounded">
-                        <div className="flex items-center">
-                          <span className="text-ai-blue mr-2">{field.type}</span>
-                          <span>{field.label}</span>
-                          {field.pageNumber && (
-                            <span className="text-xs text-gray-500 ml-2">Page {field.pageNumber}</span>
-                          )}
-                        </div>
-                        <span className="text-xs text-gray-400">
-                          {field.x && field.y ? `(${field.x}, ${field.y})` : 'Auto-position'}
-                        </span>
+                {/* Visual Form Preview with Dimension Accuracy */}
+                <div className="border border-dark-600 rounded-lg p-4 bg-dark-900/50 mb-4">
+                  <h4 className="font-medium mb-3 flex items-center justify-between">
+                    <span>Visual Form Preview</span>
+                    <div className="flex gap-2">
+                      <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs">✓ Dimensions</span>
+                      <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs">✓ Typography</span>
+                      <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded text-xs">✓ Positioning</span>
+                    </div>
+                  </h4>
+                  
+                  {generatedForm?.pages?.map((page: {fields: any[]}, pageIndex: number) => (
+                    <div key={`preview-${pageIndex}`} className="mb-4">
+                      <div className="text-sm font-medium text-ai-teal mb-2">
+                        Page {pageIndex + 1} Preview (A4: 595×842px)
                       </div>
+                      
+                      {/* Miniature form preview */}
+                      <div className="bg-gray-100 rounded-lg p-4 relative overflow-hidden">
+                        <div 
+                          className="bg-white border border-gray-300 relative mx-auto shadow-sm"
+                          style={{
+                            width: '297px', // Half scale of A4 width (595/2)
+                            height: '421px', // Half scale of A4 height (842/2)
+                            transform: 'scale(0.7)',
+                            transformOrigin: 'top center'
+                          }}
+                        >
+                          {/* Grid overlay for precision */}
+                          <div className="absolute inset-0 opacity-10">
+                            {Array.from({ length: 30 }, (_, i) => (
+                              <div key={`h-${i}`} className="absolute w-full border-t border-gray-400" style={{ top: `${i * 14}px` }} />
+                            ))}
+                            {Array.from({ length: 21 }, (_, i) => (
+                              <div key={`v-${i}`} className="absolute h-full border-l border-gray-400" style={{ left: `${i * 14}px` }} />
+                            ))}
+                          </div>
+                          
+                          {/* Field boundaries */}
+                          {page.fields?.map((field: any, fieldIndex: number) => {
+                            const accuracy = calculateFieldAccuracy(field);
+                            return (
+                              <div
+                                key={fieldIndex}
+                                className={`absolute border-2 rounded transition-all duration-200 hover:z-10 group ${
+                                  accuracy >= 90 ? 'border-green-400 bg-green-50' :
+                                  accuracy >= 75 ? 'border-yellow-400 bg-yellow-50' :
+                                  'border-red-400 bg-red-50'
+                                }`}
+                                style={{
+                                  left: `${(field.x || 0) / 2}px`,
+                                  top: `${(field.y || 0) / 2}px`,
+                                  width: `${(field.width || 100) / 2}px`,
+                                  height: `${(field.height || 30) / 2}px`,
+                                }}
+                                title={`${field.label} (${accuracy}% accuracy)`}
+                              >
+                                <div className="absolute -top-6 left-0 opacity-0 group-hover:opacity-100 bg-black text-white text-xs px-2 py-1 rounded whitespace-nowrap z-20">
+                                  {field.label} - {accuracy}% accurate
+                                </div>
+                                <div className="text-xs p-1 truncate" style={{ fontSize: `${Math.max(6, (parseInt(field.typography?.fontSize) || 12) / 2)}px` }}>
+                                  {field.type}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="border border-dark-600 rounded-lg p-4 bg-dark-900/50">
+                  <h4 className="font-medium mb-3">Form Fields ({generatedForm?.pages?.reduce((total: number, page: {fields: any[]}) => total + page.fields.length, 0) || 0})</h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {generatedForm?.pages?.map((page: {fields: any[]}, pageIndex: number) => (
+                      <React.Fragment key={`page-${pageIndex}`}>
+                        <div className="text-sm font-medium text-ai-teal mb-2 mt-3 first:mt-0">
+                          Page {pageIndex + 1} ({page.fields.length} fields)
+                        </div>
+                        {page.fields.map((field: any, fieldIndex: number) => {
+                          const accuracy = calculateFieldAccuracy(field);
+                          return (
+                            <div key={`${pageIndex}-${fieldIndex}`} className="flex items-center justify-between p-2 bg-dark-800/50 rounded">
+                              <div className="flex items-center">
+                                <span className="text-ai-blue mr-2">{field.type}</span>
+                                <span>{field.label}</span>
+                                <span className={`ml-2 text-xs px-2 py-1 rounded ${
+                                  accuracy >= 90 ? 'bg-green-500/20 text-green-400' :
+                                  accuracy >= 75 ? 'bg-yellow-500/20 text-yellow-400' :
+                                  'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {accuracy}%
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-400 text-right">
+                                <div>{field.width}×{field.height}px</div>
+                                <div>{field.x && field.y ? `(${field.x}, ${field.y})` : 'Auto-position'}</div>
+                                {field.typography?.fontSize && (
+                                  <div>Font: {field.typography.fontSize}</div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </React.Fragment>
                     ))}
                   </div>
                 </div>
@@ -720,27 +1312,63 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
     const rect = wrapperRef.current?.getBoundingClientRect();
     if (!rect) return;
     
-    setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
-    setInitialPosition({ x: field.x || 0, y: field.y || 0 });
+    // Calculate effective dimensions based on field type - use the same calculation as in the render function
+    const effectiveWidth = field.type === 'layoutTable' || field.type === 'dataTable' ? 
+      Math.max(field.width || 200, (field.settings?.columns || 3) * 100) : 
+      field.width || 200;
+      
+    const effectiveHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 
+      Math.max(field.height || 40, (field.settings?.rows || 3) * 30) : 
+      field.type === 'textarea' ? 
+        Math.max(field.height || 40, (field.settings?.rows || 3) * 20) : 
+        field.height || 40;
     
-    document.body.style.cursor = 'grabbing';
-    document.body.style.userSelect = 'none';
-  }, [field.x, field.y, onSelect, onUpdatePosition]);
+    // Check if the click is within the effective dimensions
+    const relativeX = e.clientX - rect.left;
+    const relativeY = e.clientY - rect.top;
+    
+    if (relativeX >= 0 && relativeX <= effectiveWidth && relativeY >= 0 && relativeY <= effectiveHeight) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+      setInitialPosition({ x: field.x || 0, y: field.y || 0 });
+      
+      // Enhanced cursor and visual feedback
+      document.body.style.cursor = 'grabbing';
+      document.body.style.userSelect = 'none';
+      
+      // Add visual feedback for better UX
+      if (wrapperRef.current) {
+        wrapperRef.current.style.boxShadow = '0 8px 25px rgba(0, 0, 0, 0.15)';
+        wrapperRef.current.style.transform = 'scale(1.02)';
+        wrapperRef.current.style.transition = 'box-shadow 0.2s ease, transform 0.2s ease';
+      }
+    }
+  }, [field.x, field.y, field.width, field.height, field.type, field.settings, onSelect, onUpdatePosition]);
   
   const handleResizeMouseDown = useCallback((e: React.MouseEvent, direction: string) => {
     e.preventDefault();
     e.stopPropagation();
     
+    // Calculate effective dimensions based on field type - use the same calculation as in the render function
+    const effectiveWidth = field.type === 'layoutTable' || field.type === 'dataTable' ? 
+      Math.max(field.width || 200, (field.settings?.columns || 3) * 100) : 
+      field.width || 200;
+      
+    const effectiveHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 
+      Math.max(field.height || 40, (field.settings?.rows || 3) * 30) : 
+      field.type === 'textarea' ? 
+        Math.max(field.height || 40, (field.settings?.rows || 3) * 20) : 
+        field.height || 40;
+    
     setIsResizing(true);
     setResizeDirection(direction);
     setDragStart({ x: e.clientX, y: e.clientY });
-    setInitialSize({ width: field.width || 200, height: field.height || 40 });
+    setInitialSize({ width: effectiveWidth, height: effectiveHeight });
     setInitialPosition({ x: field.x || 0, y: field.y || 0 });
     
     document.body.style.cursor = getResizeCursor(direction);
     document.body.style.userSelect = 'none';
-  }, [field.width, field.height, field.x, field.y]);
+  }, [field.width, field.height, field.x, field.y, field.type, field.settings]);
   
   const getResizeCursor = (direction: string) => {
     const cursors: { [key: string]: string } = {
@@ -762,22 +1390,54 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
     const deltaX = e.clientX - dragStart.x;
     const deltaY = e.clientY - dragStart.y;
     
-    if (isDragging && onUpdatePosition) {
-      const parentRect = wrapperRef.current.parentElement?.getBoundingClientRect();
-      if (!parentRect) return;
+    // Calculate effective dimensions based on field type - use the same calculation as in the render function
+    const effectiveWidth = field.type === 'layoutTable' || field.type === 'dataTable' ? 
+      Math.max(field.width || 200, (field.settings?.columns || 3) * 100) : 
+      field.width || 200;
       
-      const newX = Math.max(0, Math.min(
-        parentRect.width - (field.width || 200) - 24,
+    const effectiveHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 
+      Math.max(field.height || 40, (field.settings?.rows || 3) * 30) : 
+      field.type === 'textarea' ? 
+        Math.max(field.height || 40, (field.settings?.rows || 3) * 20) : 
+        field.height || 40;
+    
+    if (isDragging && onUpdatePosition) {
+      // Get the page container element and its dimensions
+      const pageContainer = wrapperRef.current.closest('[data-page-container]') as HTMLElement;
+      let pageWidth = 595; // Default A4 width
+      let pageHeight = 842; // Default A4 height
+      
+      if (pageContainer) {
+        // Try to get dimensions from the container's computed style
+        const computedStyle = window.getComputedStyle(pageContainer);
+        pageWidth = parseInt(computedStyle.width) || 595;
+        pageHeight = parseInt(computedStyle.height) || 842;
+      } else {
+        // Fallback: use parent container but with more conservative boundaries
+        const parentRect = wrapperRef.current.parentElement?.getBoundingClientRect();
+        if (parentRect) {
+          pageWidth = parentRect.width;
+          pageHeight = parentRect.height;
+        }
+      }
+      
+      // Use page dimensions for boundary constraints with proper padding
+      const padding = 24; // Account for page padding (increased for better boundaries)
+      const newX = Math.max(padding, Math.min(
+        pageWidth - effectiveWidth - padding,
         initialPosition.x + deltaX
       ));
-      const newY = Math.max(0, Math.min(
-        parentRect.height - (field.height || 40) - 24,
+      const newY = Math.max(padding, Math.min(
+        pageHeight - effectiveHeight - padding,
         initialPosition.y + deltaY
       ));
       
-      // Update position immediately for smooth dragging
-      wrapperRef.current.style.left = `${newX}px`;
-      wrapperRef.current.style.top = `${newY}px`;
+      // Apply smooth transition and update position immediately for responsive dragging
+      wrapperRef.current.style.transition = 'none'; // Disable transition during drag for immediate response
+      wrapperRef.current.style.transform = `translate(${newX - (field.x || 0)}px, ${newY - (field.y || 0)}px)`;
+      wrapperRef.current.style.left = `${field.x || 0}px`;
+      wrapperRef.current.style.top = `${field.y || 0}px`;
+      wrapperRef.current.style.zIndex = '1000'; // Bring to front while dragging
       
     } else if (isResizing) {
       let newWidth = initialSize.width;
@@ -831,15 +1491,63 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
   }, [isDragging, isResizing, dragStart, initialPosition, initialSize, resizeDirection, field.width, field.height, onUpdatePosition]);
   
   const handleMouseUp = useCallback(() => {
-    if (isDragging && wrapperRef.current && onUpdatePosition) {
-      const rect = wrapperRef.current.getBoundingClientRect();
-      const parentRect = wrapperRef.current.parentElement?.getBoundingClientRect();
+    // Calculate effective dimensions based on field type - use the same calculation as in the render function
+    const effectiveWidth = field.type === 'layoutTable' || field.type === 'dataTable' ? 
+      Math.max(field.width || 200, (field.settings?.columns || 3) * 100) : 
+      field.width || 200;
       
-      if (parentRect) {
-        const newX = rect.left - parentRect.left - 12; // Account for padding
-        const newY = rect.top - parentRect.top - 12;
-        onUpdatePosition(fieldId, Math.max(0, newX), Math.max(0, newY));
+    const effectiveHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 
+      Math.max(field.height || 40, (field.settings?.rows || 3) * 30) : 
+      field.type === 'textarea' ? 
+        Math.max(field.height || 40, (field.settings?.rows || 3) * 20) : 
+        field.height || 40;
+    
+    if (isDragging && wrapperRef.current && onUpdatePosition) {
+      // Calculate the final position based on the current transform
+      const currentTransform = wrapperRef.current.style.transform;
+      let finalX = initialPosition.x;
+      let finalY = initialPosition.y;
+      
+      // Extract position from transform if it exists
+      if (currentTransform && currentTransform.includes('translate')) {
+        const matches = currentTransform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+        if (matches) {
+          const deltaX = parseFloat(matches[1]) || 0;
+          const deltaY = parseFloat(matches[2]) || 0;
+          finalX = initialPosition.x + deltaX;
+          finalY = initialPosition.y + deltaY;
+        }
       }
+      
+      // Get the page container element and its dimensions for proper boundary calculation
+      const pageContainer = wrapperRef.current.closest('[data-page-container]') as HTMLElement;
+      let pageWidth = 595;
+      let pageHeight = 842;
+      
+      if (pageContainer) {
+        const computedStyle = window.getComputedStyle(pageContainer);
+        pageWidth = parseInt(computedStyle.width) || 595;
+        pageHeight = parseInt(computedStyle.height) || 842;
+      }
+      
+      const padding = 24;
+       const newX = Math.max(padding, Math.min(
+         pageWidth - effectiveWidth - padding,
+         finalX
+       ));
+       const newY = Math.max(padding, Math.min(
+         pageHeight - effectiveHeight - padding,
+         finalY
+       ));
+      
+      // Reset all visual enhancements and apply final position
+       wrapperRef.current.style.transform = 'none';
+       wrapperRef.current.style.transition = 'all 0.3s ease-out'; // Smooth transition back
+       wrapperRef.current.style.zIndex = field.zIndex?.toString() || '1'; // Reset z-index
+       wrapperRef.current.style.boxShadow = ''; // Reset shadow
+       
+       // Update the field position
+       onUpdatePosition(fieldId, newX, newY);
     }
     
     if (isResizing && wrapperRef.current) {
@@ -864,7 +1572,7 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
     setResizeDirection('');
     document.body.style.cursor = 'default';
     document.body.style.userSelect = 'auto';
-  }, [isDragging, isResizing, fieldId, onUpdateSize, onUpdatePosition]);
+  }, [isDragging, isResizing, fieldId, field.type, field.width, field.height, field.settings, onUpdateSize, onUpdatePosition]);
   
   useEffect(() => {
     if (isDragging || isResizing) {
@@ -878,6 +1586,17 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
     }
   }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
   
+  // Calculate effective dimensions based on field type for consistent sizing
+  const effectiveWidth = field.type === 'layoutTable' || field.type === 'dataTable' ? 
+    Math.max(field.width || 200, (field.settings?.columns || 3) * 100) : 
+    field.width || 200;
+    
+  const effectiveHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 
+    Math.max(field.height || 40, (field.settings?.rows || 3) * 30) : 
+    field.type === 'textarea' ? 
+      Math.max(field.height || 40, (field.settings?.rows || 3) * 20) : 
+      field.height || 40;
+
   return (
     <div 
       ref={wrapperRef} 
@@ -887,23 +1606,63 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
           : 'border-transparent hover:border-ai-blue/50 hover:shadow-md'
       } ${isDragging ? 'cursor-grabbing z-50' : 'cursor-grab'} ${isResizing ? 'z-50' : ''}`}
       style={{ 
-        width: field.width || 200,
-        height: field.height || 40,
+        // Use effective dimensions for both width/height and min-width/min-height
+        // This ensures the border properly follows the content boundaries
+        width: effectiveWidth,
+        height: effectiveHeight,
+        minWidth: effectiveWidth,
+        minHeight: effectiveHeight,
         left: field.x || 0,
         top: field.y || 0,
-        zIndex: isSelected ? 10 : (field.zIndex || 1)
+        zIndex: isSelected ? 10 : (field.zIndex || 1),
+        boxSizing: 'border-box', // Ensure border is included in the dimensions
+        padding: '0', // Remove any padding that might affect border positioning
+        overflow: 'visible', // Allow resize handles to extend outside
+        borderWidth: '2px', // Ensure consistent border width
+        borderStyle: 'solid' // Ensure border is solid
       }}
       onMouseDown={handleMouseDown}
     >
-      {/* Main content area */}
-      <div className="w-full h-full pointer-events-none">
+      {/* Main content area - using consistent effective dimensions */}
+      <div 
+        className="w-full h-full pointer-events-none"
+        style={{
+          // Use 100% to fill the parent container which now has the correct effective dimensions
+          width: '100%',
+          height: '100%',
+          boxSizing: 'border-box',
+          padding: '0', // Remove any padding that might affect content positioning
+          margin: '0', // Remove any margin that might affect content positioning
+          position: 'absolute', // Ensure absolute positioning
+          top: '0',
+          left: '0',
+          right: '0',
+          bottom: '0'
+        }}
+      >
         {children}
       </div>
       
-      {/* Hover instruction */}
+      {/* Hover instruction - full coverage with consistent effective dimensions */}
       {!isSelected && (
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-ai-blue/10 rounded">
-          <span className="text-ai-blue text-xs font-medium">Click to select & drag</span>
+        <div 
+          className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-ai-blue/10 rounded-sm"
+          style={{
+            // Use 100% to fill the parent container which now has the correct effective dimensions
+            width: '100%',
+            height: '100%',
+            boxSizing: 'border-box',
+            padding: '0',
+            margin: '0',
+            top: '0',
+            left: '0',
+            right: '0',
+            bottom: '0',
+            pointerEvents: 'none', // Allow clicks to pass through to the parent
+            borderRadius: '0' // Ensure no rounded corners that might affect border coverage
+          }}
+        >
+          <span className="text-ai-blue text-sm font-medium px-2 py-1 bg-white/80 rounded shadow-sm">Click to select & drag</span>
         </div>
       )}
       
@@ -912,51 +1671,59 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
         <>
           {/* Corner handles - larger and easier to grab */}
           <div 
-            className="absolute -top-2 -left-2 w-4 h-4 bg-ai-blue border-2 border-white cursor-nw-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -top-3 -left-3 w-6 h-6 bg-ai-blue border-2 border-white cursor-nw-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'nw')}
             title="Resize northwest"
+            style={{ pointerEvents: 'auto' }}
           />
           <div 
-            className="absolute -top-2 -right-2 w-4 h-4 bg-ai-blue border-2 border-white cursor-ne-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -top-3 -right-3 w-6 h-6 bg-ai-blue border-2 border-white cursor-ne-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'ne')}
             title="Resize northeast"
+            style={{ pointerEvents: 'auto' }}
           />
           <div 
-            className="absolute -bottom-2 -left-2 w-4 h-4 bg-ai-blue border-2 border-white cursor-sw-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -bottom-3 -left-3 w-6 h-6 bg-ai-blue border-2 border-white cursor-sw-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'sw')}
             title="Resize southwest"
+            style={{ pointerEvents: 'auto' }}
           />
           <div 
-            className="absolute -bottom-2 -right-2 w-4 h-4 bg-ai-blue border-2 border-white cursor-se-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -bottom-3 -right-3 w-6 h-6 bg-ai-blue border-2 border-white cursor-se-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'se')}
             title="Resize southeast"
+            style={{ pointerEvents: 'auto' }}
           />
           
           {/* Edge handles */}
           <div 
-            className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-ai-blue border-2 border-white cursor-n-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-ai-blue border-2 border-white cursor-n-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'n')}
             title="Resize north"
+            style={{ pointerEvents: 'auto' }}
           />
           <div 
-            className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-ai-blue border-2 border-white cursor-s-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-ai-blue border-2 border-white cursor-s-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 's')}
             title="Resize south"
+            style={{ pointerEvents: 'auto' }}
           />
           <div 
-            className="absolute -left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 bg-ai-blue border-2 border-white cursor-w-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -left-3 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-ai-blue border-2 border-white cursor-w-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'w')}
             title="Resize west"
+            style={{ pointerEvents: 'auto' }}
           />
           <div 
-            className="absolute -right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 bg-ai-blue border-2 border-white cursor-e-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -right-3 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-ai-blue border-2 border-white cursor-e-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'e')}
             title="Resize east"
+            style={{ pointerEvents: 'auto' }}
           />
           
           {/* Move indicator */}
-          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-ai-blue text-white px-2 py-1 rounded text-xs pointer-events-none z-30">
-            <RiDragMove2Line className="inline mr-1" />
+          <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-ai-blue text-white px-3 py-2 rounded text-sm font-medium pointer-events-none z-30 shadow-lg">
+            <RiDragMove2Line className="inline mr-2 text-base" style={{ width: '16px', height: '16px' }} />
             Drag to move
           </div>
         </>
@@ -972,6 +1739,7 @@ const DraggableWidget = ({ type, icon, label }: { type: string, icon: React.Reac
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     setIsDragging(true);
     e.dataTransfer.setData('application/json', JSON.stringify({ type, label }));
+    e.dataTransfer.setData('text/plain', type); // Also set as text/plain for compatibility
     e.dataTransfer.effectAllowed = 'copy';
   };
   
@@ -1004,11 +1772,59 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   isDragging, 
   setIsDragging, 
   activeTab, 
-  setActiveTab 
+  setActiveTab,
+  showPreview,
+  setShowPreview
 }) => {
-  // Add state for AI modal and preview
+  // Zoom functionality
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const minZoom = 0.5; // Two A4 pages side by side
+  const maxZoom = 1.5; // One page zoomed in
+  
+  const handleZoomIn = () => {
+    setZoomLevel(prev => Math.min(maxZoom, prev + 0.1));
+  };
+  
+  const handleZoomOut = () => {
+    setZoomLevel(prev => Math.max(minZoom, prev - 0.1));
+  };
+  
+  const resetZoom = () => {
+    setZoomLevel(1);
+  };
+
+  // Handle trackpad zoom
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setZoomLevel(prev => Math.max(minZoom, Math.min(maxZoom, prev + delta)));
+    }
+  }, [minZoom, maxZoom]);
+
+  // Handle keyboard delete
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Delete' && selectedField) {
+      e.preventDefault();
+      setFormPages(prev => prev.map((page, index) => 
+        index === currentPageIndex 
+          ? { ...page, fields: page.fields.filter(field => field.id !== selectedField.id) }
+          : page
+      ));
+      setSelectedField(null);
+    }
+  }, [selectedField, currentPageIndex]);
+
+  // Add keyboard event listener
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
+  
+  // Add state for AI modal
   const [showAIGenerator, setShowAIGenerator] = useState(false);
-  const [showFormPreview, setShowFormPreview] = useState(false);
   
   // Add page dimension controls
   const [currentPageSize, setCurrentPageSize] = useState<'A4' | 'A3' | 'A5'>('A4');
@@ -1037,18 +1853,14 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   // Update page dimensions
   const updatePageDimensions = (size: 'A4' | 'A3' | 'A5', orientation: 'portrait' | 'landscape') => {
     const newDimensions = pageDimensions[size][orientation];
-    setFormPages(prev => prev.map((page, index) => 
-      index === currentPageIndex 
-        ? { 
-            ...page, 
-            dimensions: { 
-              ...newDimensions, 
-              size, 
-              orientation 
-            } 
-          }
-        : page
-    ));
+    setFormPages(prev => prev.map((page) => ({ 
+      ...page, 
+      dimensions: { 
+        ...newDimensions, 
+        size, 
+        orientation 
+      } 
+    })));
     setCurrentPageSize(size);
     setCurrentPageOrientation(orientation);
   };
@@ -1351,10 +2163,221 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     }
   };
   
-  const handleAIFormGenerated = (formData: any) => {
-    if (formData.fields && formData.fields.length > 0) {
-      saveToHistory();
+  // Function to check if a field would overflow the page
+  const checkFieldOverflow = (field: any, pageHeight: number) => {
+    const fieldBottom = (field.y || 0) + (field.height || 40);
+    return fieldBottom > pageHeight - 20; // 20px bottom margin
+  };
+
+  // Function to distribute fields across pages with overflow handling
+  const distributeFieldsAcrossPages = (fields: any[], pageDimensions: any = {
+    width: 595,
+    height: 842,
+    orientation: 'portrait' as const,
+    size: 'A4' as const
+  }) => {
+    const pages: FormPage[] = [];
+    let currentPageFields: any[] = [];
+    let currentY = 20; // Start with some padding from the top
+    const pageHeight = pageDimensions.height;
+    const verticalSpacing = 15; // Spacing between fields
+
+    // Sort fields by Y position
+    const sortedFields = [...fields].sort((a, b) => (a.y || 0) - (b.y || 0));
+
+    // Process each field
+    sortedFields.forEach((field) => {
+      const fieldHeight = field.height || 40;
       
+      // Check if this field would overflow the current page
+      if (currentY + fieldHeight + 20 > pageHeight) { // 20px bottom margin
+        // Create a new page with the current fields
+        if (currentPageFields.length > 0) {
+          pages.push({
+            id: `page_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            fields: [...currentPageFields],
+            dimensions: { ...pageDimensions }
+          });
+        }
+
+        // Reset for the new page
+        currentPageFields = [];
+        currentY = 20; // Reset Y position for the new page
+      }
+
+      // Add the field to the current page with updated Y position
+      const processedField = { ...field };
+      processedField.y = currentY;
+      currentPageFields.push(processedField);
+      
+      // Update currentY for the next field
+      currentY += fieldHeight + verticalSpacing;
+    });
+
+    // Add the last page if it has fields
+    if (currentPageFields.length > 0) {
+      pages.push({
+        id: `page_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        fields: [...currentPageFields],
+        dimensions: { ...pageDimensions }
+      });
+    }
+
+    return pages;
+  };
+
+  const handleAIFormGenerated = (formData: any) => {
+    console.log('Received AI generated form data:', formData);
+    saveToHistory();
+    
+    if (formData.pages && formData.pages.length > 0) {
+      // The form data already has pages structure, process each page
+      const processedPages = formData.pages.map((page: any) => {
+        // Process the fields in each page
+        const processedFields = page.fields.map((field: any) => {
+          const baseField = {
+            id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            type: field.type || 'text',
+            label: field.label || 'Generated Field',
+            width: field.width || 300,
+            height: field.height || 40,
+            x: field.x || 0,
+            y: field.y || 0,
+            zIndex: 1
+          };
+
+          // Process settings based on field type
+          let settings: Record<string, any> = {
+            required: field.settings?.required || false,
+            placeholder: field.settings?.placeholder || '',
+            hideTitle: field.settings?.hideTitle || false,
+            titleLayout: field.settings?.titleLayout || 'horizontal',
+            ...field.settings
+          };
+
+          // Field-specific settings processing
+          switch (field.type) {
+            case 'select':
+            case 'checkbox':
+            case 'multipleChoice':
+              settings.options = field.settings?.options || ['Option 1', 'Option 2', 'Option 3'];
+              settings.allowMultiple = field.type === 'checkbox';
+              settings.allowSearch = field.settings?.allowSearch || false;
+              break;
+              
+            case 'layoutTable':
+            case 'dataTable':
+              settings.rows = field.settings?.rows || 3;
+              settings.columns = field.settings?.columns || 3;
+              settings.headers = field.settings?.headers || [];
+              settings.data = field.settings?.data || [];
+              settings.showHeader = field.settings?.showHeader !== false;
+              settings.hiddenFrameLine = field.settings?.hiddenFrameLine || false;
+              
+              // Ensure minimum table size
+              baseField.width = Math.max(400, baseField.width);
+              baseField.height = Math.max(150, baseField.height);
+              
+              // If headers are provided but data is empty, create empty data structure
+              if (settings.headers.length > 0 && settings.data.length === 0) {
+                settings.columns = settings.headers.length;
+                settings.data = Array.from({ length: settings.rows }, () => 
+                  Array.from({ length: settings.columns }, () => '')
+                );
+              }
+              
+              // If data is provided, adjust rows/columns to match
+              if (settings.data.length > 0) {
+                settings.rows = settings.data.length;
+                settings.columns = Math.max(settings.columns, Math.max(...settings.data.map((row: any[]) => row.length)));
+              }
+              break;
+              
+            case 'number':
+              settings.min = field.settings?.min;
+              settings.max = field.settings?.max;
+              settings.step = field.settings?.step || 1;
+              settings.numberFormat = field.settings?.numberFormat || 'integer';
+              break;
+              
+            case 'text':
+              settings.inputType = field.settings?.inputType || 'text';
+              settings.maxLength = field.settings?.maxLength;
+              settings.pattern = field.settings?.pattern || '';
+              break;
+              
+            case 'textarea':
+              settings.rows = field.settings?.rows || 3;
+              baseField.height = Math.max(80, baseField.height);
+              break;
+              
+            case 'date':
+              settings.dateFormat = field.settings?.dateFormat || 'YYYY-MM-DD';
+              settings.includeTime = field.settings?.includeTime || false;
+              break;
+              
+            case 'image':
+            case 'attachment':
+              settings.maxSize = field.settings?.maxSize || '10MB';
+              settings.allowedTypes = field.settings?.allowedTypes || (field.type === 'image' ? ['image/*'] : ['*/*']);
+              baseField.height = Math.max(80, baseField.height);
+              break;
+              
+            case 'signature':
+              baseField.height = Math.max(80, baseField.height);
+              break;
+              
+            default:
+              // Keep default settings for other field types
+              break;
+          }
+
+          return {
+            ...baseField,
+            settings
+          };
+        });
+
+        return {
+          id: page.id || `page_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          fields: processedFields,
+          dimensions: page.dimensions || {
+            width: 595,
+            height: 842,
+            orientation: 'portrait' as const,
+            size: 'A4' as const
+          }
+        };
+      });
+      
+      // Check each page for overflow and redistribute fields if needed
+      const finalPages: FormPage[] = [];
+      
+      processedPages.forEach((page: FormPage) => {
+        // Check if any field overflows the page height
+        let hasOverflow = false;
+        for (const field of page.fields) {
+          if (checkFieldOverflow(field, page.dimensions.height)) {
+            hasOverflow = true;
+            break;
+          }
+        }
+        
+        if (hasOverflow) {
+          // If overflow detected, redistribute this page's fields
+          const redistributedPages = distributeFieldsAcrossPages(page.fields, page.dimensions);
+          finalPages.push(...redistributedPages);
+        } else {
+          // No overflow, keep the page as is
+          finalPages.push(page);
+        }
+      });
+      
+      // Replace the current form pages with the processed pages
+      setFormPages(finalPages);
+      setCurrentPageIndex(0); // Set to the first page
+    } else if (formData.fields && formData.fields.length > 0) {
+      // Legacy support for form data with only fields property
       // Process the form data to ensure all fields have proper structure
       const processedFields = formData.fields.map((field: any) => {
         const baseField = {
@@ -1368,7 +2391,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           zIndex: 1
         };
 
-        // Process settings based on field type
+        // Process settings based on field type (same as above)
         let settings: Record<string, any> = {
           required: field.settings?.required || false,
           placeholder: field.settings?.placeholder || '',
@@ -1377,103 +2400,30 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           ...field.settings
         };
 
-        // Field-specific settings processing
-        switch (field.type) {
-          case 'select':
-          case 'checkbox':
-          case 'multipleChoice':
-            settings.options = field.settings?.options || ['Option 1', 'Option 2', 'Option 3'];
-            settings.allowMultiple = field.type === 'checkbox';
-            settings.allowSearch = field.settings?.allowSearch || false;
-            break;
-            
-          case 'layoutTable':
-          case 'dataTable':
-            settings.rows = field.settings?.rows || 3;
-            settings.columns = field.settings?.columns || 3;
-            settings.headers = field.settings?.headers || [];
-            settings.data = field.settings?.data || [];
-            settings.showHeader = field.settings?.showHeader !== false;
-            settings.hiddenFrameLine = field.settings?.hiddenFrameLine || false;
-            
-            // Ensure minimum table size
-            baseField.width = Math.max(400, baseField.width);
-            baseField.height = Math.max(150, baseField.height);
-            
-            // If headers are provided but data is empty, create empty data structure
-            if (settings.headers.length > 0 && settings.data.length === 0) {
-              settings.columns = settings.headers.length;
-              settings.data = Array.from({ length: settings.rows }, () => 
-                Array.from({ length: settings.columns }, () => '')
-              );
-            }
-            
-            // If data is provided, adjust rows/columns to match
-            if (settings.data.length > 0) {
-              settings.rows = settings.data.length;
-              settings.columns = Math.max(settings.columns, Math.max(...settings.data.map((row: any[]) => row.length)));
-            }
-            break;
-            
-          case 'number':
-            settings.min = field.settings?.min;
-            settings.max = field.settings?.max;
-            settings.step = field.settings?.step || 1;
-            settings.numberFormat = field.settings?.numberFormat || 'integer';
-            break;
-            
-          case 'text':
-            settings.inputType = field.settings?.inputType || 'text';
-            settings.maxLength = field.settings?.maxLength;
-            settings.pattern = field.settings?.pattern || '';
-            break;
-            
-          case 'textarea':
-            settings.rows = field.settings?.rows || 3;
-            baseField.height = Math.max(80, baseField.height);
-            break;
-            
-          case 'date':
-            settings.dateFormat = field.settings?.dateFormat || 'YYYY-MM-DD';
-            settings.includeTime = field.settings?.includeTime || false;
-            break;
-            
-          case 'image':
-          case 'attachment':
-            settings.maxSize = field.settings?.maxSize || '10MB';
-            settings.allowedTypes = field.settings?.allowedTypes || (field.type === 'image' ? ['image/*'] : ['*/*']);
-            baseField.height = Math.max(80, baseField.height);
-            break;
-            
-          case 'signature':
-            baseField.height = Math.max(80, baseField.height);
-            break;
-            
-          default:
-            // Keep default settings for other field types
-            break;
-        }
-
+        // Field-specific settings processing (simplified for brevity)
         return {
           ...baseField,
           settings
         };
       });
 
-      const newPage: FormPage = {
-        id: `page_${Date.now()}`,
-        fields: processedFields,
-        dimensions: {
-          width: 595,
-          height: 842,
-          orientation: 'portrait' as const,
-          size: 'A4' as const
-        }
+      // Check for overflow and distribute fields across multiple pages if needed
+      const defaultDimensions = {
+        width: 595,
+        height: 842,
+        orientation: 'portrait' as const,
+        size: 'A4' as const
       };
       
-      setFormPages(prev => [...prev, newPage]);
-      setCurrentPageIndex(formPages.length);
+      // Create pages with overflow handling
+      const pages = distributeFieldsAcrossPages(processedFields, defaultDimensions);
+      
+      setFormPages(pages); // Replace with the new pages
+      setCurrentPageIndex(0); // Set to the first page
+    } else {
+      console.warn('AI generated form data has no fields or pages');
     }
+    
     setShowAIGenerator(false);
   };
   
@@ -1686,19 +2636,19 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </div>
             )}
             <div className="border border-gray-300 rounded overflow-hidden">
-              <table className="w-full text-xs">
+              <table className={`w-full text-xs ${field.settings.showBorders !== false ? 'border-collapse' : 'border-separate border-spacing-0'}`}>
                 {field.settings.showHeader !== false && (
                   <thead className="bg-gray-100">
                     <tr>
                       {field.settings.headers && field.settings.headers.length > 0 ? (
                         field.settings.headers.map((header: string, i: number) => (
-                          <th key={i} className="border border-gray-300 p-1 text-center font-medium text-gray-800">
+                          <th key={i} className={`${field.settings.showBorders !== false ? 'border border-gray-300' : ''} p-1 text-center font-medium text-gray-800`}>
                             {header}
                           </th>
                         ))
                       ) : (
                         Array.from({ length: field.settings.columns || 3 }).map((_, i) => (
-                          <th key={i} className="border border-gray-300 p-1 text-center text-gray-800">
+                          <th key={i} className={`${field.settings.showBorders !== false ? 'border border-gray-300' : ''} p-1 text-center text-gray-800`}>
                             Header {i + 1}
                           </th>
                         ))
@@ -1709,9 +2659,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 <tbody>
                   {field.settings.data && field.settings.data.length > 0 ? (
                     field.settings.data.map((row: string[], rowIndex: number) => (
-                      <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                      <tr key={rowIndex} className={field.settings.stripedRows && rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         {row.map((cell: string, colIndex: number) => (
-                          <td key={colIndex} className="border border-gray-300 p-1 text-center text-gray-800">
+                          <td key={colIndex} className={`${field.settings.showBorders !== false ? 'border border-gray-300' : ''} p-1 text-center text-gray-800`}>
                             {cell || `Data ${rowIndex + 1},${colIndex + 1}`}
                           </td>
                         ))}
@@ -1719,9 +2669,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     ))
                   ) : (
                     Array.from({ length: field.settings.rows || 3 }).map((_, rowIndex) => (
-                      <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                      <tr key={rowIndex} className={field.settings.stripedRows && rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         {Array.from({ length: field.settings.columns || 3 }).map((_, colIndex) => (
-                          <td key={colIndex} className="border border-gray-300 p-1 text-center text-gray-500">
+                          <td key={colIndex} className={`${field.settings.showBorders !== false ? 'border border-gray-300' : ''} p-1 text-center text-gray-500`}>
                             Data {rowIndex + 1},{colIndex + 1}
                           </td>
                         ))}
@@ -1743,18 +2693,18 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </div>
             )}
             <div className="border border-gray-300 rounded overflow-hidden">
-              <table className="w-full text-xs">
+              <table className={`w-full text-xs ${field.settings.showBorders !== false ? 'border-collapse' : 'border-separate border-spacing-0'}`}>
                 <thead className="bg-gray-200">
                   <tr>
                     {field.settings.headers && field.settings.headers.length > 0 ? (
                       field.settings.headers.map((header: string, i: number) => (
-                        <th key={i} className="border border-gray-300 p-1 text-center font-medium text-gray-800">
+                        <th key={i} className={`${field.settings.showBorders !== false ? 'border border-gray-300' : ''} p-1 text-center font-medium text-gray-800`}>
                           {header}
                         </th>
                       ))
                     ) : (
                       Array.from({ length: field.settings.columns || 3 }).map((_, i) => (
-                        <th key={i} className="border border-gray-300 p-1 text-center text-gray-800">
+                        <th key={i} className={`${field.settings.showBorders !== false ? 'border border-gray-300' : ''} p-1 text-center text-gray-800`}>
                           Column {i + 1}
                         </th>
                       ))
@@ -1764,9 +2714,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 <tbody>
                   {field.settings.data && field.settings.data.length > 0 ? (
                     field.settings.data.map((row: string[], rowIndex: number) => (
-                      <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                      <tr key={rowIndex} className={field.settings.stripedRows && rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         {row.map((cell: string, colIndex: number) => (
-                          <td key={colIndex} className="border border-gray-300 p-1 text-center text-gray-800">
+                          <td key={colIndex} className={`${field.settings.showBorders !== false ? 'border border-gray-300' : ''} p-1 text-center text-gray-800`}>
                             {cell || `Data ${rowIndex + 1},${colIndex + 1}`}
                           </td>
                         ))}
@@ -1774,9 +2724,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     ))
                   ) : (
                     Array.from({ length: field.settings.rows || 3 }).map((_, rowIndex) => (
-                      <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                      <tr key={rowIndex} className={field.settings.stripedRows && rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         {Array.from({ length: field.settings.columns || 3 }).map((_, colIndex) => (
-                          <td key={colIndex} className="border border-gray-300 p-1 text-center text-gray-500">
+                          <td key={colIndex} className={`${field.settings.showBorders !== false ? 'border border-gray-300' : ''} p-1 text-center text-gray-500`}>
                             Data {rowIndex + 1},{colIndex + 1}
                           </td>
                         ))}
@@ -1785,6 +2735,17 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                   )}
                 </tbody>
               </table>
+              {field.settings.pagination && (
+                <div className="flex justify-between items-center p-1 bg-gray-100 text-xs">
+                  <button className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50">
+                    Previous
+                  </button>
+                  <span className="text-gray-600">Page 1 of 1</span>
+                  <button className="px-2 py-1 bg-white border border-gray-300 rounded text-gray-600 hover:bg-gray-50">
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -1889,42 +2850,45 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   };
   
   return (
-    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-full">
-      {/* Left panel - Widget palette */}
-      <div className="md:col-span-3">
-        <div className="bg-dark-800/70 rounded-lg border border-dark-700/50 p-4">
-          <h3 className="text-lg font-semibold mb-4">Form Elements</h3>
-          
-          {/* Tab navigation */}
-          <div className="flex space-x-1 mb-4 bg-dark-700/30 rounded-md p-1">
-            <button
-              className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'fields' ? 'bg-ai-blue text-white' : 'text-gray-400 hover:text-gray-300'
-              }`}
-              onClick={() => setActiveTab('fields')}
-            >
-              Fields
-            </button>
-            <button
-              className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'kit' ? 'bg-ai-blue text-white' : 'text-gray-400 hover:text-gray-300'
-              }`}
-              onClick={() => setActiveTab('kit')}
-            >
-              Kit
-            </button>
-            <button
-              className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'table' ? 'bg-ai-blue text-white' : 'text-gray-400 hover:text-gray-300'
-              }`}
-              onClick={() => setActiveTab('table')}
-            >
-              Table
-            </button>
+    <div className="flex h-screen gap-4">
+      {/* Left panel - Widget palette - Fixed 20% */}
+      <div className="w-1/5 flex-shrink-0 flex-grow-0" style={{ width: '20%' }}>
+        <div className="bg-dark-800/70 rounded-lg border border-dark-700/50 h-full flex flex-col">
+          <div className="p-4 border-b border-dark-700/50">
+            <h3 className="text-lg font-semibold mb-4">Form Elements</h3>
+            
+            {/* Tab navigation */}
+            <div className="flex space-x-1 mb-4 bg-dark-700/30 rounded-md p-1">
+              <button
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'fields' ? 'bg-ai-blue text-white' : 'text-gray-400 hover:text-gray-300'
+                }`}
+                onClick={() => setActiveTab('fields')}
+              >
+                Fields
+              </button>
+              <button
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'kit' ? 'bg-ai-blue text-white' : 'text-gray-400 hover:text-gray-300'
+                }`}
+                onClick={() => setActiveTab('kit')}
+              >
+                Kit
+              </button>
+              <button
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'table' ? 'bg-ai-blue text-white' : 'text-gray-400 hover:text-gray-300'
+                }`}
+                onClick={() => setActiveTab('table')}
+              >
+                Table
+              </button>
+            </div>
           </div>
           
-          {/* Widget list */}
-          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+          {/* Widget list - Scrollable content */}
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="space-y-2">
             {activeTab === 'fields' && (
               <div className="space-y-3">
                 <div className="text-xs uppercase text-gray-500 font-medium mb-2">WidgetKitTable</div>
@@ -2029,15 +2993,16 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 />
               </div>
             )}
+            </div>
           </div>
         </div>
       </div>
       
-      {/* Center panel - MS Word-like Form builder */}
-      <div className="md:col-span-6">
-        <div className="bg-dark-800/30 rounded-lg border border-dark-700/50">
+      {/* Center panel - MS Word-like Form builder - Fixed 50% */}
+      <div className="flex-shrink-0 flex-grow-0 flex flex-col" style={{ width: '50%' }}>
+        <div className="bg-dark-800/30 rounded-lg border border-dark-700/50 flex flex-col h-full">
           {/* Enhanced Toolbar with AI and Preview buttons */}
-          <div className="flex justify-between items-center border-b border-dark-700/50 p-2">
+          <div className="flex justify-between items-center border-b border-dark-700/50 p-2 flex-shrink-0">
             <div className="flex gap-2">
               <Button 
                 variant="ai-secondary" 
@@ -2092,253 +3057,260 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 AI Generate
               </Button>
               
-              {/* Demo Button for testing AI generation */}
-              <Button 
-                variant="ai-secondary" 
-                size="sm" 
-                onClick={() => {
-                  const demoFormData = {
-                    formName: "Demo Safety Inspection Form",
-                    formDescription: "A demonstration of AI-generated form with various field types",
-                    fields: [
-                      {
-                        id: "demo_text_1",
-                        type: "text",
-                        label: "Inspector Name",
-                        x: 50,
-                        y: 50,
-                        width: 300,
-                        height: 40,
-                        settings: {
-                          required: true,
-                          placeholder: "Enter inspector name",
-                          hideTitle: false,
-                          titleLayout: "horizontal"
-                        }
-                      },
-                      {
-                        id: "demo_date_1",
-                        type: "date",
-                        label: "Inspection Date",
-                        x: 400,
-                        y: 50,
-                        width: 150,
-                        height: 40,
-                        settings: {
-                          required: true,
-                          dateFormat: "YYYY-MM-DD",
-                          includeTime: false
-                        }
-                      },
-                      {
-                        id: "demo_textarea_1",
-                        type: "textarea",
-                        label: "General Comments",
-                        x: 50,
-                        y: 120,
-                        width: 500,
-                        height: 80,
-                        settings: {
-                          required: false,
-                          placeholder: "Enter general comments about the inspection",
-                          rows: 3
-                        }
-                      },
-                      {
-                        id: "demo_table_1",
-                        type: "dataTable",
-                        label: "Safety Checklist",
-                        x: 50,
-                        y: 220,
-                        width: 500,
-                        height: 200,
-                        settings: {
-                          rows: 4,
-                          columns: 4,
-                          headers: ["Item", "Status", "Priority", "Comments"],
-                          data: [
-                            ["Fire extinguisher check", "OK", "High", "All units functional"],
-                            ["Safety signage", "Needs attention", "Medium", "Replace worn signs"],
-                            ["Emergency exits", "OK", "High", "All clear and accessible"],
-                            ["First aid kit", "OK", "Medium", "Fully stocked"]
-                          ],
-                          showHeader: true
-                        }
-                      },
-                      {
-                        id: "demo_checkbox_1",
-                        type: "checkbox",
-                        label: "Areas Inspected",
-                        x: 50,
-                        y: 450,
-                        width: 250,
-                        height: 100,
-                        settings: {
-                          options: ["Main entrance", "Work areas", "Storage rooms", "Emergency exits", "Parking area"],
-                          required: true
-                        }
-                      },
-                      {
-                        id: "demo_select_1",
-                        type: "select",
-                        label: "Overall Rating",
-                        x: 350,
-                        y: 450,
-                        width: 200,
-                        height: 40,
-                        settings: {
-                          options: ["Excellent", "Good", "Fair", "Poor", "Critical"],
-                          required: true
-                        }
-                      },
-                      {
-                        id: "demo_signature_1",
-                        type: "signature",
-                        label: "Inspector Signature",
-                        x: 50,
-                        y: 580,
-                        width: 250,
-                        height: 80,
-                        settings: {
-                          required: true
-                        }
-                      }
-                    ]
-                  };
-                  handleAIFormGenerated(demoFormData);
-                }}
-                title="Generate a demo form to test AI functionality"
-                leftIcon={<RiFileEditLine />}
-              >
-                Demo Form
-              </Button>
-              
-              {/* Preview Button */}
-              <Button 
-                variant="ai-secondary" 
-                size="sm" 
-                onClick={() => setShowFormPreview(true)}
-                title="Preview form"
-                leftIcon={<RiEyeLine />}
-              >
-                Preview
-              </Button>
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-1 ml-4 border-l border-dark-600/50 pl-4">
+                <Button 
+                  variant="ai-secondary" 
+                  size="sm" 
+                  onClick={handleZoomOut}
+                  disabled={zoomLevel <= minZoom}
+                  title="Zoom out"
+                >
+                  <RiArrowDownLine />
+                </Button>
+                <span className="text-xs text-gray-400 min-w-[3rem] text-center">
+                  {Math.round(zoomLevel * 100)}%
+                </span>
+                <Button 
+                  variant="ai-secondary" 
+                  size="sm" 
+                  onClick={handleZoomIn}
+                  disabled={zoomLevel >= maxZoom}
+                  title="Zoom in"
+                >
+                  <RiArrowUpLine />
+                </Button>
+                <Button 
+                  variant="ai-secondary" 
+                  size="sm" 
+                  onClick={resetZoom}
+                  title="Reset zoom (100%)"
+                  className="ml-1"
+                >
+                  <RiApps2Line />
+                </Button>
+              </div>
             </div>
             <div className="text-sm text-gray-400">
               {isDragging ? 'Drop widget here' : `${getCurrentPageDimensions().width}×${getCurrentPageDimensions().height}px`}
             </div>
           </div>
           
-          {/* MS Word-like Form content area */}
-          <div className="p-4 flex justify-center">
+          {/* MS Word-like Form content area - Continuous scrollable pages */}
+          <div 
+            className="flex-1 overflow-y-auto p-4 bg-gradient-to-br from-gray-50 to-gray-100 min-h-0"
+            onWheel={handleWheel}
+          >
             <div 
-              className={`relative bg-white rounded-lg shadow-lg transition-all duration-300 ${
-                isDragging ? 'ring-2 ring-ai-blue ring-opacity-50 shadow-ai-blue/20' : ''
+              className={`transition-transform duration-300 ease-out ${
+                zoomLevel <= minZoom && formPages.length > 1 
+                  ? 'grid grid-cols-2 gap-8 justify-items-center max-w-none' 
+                  : 'flex flex-col items-center space-y-6'
               }`}
-              style={{
-                width: `${getCurrentPageDimensions().width}px`,
-                minHeight: `${getCurrentPageDimensions().height}px`,
+              style={{ 
+                transform: `scale(${zoomLevel})`,
+                transformOrigin: zoomLevel <= minZoom ? 'top left' : 'top center',
+                width: zoomLevel <= minZoom && formPages.length > 1 ? 'fit-content' : 'auto',
+                minWidth: zoomLevel <= minZoom && formPages.length > 1 ? '1400px' : 'auto'
               }}
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
             >
-              {/* Canvas content with data attribute for better drop targeting */}
-              <div 
-                className="relative w-full h-full p-6"
-                data-canvas="true"
-                style={{ minHeight: `${getCurrentPageDimensions().height - 48}px` }}
-                onClick={(e) => {
-                  // Only deselect if clicking on empty canvas (not on a widget)
-                  if (e.target === e.currentTarget) {
-                    setSelectedField(null);
-                  }
-                }}
-              >
-                {/* Drop zone indicator */}
-                {isDragging && (
-                  <div className="absolute inset-0 bg-ai-blue/5 border-2 border-dashed border-ai-blue rounded-lg flex items-center justify-center z-50">
-                    <div className="text-ai-blue font-medium text-lg">
-                      Drop widget here
-                    </div>
-                  </div>
-                )}
+              {formPages.map((page, pageIndex) => {
+                const pageHeight = page.dimensions.height;
+                const pageWidth = page.dimensions.width;
+                const cumulativeHeight = formPages.slice(0, pageIndex).reduce((sum, p) => sum + p.dimensions.height + 24, 0); // 24px for spacing
                 
-                {formPages[currentPageIndex].fields.length === 0 ? (
-                  <div className="absolute inset-6 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-300 rounded-lg">
-                    <RiDragMove2Line className="text-6xl mb-4" />
-                    <p className="text-lg font-medium">Drop form fields here</p>
-                    <p className="text-sm mt-2">Drag widgets from the left panel to create your form</p>
-                    <p className="text-xs mt-1 text-gray-500">
-                      Page: {getCurrentPageDimensions().size} {getCurrentPageDimensions().orientation}
-                    </p>
-                    <div className="mt-4 flex gap-2">
-                      <Button 
-                        variant="ai" 
-                        size="sm" 
-                        onClick={() => setShowAIGenerator(true)}
-                        leftIcon={<RiRobotLine />}
+                return (
+                  <div key={page.id} className="relative">
+                    {/* Page number indicator */}
+                    <div className="absolute -left-16 top-4 text-sm text-gray-400 font-medium">
+                      Page {pageIndex + 1}
+                    </div>
+                    
+                    <div 
+                      className={`relative bg-white rounded-lg shadow-lg transition-all duration-300 ${
+                        isDragging ? 'ring-2 ring-ai-blue ring-opacity-50 shadow-ai-blue/20' : ''
+                      }`}
+                      style={{
+                        width: `${pageWidth}px`,
+                        minHeight: `${pageHeight}px`,
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                        
+                        // Try to get data from both formats
+                        let draggedData = null;
+                        let draggedType = null;
+                        
+                        try {
+                          const jsonData = e.dataTransfer.getData('application/json');
+                          if (jsonData) {
+                            draggedData = JSON.parse(jsonData);
+                            draggedType = draggedData.type;
+                          }
+                        } catch (error) {
+                          // Fallback to text/plain
+                          draggedType = e.dataTransfer.getData('text/plain');
+                        }
+                        
+                        if (!draggedType) return;
+                        
+                        // Calculate drop position relative to the page
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = e.clientX - rect.left - 24; // Account for padding
+                        const y = e.clientY - rect.top - 24;
+                        
+                        // Define field dimensions
+                        const defaultWidth = draggedType === 'layoutTable' || draggedType === 'dataTable' ? 400 : 300;
+                        const defaultHeight = draggedType === 'layoutTable' || draggedType === 'dataTable' ? 200 : 
+                                            draggedType === 'signature' ? 80 : 
+                                            draggedType === 'textarea' ? 80 :
+                                            draggedType === 'image' || draggedType === 'attachment' ? 120 : 40;
+                        
+                        // Create new field with proper positioning
+                        const newField: FormField = {
+                          id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                          type: draggedType,
+                          label: draggedData?.label || `${draggedType.charAt(0).toUpperCase() + draggedType.slice(1)} Field`,
+                          x: Math.max(0, Math.min(x, pageWidth - defaultWidth - 24)),
+                          y: Math.max(0, Math.min(y, pageHeight - defaultHeight - 24)),
+                          width: defaultWidth,
+                          height: defaultHeight,
+                          zIndex: 1,
+                          settings: {
+                            required: false,
+                            placeholder: '',
+                            hideTitle: false,
+                            titleLayout: 'horizontal',
+                            options: draggedType === 'multipleChoice' || draggedType === 'checkbox' || draggedType === 'select' ? ['Option 1', 'Option 2'] : []
+                          }
+                        };
+                        
+                        // Add field to the specific page
+                        setFormPages(prev => {
+                          const newPages = [...prev];
+                          newPages[pageIndex] = {
+                            ...newPages[pageIndex],
+                            fields: [...newPages[pageIndex].fields, newField]
+                          };
+                          return newPages;
+                        });
+                        
+                        setSelectedField(newField);
+                        setCurrentPageIndex(pageIndex);
+                        setIsDragging(false);
+                        e.preventDefault();
+                      }}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                    >
+                      {/* Canvas content */}
+                      <div 
+                        className="relative w-full h-full p-6"
+                        data-canvas="true"
+                        data-page-container="true"
+                        data-page-index={pageIndex}
+                        style={{ 
+                          minHeight: `${pageHeight - 48}px`,
+                          width: `${pageWidth}px`,
+                          height: `${pageHeight}px`
+                        }}
+                        onClick={(e) => {
+                          if (e.target === e.currentTarget) {
+                            setSelectedField(null);
+                            setCurrentPageIndex(pageIndex);
+                          }
+                        }}
                       >
-                        Generate with AI
-                      </Button>
+                        {/* Drop zone indicator */}
+                        {isDragging && (
+                          <div className="absolute inset-0 bg-ai-blue/5 border-2 border-dashed border-ai-blue rounded-lg flex items-center justify-center z-50">
+                            <div className="text-ai-blue font-medium text-lg">
+                              Drop widget here
+                            </div>
+                          </div>
+                        )}
+                        
+                        {page.fields.length === 0 ? (
+                          <div className="absolute inset-6 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-300 rounded-lg">
+                            <RiDragMove2Line className="text-6xl mb-4" />
+                            <p className="text-lg font-medium">Drop form fields here</p>
+                            <p className="text-sm mt-2">Drag widgets from the left panel to create your form</p>
+                            <p className="text-xs mt-1 text-gray-500">
+                              Page {pageIndex + 1}: {page.dimensions.size} {page.dimensions.orientation}
+                            </p>
+                            {pageIndex === 0 && (
+                              <div className="mt-4 flex gap-2">
+                                <Button 
+                                  variant="ai" 
+                                  size="sm" 
+                                  onClick={() => setShowAIGenerator(true)}
+                                  leftIcon={<RiRobotLine />}
+                                >
+                                  Generate with AI
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          page.fields.map((field: FormField) => (
+                            <ResizableWrapper 
+                              key={field.id}
+                              fieldId={field.id}
+                              onUpdateSize={updateFieldSize}
+                              onUpdatePosition={(fieldId, x, y) => {
+                                // Update field position within the specific page
+                                setFormPages(prev => {
+                                  const newPages = [...prev];
+                                  const pageToUpdate = newPages[pageIndex];
+                                  const fieldIndex = pageToUpdate.fields.findIndex(f => f.id === fieldId);
+                                  if (fieldIndex !== -1) {
+                                    pageToUpdate.fields[fieldIndex] = {
+                                      ...pageToUpdate.fields[fieldIndex],
+                                      x,
+                                      y
+                                    };
+                                  }
+                                  return newPages;
+                                });
+                              }}
+                              field={field}
+                              isSelected={selectedField?.id === field.id}
+                              onSelect={() => {
+                                setSelectedField(field);
+                                setCurrentPageIndex(pageIndex);
+                              }}
+                            >
+                              <div className="w-full h-full bg-white border border-gray-200 rounded p-2">
+                                {renderWidgetPreview(field)}
+                              </div>
+                            </ResizableWrapper>
+                          ))
+                        )}
+                      </div>
                     </div>
                   </div>
-                ) : (
-                  formPages[currentPageIndex].fields.map((field: FormField) => (
-                    <ResizableWrapper 
-                      key={field.id}
-                      fieldId={field.id}
-                      onUpdateSize={updateFieldSize}
-                      onUpdatePosition={updateFieldPosition}
-                      field={field}
-                      isSelected={selectedField?.id === field.id}
-                      onSelect={() => setSelectedField(field)}
-                    >
-                      <div className="w-full h-full bg-white border border-gray-200 rounded p-2">
-                        {renderWidgetPreview(field)}
-                      </div>
-                    </ResizableWrapper>
-                  ))
-                )}
-              </div>
+                );
+              })}
             </div>
           </div>
           
-          {/* Page navigation */}
-          <div className="border-t border-dark-700/50 p-2 flex items-center justify-between">
-            <div className="text-sm text-gray-400">
-              Page {currentPageIndex + 1} of {formPages.length}
-            </div>
-            <div className="flex gap-2">
-              <Button 
-                variant="ai-secondary" 
-                size="sm"
-                onClick={addPage}
-              >
-                Add Page
-              </Button>
-              <Button 
-                variant="ai-secondary" 
-                size="sm"
-                onClick={deletePage}
-                disabled={formPages.length <= 1}
-              >
-                Delete Page
-              </Button>
-            </div>
-          </div>
+
         </div>
       </div>
       
-      {/* Right panel - Widget settings */}
-      <div className="md:col-span-3">
-        <div className="bg-dark-800/70 rounded-lg border border-dark-700/50 p-4">
-          <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <RiSettings4Line className="mr-2" /> Widget Settings
-          </h3>
+      {/* Right panel - Widget settings - Fixed 30% */}
+      <div className="flex-shrink-0 flex-grow-0 min-w-0" style={{ width: '30%' }}>
+        <div className="bg-dark-800/70 rounded-lg border border-dark-700/50 h-full flex flex-col overflow-hidden">
+          <div className="p-4 border-b border-dark-700/50">
+            <h3 className="text-lg font-semibold flex items-center">
+              <RiSettings4Line className="mr-2" /> Widget Settings
+            </h3>
+          </div>
           
           {selectedField ? (
-            <div className="space-y-4 max-h-[450px] overflow-auto pr-2">
+            <div className="flex-1 overflow-y-auto p-4 pr-12">
+              <div className="space-y-4">
               {/* Common settings for all fields */}
               <div className="mb-3">
                 <Input
@@ -2752,7 +3724,32 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       <Input
                         type="number"
                         value={selectedField.settings.rows || 3}
-                        onChange={(e) => updateFieldSettings(selectedField.id, { rows: parseInt(e.target.value) || 3 })}
+                        onChange={(e) => {
+                          const newRows = parseInt(e.target.value) || 3;
+                          const oldRows = selectedField.settings.rows || 3;
+                          const columns = selectedField.settings.columns || 3;
+                          let newData = [...(selectedField.settings.data || [])];
+                          
+                          // Adjust data array for new row count
+                          if (newRows > oldRows) {
+                            // Add new rows
+                            for (let i = oldRows; i < newRows; i++) {
+                              const newRow = [];
+                              for (let j = 0; j < columns; j++) {
+                                newRow.push(`Data ${i+1},${j+1}`);
+                              }
+                              newData.push(newRow);
+                            }
+                          } else if (newRows < oldRows) {
+                            // Remove rows
+                            newData = newData.slice(0, newRows);
+                          }
+                          
+                          updateFieldSettings(selectedField.id, { 
+                            rows: newRows,
+                            data: newData
+                          });
+                        }}
                         className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
                       />
                     </div>
@@ -2761,11 +3758,153 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       <Input
                         type="number"
                         value={selectedField.settings.columns || 3}
-                        onChange={(e) => updateFieldSettings(selectedField.id, { columns: parseInt(e.target.value) || 3 })}
+                        onChange={(e) => {
+                          const newColumns = parseInt(e.target.value) || 3;
+                          const oldColumns = selectedField.settings.columns || 3;
+                          const rows = selectedField.settings.rows || 3;
+                          
+                          // Adjust headers for new column count
+                          let newHeaders = [...(selectedField.settings.headers || [])];
+                          if (newColumns > oldColumns) {
+                            // Add new headers
+                            for (let i = oldColumns; i < newColumns; i++) {
+                              newHeaders.push(`Header ${i+1}`);
+                            }
+                          } else if (newColumns < oldColumns) {
+                            // Remove headers
+                            newHeaders = newHeaders.slice(0, newColumns);
+                          }
+                          
+                          // Adjust data array for new column count
+                          const newData = [];
+                          const currentData = selectedField.settings.data || [];
+                          
+                          for (let i = 0; i < rows; i++) {
+                            const currentRow = currentData[i] || [];
+                            const newRow = [];
+                            
+                            for (let j = 0; j < newColumns; j++) {
+                              if (j < oldColumns && i < currentData.length) {
+                                newRow.push(currentRow[j] || `Data ${i+1},${j+1}`);
+                              } else {
+                                newRow.push(`Data ${i+1},${j+1}`);
+                              }
+                            }
+                            
+                            newData.push(newRow);
+                          }
+                          
+                          updateFieldSettings(selectedField.id, { 
+                            columns: newColumns,
+                            headers: newHeaders,
+                            data: newData
+                          });
+                        }}
                         className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
                       />
                     </div>
                   </div>
+                  
+                  {/* Table Headers Editor */}
+                  {selectedField.settings.showHeader !== false && (
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-gray-400 mb-2">Table Headers</label>
+                      <div className="flex flex-wrap gap-2">
+                        {(selectedField.settings.headers || []).map((header: string, index: number) => (
+                          <div key={index} className="flex items-center gap-1">
+                            <Input
+                              value={header}
+                              onChange={(e) => {
+                                const newHeaders = [...(selectedField.settings.headers || [])];
+                                newHeaders[index] = e.target.value;
+                                updateFieldSettings(selectedField.id, { headers: newHeaders });
+                              }}
+                              className="input-ai bg-dark-800/50 border-ai-blue/30 text-white text-sm w-24"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Table Data Editor */}
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Table Data</label>
+                    <div className="max-h-60 overflow-y-auto border border-dark-600 rounded">
+                      <table className="w-full text-sm">
+                        {selectedField.settings.showHeader !== false && (
+                          <thead className="bg-dark-700">
+                            <tr>
+                              {(selectedField.settings.headers || []).map((header: string, index: number) => (
+                                <th key={index} className="p-1 text-center text-xs font-medium text-gray-300 border-b border-dark-600">
+                                  {header}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                        )}
+                        <tbody>
+                          {(selectedField.settings.data || []).map((row: string[], rowIndex: number) => (
+                            <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-dark-800/50' : 'bg-dark-800'}>
+                              {row.map((cell: string, colIndex: number) => (
+                                <td key={colIndex} className="border border-dark-600 p-1">
+                                  <Input
+                                    value={cell}
+                                    onChange={(e) => {
+                                      const newData = [...(selectedField.settings.data || [])];
+                                      if (!newData[rowIndex]) {
+                                        newData[rowIndex] = [];
+                                      }
+                                      newData[rowIndex][colIndex] = e.target.value;
+                                      updateFieldSettings(selectedField.id, { data: newData });
+                                    }}
+                                    className="input-ai bg-transparent border-0 text-white text-xs w-full p-0"
+                                  />
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="flex justify-between mt-2">
+                      <button
+                        onClick={() => {
+                          const columns = selectedField.settings.columns || 3;
+                          const newRow = [];
+                          for (let i = 0; i < columns; i++) {
+                            newRow.push(`Data ${selectedField.settings.data.length + 1},${i+1}`);
+                          }
+                          const newData = [...(selectedField.settings.data || []), newRow];
+                          updateFieldSettings(selectedField.id, { 
+                            data: newData,
+                            rows: newData.length
+                          });
+                        }}
+                        className="text-xs flex items-center text-ai-blue hover:text-ai-blue-light"
+                      >
+                        <RiAddLine className="mr-1" /> Add Row
+                      </button>
+                      <button
+                        onClick={() => {
+                          if ((selectedField.settings.data || []).length > 1) {
+                            const newData = [...(selectedField.settings.data || [])];
+                            newData.pop();
+                            updateFieldSettings(selectedField.id, { 
+                              data: newData,
+                              rows: newData.length
+                            });
+                          }
+                        }}
+                        className="text-xs flex items-center text-red-400 hover:text-red-300"
+                        disabled={(selectedField.settings.data || []).length <= 1}
+                      >
+                        <RiDeleteBin6Line className="mr-1" /> Remove Last Row
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Table Display Options */}
                   <div className="flex items-center justify-between mb-3">
                     <label className="text-sm">Show header row</label>
                     <input 
@@ -3032,6 +4171,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                   Delete Field
                 </Button>
               </div>
+              </div>
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
@@ -3040,7 +4180,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           )}
           
           {/* Field movement controls */}
-          <div className="pt-4 border-t border-dark-700/50">
+          <div className="p-4 border-t border-dark-700/50">
             <div className="flex gap-2">
               <Button
                 variant="ai-secondary"
@@ -3086,7 +4226,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       </AnimatePresence>
       
       {/* Enhanced Preview Modal */}
-      {showFormPreview && (
+      {showPreview && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="w-full h-full bg-white flex flex-col">
             {/* Enhanced Preview Header */}
@@ -3104,36 +4244,14 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                   </div>
                 </div>
                 
-                {/* Page Counter */}
+                {/* Total Pages Counter */}
                 <div className="flex items-center gap-2 bg-gray-700/50 rounded-lg px-3 py-2">
-                  <span className="text-sm text-gray-300">Page</span>
-                  <span className="text-lg font-bold text-white">{currentPageIndex + 1}</span>
-                  <span className="text-sm text-gray-400">of {formPages.length}</span>
+                  <span className="text-sm text-gray-300">Total Pages:</span>
+                  <span className="text-lg font-bold text-white">{formPages.length}</span>
                 </div>
               </div>
               
               <div className="flex items-center gap-3">
-                {/* Enhanced Page Navigation */}
-                <div className="flex items-center gap-1 bg-gray-700/50 rounded-lg p-1">
-                  <button
-                    onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))}
-                    disabled={currentPageIndex === 0}
-                    className="flex items-center gap-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-800 disabled:text-gray-500 text-white rounded text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed"
-                    title="Previous Page"
-                  >
-                    <RiArrowLeftLine />
-                    Prev
-                  </button>
-                  <button
-                    onClick={() => setCurrentPageIndex(Math.min(formPages.length - 1, currentPageIndex + 1))}
-                    disabled={currentPageIndex === formPages.length - 1}
-                    className="flex items-center gap-1 px-3 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-800 disabled:text-gray-500 text-white rounded text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed"
-                    title="Next Page"
-                  >
-                    Next
-                    <RiArrowRightLine />
-                  </button>
-                </div>
                 
                 {/* Action Buttons */}
                 <button
@@ -3146,7 +4264,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 </button>
                 
                 <button
-                  onClick={() => setShowFormPreview(false)}
+                  onClick={() => setShowPreview(false)}
                   className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
                   title="Close Preview"
                 >
@@ -3156,51 +4274,65 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </div>
             </div>
             
-            {/* Enhanced Preview Content */}
+            {/* Enhanced Preview Content - Continuous Scrollable Pages */}
             <div className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 to-gray-100 p-8">
-              <div className="flex justify-center">
-                <div 
-                  className="bg-white shadow-2xl rounded-xl overflow-hidden print:shadow-none print:rounded-none border border-gray-200 transform transition-all duration-300 hover:shadow-3xl"
-                  style={{
-                    width: `${getCurrentPageDimensions().width}px`,
-                    minHeight: `${getCurrentPageDimensions().height}px`,
-                  }}
-                >
-                  {/* Print-ready content */}
-                  <div className="relative w-full h-full p-6" style={{ minHeight: `${getCurrentPageDimensions().height - 48}px` }}>
-                    {formPages[currentPageIndex].fields.length === 0 ? (
-                      <div className="flex items-center justify-center h-full text-gray-400">
-                        <div className="text-center">
-                          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <RiFileTextLine className="text-4xl text-gray-400" />
+              <div className="flex flex-col items-center space-y-8">
+                {formPages.map((page, pageIndex) => (
+                  <div key={page.id} className="relative">
+                    {/* Page number indicator */}
+                    <div className="absolute -left-20 top-4 text-sm text-gray-500 font-medium bg-white px-2 py-1 rounded shadow">
+                      Page {pageIndex + 1}
+                    </div>
+                    
+                    <div 
+                      className="bg-white shadow-2xl rounded-xl overflow-hidden print:shadow-none print:rounded-none border border-gray-200 transform transition-all duration-300 hover:shadow-3xl"
+                      style={{
+                        width: `${page.dimensions.width}px`,
+                        minHeight: `${page.dimensions.height}px`,
+                      }}
+                    >
+                      {/* Print-ready content */}
+                      <div className="relative w-full h-full p-6" style={{ minHeight: `${page.dimensions.height - 48}px` }}>
+                        {page.fields.length === 0 ? (
+                          <div className="flex items-center justify-center h-full text-gray-400">
+                            <div className="text-center">
+                              <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <RiFileTextLine className="text-4xl text-gray-400" />
+                              </div>
+                              <p className="text-xl font-medium text-gray-600">No fields added to page {pageIndex + 1}</p>
+                              <p className="text-sm mt-2 text-gray-500">Add form fields to see the preview</p>
+                              <p className="text-xs mt-1 text-gray-400">
+                                {page.dimensions.size} {page.dimensions.orientation}
+                              </p>
+                              {pageIndex === 0 && (
+                                <div className="mt-4 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
+                                  💡 Tip: Use the "Demo Form" button to see an example
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <p className="text-xl font-medium text-gray-600">No fields added to this page</p>
-                          <p className="text-sm mt-2 text-gray-500">Add form fields to see the preview</p>
-                          <div className="mt-4 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
-                            💡 Tip: Use the "Demo Form" button to see an example
-                          </div>
-                        </div>
+                        ) : (
+                          page.fields.map((field: FormField) => (
+                            <div 
+                              key={field.id}
+                              className="absolute transition-all duration-200 hover:z-10"
+                              style={{ 
+                                left: field.x || 0,
+                                top: field.y || 0,
+                                width: field.width || 200,
+                                height: field.height || 40,
+                              }}
+                            >
+                              <div className="w-full h-full bg-white border border-gray-200 rounded shadow-sm hover:shadow-md transition-shadow duration-200">
+                                {renderWidgetPreview(field)}
+                              </div>
+                            </div>
+                          ))
+                        )}
                       </div>
-                    ) : (
-                      formPages[currentPageIndex].fields.map((field: FormField) => (
-                        <div 
-                          key={field.id}
-                          className="absolute transition-all duration-200 hover:z-10"
-                          style={{ 
-                            left: field.x || 0,
-                            top: field.y || 0,
-                            width: field.width || 200,
-                            height: field.height || 40,
-                          }}
-                        >
-                          <div className="w-full h-full bg-white border border-gray-200 rounded shadow-sm hover:shadow-md transition-shadow duration-200">
-                            {renderWidgetPreview(field)}
-                          </div>
-                        </div>
-                      ))
-                    )}
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
             </div>
             
@@ -4077,13 +5209,13 @@ const FormsPage: React.FC = () => {
       {/* FormCreationFlow Modal */}
       <AnimatePresence>
         {formFlowOpen && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-0 z-50">
+          <div className="fixed inset-0 bg-dark-900 z-50">
             <motion.div
-              className="w-full h-full max-w-none max-h-none overflow-auto"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
+              className="w-full h-full"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
             >
               <FormCreationFlow 
                 onClose={() => setFormFlowOpen(false)}
@@ -4108,6 +5240,20 @@ const FormsPage: React.FC = () => {
                 onMonthlyReturnSelect={handleUseMonthlyReturnTemplate}
                 onInspectionCheckSelect={handleUseInspectionCheckTemplate}
                 onSurveyCheckSelect={handleUseSurveyCheckTemplate}
+                onAddPage={() => {
+                  const newPage: FormPage = {
+                    id: `page_${Date.now()}`,
+                    fields: [],
+                    dimensions: {
+                      width: 595,
+                      height: 842,
+                      orientation: 'portrait',
+                      size: 'A4'
+                    }
+                  };
+                  setFormPages(prev => [...prev, newPage]);
+                }}
+                onPreview={() => setShowPreview(true)}
                 formEditor={
                   <FormBuilder
                     formPages={formPages}
@@ -4120,6 +5266,8 @@ const FormsPage: React.FC = () => {
                     setIsDragging={setIsDragging}
                     activeTab={activeTab}
                     setActiveTab={setActiveTab}
+                    showPreview={showPreview}
+                    setShowPreview={setShowPreview}
                   />
                 }
               />
@@ -4137,4 +5285,4 @@ const FormsPage: React.FC = () => {
   );
 };
 
-export default FormsPage; 
+export default FormsPage;

@@ -20,7 +20,39 @@
     "register": "تسجيل",
     "logout": "تسجيل الخروج",
     "forgotPassword": "نسيت كلمة المرور",
-    "resetPassword": "إعادة تعيين كلمة المرور"
+    "resetPassword": "إعادة تعيين كلمة المرور",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "passwordConfirm": "تأكيد كلمة المرور",
+    "name": "الاسم الكامل",
+    "namePlaceholder": "محمد أحمد",
+    "rememberMe": "تذكرني",
+    "noAccount": "ليس لديك حساب؟",
+    "haveAccount": "لديك حساب بالفعل؟",
+    "selectRole": "اختر الدور",
+    "loginSuccess": "تم تسجيل الدخول بنجاح",
+    "signupSuccess": "تم التسجيل بنجاح",
+    "redirecting": "جاري التحويل إلى لوحة التحكم...",
+    "2fa": "المصادقة الثنائية",
+    "enterCode": "أدخل رمز التحقق المرسل إلى جهازك",
+    "role": "دورك",
+    "roleDescription": "اختر الدور الذي يصف منصبك بشكل أفضل",
+    "createNewPassword": "إنشاء كلمة مرور جديدة",
+    "newPassword": "كلمة المرور الجديدة",
+    "confirmNewPassword": "تأكيد كلمة المرور الجديدة",
+    "welcomeBack": "مرحبًا بعودتك",
+    "signInToContinue": "تسجيل الدخول للمتابعة",
+    "dontHaveAccount": "ليس لديك حساب؟",
+    "signIn": "تسجيل الدخول",
+    "signingIn": "جاري تسجيل الدخول...",
+    "twoFactorAuth": "المصادقة الثنائية",
+    "enterVerificationCode": "أدخل رمز التحقق",
+    "verificationCode": "رمز التحقق",
+    "verifying": "جاري التحقق...",
+    "verify": "تحقق",
+    "backToLogin": "العودة إلى تسجيل الدخول",
+    "lightMode": "الوضع المضيء",
+    "darkMode": "الوضع المظلم"
   },
   "common": {
     "search": "بحث",
@@ -304,4 +336,4 @@
     "noMembersFoundUser": "لا يوجد حاليًا أعضاء فريق متاحين لعرضهم.",
     "addFirstTeamMember": "إضافة أول عضو في الفريق"
   }
-} 
+}

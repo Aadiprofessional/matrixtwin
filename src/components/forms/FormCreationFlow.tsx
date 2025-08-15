@@ -16,7 +16,8 @@ import {
   RiSearchLine,
   RiCloseLine,
   RiTeamLine,
-  RiLoader4Line
+  RiLoader4Line,
+  RiEyeLine
 } from 'react-icons/ri';
 import ProcessFlowBuilder from './ProcessFlowBuilder';
 import { useAuth } from '../../contexts/AuthContext';
@@ -186,6 +187,8 @@ interface FormCreationFlowProps {
   onMonthlyReturnSelect?: () => void;
   onInspectionCheckSelect?: () => void;
   onSurveyCheckSelect?: () => void;
+  onAddPage?: () => void;
+  onPreview?: () => void;
 }
 
 const FormCreationFlow: React.FC<FormCreationFlowProps> = ({ 
@@ -199,7 +202,9 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
   onDailyCleaningInspectionSelect,
   onMonthlyReturnSelect,
   onInspectionCheckSelect,
-  onSurveyCheckSelect
+  onSurveyCheckSelect,
+  onAddPage,
+  onPreview
 }) => {
   const { user } = useAuth();
   const { selectedProject } = useProjects();
@@ -525,200 +530,85 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
   // Step 1: Template selection
   const renderTemplateStep = () => {
     return (
-      <div className="space-y-6">
-        <div>
-          <h3 className="text-lg font-medium mb-2 text-white">Create a new form</h3>
-          <Input
-            label="Form Template Name"
-            value={templateName}
-            onChange={(e) => setTemplateName(e.target.value)}
-            placeholder="Enter a name for your form template"
-          />
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-400 mb-1">
-              Form Description (Optional)
-            </label>
-            <textarea
-              value={formDescription}
-              onChange={(e) => setFormDescription(e.target.value)}
-              placeholder="Enter a brief description of this form template"
-              className="resize-none w-full h-24 bg-dark-700 border border-dark-600 rounded-md shadow-sm focus:border-ai-blue focus:ring-1 focus:ring-ai-blue p-2 text-white"
-            />
-          </div>
-        </div>
-        
-        <div className="flex items-center text-white">
-          <div className="flex-grow border-t border-dark-600"></div>
-          <div className="px-4 text-gray-400">OR select a template</div>
-          <div className="flex-grow border-t border-dark-600"></div>
-        </div>
-        
-        <div className="space-y-4">
-          {/* Template cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            {/* Default Site Diary Template */}
-            <div 
-              className="bg-dark-800 rounded-lg border border-dark-700 hover:border-ai-blue/50 transition-colors p-4 cursor-pointer"
-              onClick={() => {
-                if (onSiteDiarySelect) {
-                  onSiteDiarySelect();
-                }
-              }}
-            >
-              <div className="text-lg font-medium mb-2">Site Diary</div>
-              <div className="text-sm text-gray-400 mb-4">Daily site progress and activity documentation</div>
-              <div className="flex justify-end">
-                <Button variant="ai-secondary" size="sm">
-                  Use Template
-                </Button>
+      <div className="h-full flex flex-col">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 p-6">
+          {/* Left Panel - Create New Form */}
+          <div className="bg-gradient-to-br from-dark-800/80 to-dark-900/80 rounded-xl border border-dark-700/50 p-6 backdrop-blur-sm">
+            <div className="flex items-center mb-6">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-ai-blue to-ai-teal flex items-center justify-center mr-3">
+                <RiAddLine className="text-white text-xl" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">Create New Form</h3>
+                <p className="text-gray-400 text-sm">Start with a blank form template</p>
               </div>
             </div>
             
-            {/* Default Safety Inspection Template */}
-            <div 
-              className="bg-dark-800 rounded-lg border border-dark-700 hover:border-ai-blue/50 transition-colors p-4 cursor-pointer"
-              onClick={() => {
-                if (onSafetyInspectionSelect) {
-                  onSafetyInspectionSelect();
-                }
-              }}
-            >
-              <div className="text-lg font-medium mb-2">Safety Inspection Checklist</div>
-              <div className="text-sm text-gray-400 mb-4">Weekly site safety inspection documentation</div>
-              <div className="flex justify-end">
-                <Button variant="ai-secondary" size="sm">
-                  Use Template
-                </Button>
-              </div>
-            </div>
-
-            {/* Daily Cleaning Inspection Template */}
-            <div 
-              className="bg-dark-800 rounded-lg border border-dark-700 hover:border-ai-blue/50 transition-colors p-4 cursor-pointer"
-              onClick={() => {
-                if (onDailyCleaningInspectionSelect) {
-                  onDailyCleaningInspectionSelect();
-                }
-              }}
-            >
-              <div className="text-lg font-medium mb-2">Daily Cleaning Inspection Checklist</div>
-              <div className="text-sm text-gray-400 mb-4">Daily cleaning inspection documentation</div>
-              <div className="flex justify-end">
-                <Button variant="ai-secondary" size="sm">
-                  Use Template
-                </Button>
-              </div>
-            </div>
-            
-            {/* Monthly Return Template */}
-            <div 
-              className="bg-dark-800 rounded-lg border border-dark-700 hover:border-ai-blue/50 transition-colors p-4 cursor-pointer"
-              onClick={() => {
-                if (onMonthlyReturnSelect) {
-                  onMonthlyReturnSelect();
-                }
-              }}
-            >
-              <div className="text-lg font-medium mb-2">Monthly Return</div>
-              <div className="text-sm text-gray-400 mb-4">Monthly tracking of site labour deployment and wage rates</div>
-              <div className="flex justify-end">
-                <Button variant="ai-secondary" size="sm">
-                  Use Template
-                </Button>
-              </div>
-            </div>
-
-            {/* Inspection Check Form Template */}
-            <div 
-              className="bg-dark-800 rounded-lg border border-dark-700 hover:border-ai-blue/50 transition-colors p-4 cursor-pointer"
-              onClick={() => {
-                if (onInspectionCheckSelect) {
-                  onInspectionCheckSelect();
-                }
-              }}
-            >
-              <div className="text-lg font-medium mb-2">Inspection Check Form</div>
-              <div className="text-sm text-gray-400 mb-4">Form for requesting inspection of construction works</div>
-              <div className="flex justify-end">
-                <Button variant="ai-secondary" size="sm">
-                  Use Template
-                </Button>
-              </div>
-            </div>
-            
-            {/* Survey Check Form Template */}
-            <div 
-              className="bg-dark-800 rounded-lg border border-dark-700 hover:border-ai-blue/50 transition-colors p-4 cursor-pointer"
-              onClick={() => {
-                if (onSurveyCheckSelect) {
-                  onSurveyCheckSelect();
-                }
-              }}
-            >
-              <div className="text-lg font-medium mb-2">Survey Check Form</div>
-              <div className="text-sm text-gray-400 mb-4">Form for requesting survey check of construction works</div>
-              <div className="flex justify-end">
-                <Button variant="ai-secondary" size="sm">
-                  Use Template
-                </Button>
-              </div>
-            </div>
-          </div>
-          
-          {/* Custom form templates section */}
-          {customFormTemplates.length > 0 && (
-            <>
-              <div className="text-gray-400 text-sm mt-4 border-t border-dark-600 pt-4">
-                Or use an existing custom form as a starting point:
+            <div className="space-y-6">
+              <div>
+                <Input
+                  label="Form Template Name"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="Enter a name for your form template"
+                  className="bg-dark-700/50 border-dark-600/50 focus:border-ai-blue/50"
+                />
               </div>
               
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {loadingTemplates ? (
-                  <div className="p-4 text-center text-gray-400">
-                    <RiLoader4Line className="animate-spin text-2xl mx-auto mb-2" />
-                    Loading templates...
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Form Description <span className="text-gray-500">(Optional)</span>
+                </label>
+                <textarea
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  placeholder="Enter a brief description of this form template"
+                  className="resize-none w-full h-32 bg-dark-700/50 border border-dark-600/50 rounded-lg shadow-sm focus:border-ai-blue/50 focus:ring-1 focus:ring-ai-blue/30 p-3 text-white placeholder-gray-500 transition-all duration-200"
+                />
+              </div>
+              
+              <div className="pt-4">
+                <div className="flex items-center justify-between p-4 bg-dark-700/30 rounded-lg border border-dark-600/30">
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 rounded-full bg-ai-blue/20 flex items-center justify-center mr-3">
+                      <RiFileUserLine className="text-ai-blue text-sm" />
+                    </div>
+                    <div>
+                      <p className="text-white font-medium">Blank Template</p>
+                      <p className="text-gray-400 text-xs">Start from scratch</p>
+                    </div>
                   </div>
-                ) : (
-                  customFormTemplates.map(form => (
-                    <Card 
-                      key={form.id} 
-                      variant="ai-dark" 
-                      className={`border ${selectedFormId === form.id ? 'border-ai-blue' : 'border-dark-600 hover:border-ai-blue/50'} transition-colors cursor-pointer`}
-                      onClick={() => {
-                        setSelectedFormId(form.id);
-                        setUseExistingForm(true);
-                      }}
-                    >
-                      <div className="p-3 flex justify-between items-center">
-                        <div>
-                          <h4 className="font-medium text-white">{form.name}</h4>
-                          <p className="text-xs text-gray-400">{form.description}</p>
-                          <p className="text-xs text-gray-500">Created: {new Date(form.created_at).toLocaleDateString()}</p>
-                        </div>
-                        <div className="w-5 h-5 rounded-full border border-gray-500 flex items-center justify-center">
-                          {selectedFormId === form.id && <div className="w-3 h-3 rounded-full bg-ai-blue"></div>}
-                        </div>
-                      </div>
-                    </Card>
-                  ))
-                )}
+                  <div className="w-5 h-5 rounded-full border-2 border-ai-blue bg-ai-blue flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-white"></div>
+                  </div>
+                </div>
               </div>
-            </>
-          )}
+            </div>
+          </div>
           
-          {/* Existing forms from props */}
-          {existingForms.length > 0 && (
-            <>
-              <div className="text-gray-400 text-sm mt-4 border-t border-dark-600 pt-4">
-                Or use an existing form as a starting point:
+          {/* Right Panel - Recent Forms */}
+          <div className="bg-gradient-to-br from-dark-800/80 to-dark-900/80 rounded-xl border border-dark-700/50 p-6 backdrop-blur-sm">
+            <div className="flex items-center mb-6">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center mr-3">
+                <RiFileUserLine className="text-white text-xl" />
               </div>
-              
-              <div className="space-y-2 max-h-64 overflow-y-auto">
+              <div>
+                <h3 className="text-xl font-semibold text-white">Use Existing Form</h3>
+                <p className="text-gray-400 text-sm">Start from a previous template</p>
+              </div>
+            </div>
+            
+            {existingForms.length > 0 ? (
+              <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
                 {existingForms.map(form => (
                   <Card 
                     key={form.id} 
                     variant="ai-dark" 
-                    className={`border ${selectedFormId === form.id.toString() ? 'border-ai-blue' : 'border-dark-600 hover:border-ai-blue/50'} transition-colors cursor-pointer`}
+                    className={`border transition-all duration-200 cursor-pointer hover:scale-[1.02] ${
+                      selectedFormId === form.id.toString() 
+                        ? 'border-ai-blue bg-ai-blue/10 shadow-lg shadow-ai-blue/20' 
+                        : 'border-dark-600/50 hover:border-ai-blue/50 hover:bg-dark-700/30'
+                    }`}
                     onClick={() => {
                       setSelectedFormId(form.id.toString());
                       setUseExistingForm(true);
@@ -727,20 +617,42 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
                       }
                     }}
                   >
-                    <div className="p-3 flex justify-between items-center">
-                      <div>
-                        <h4 className="font-medium text-white">{form.name}</h4>
-                        <p className="text-xs text-gray-400">{form.fieldsCount || 0} fields</p>
+                    <div className="p-4 flex justify-between items-center">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-white mb-1">{form.name}</h4>
+                        <p className="text-xs text-gray-400 mb-2">{form.description || 'No description'}</p>
+                        <div className="flex items-center text-xs text-gray-500">
+                          <span className="bg-dark-600/50 px-2 py-1 rounded-full">
+                            {form.fieldsCount || 0} fields
+                          </span>
+                          <span className="ml-2">
+                            {new Date(form.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
                       </div>
-                      <div className="w-5 h-5 rounded-full border border-gray-500 flex items-center justify-center">
-                        {selectedFormId === form.id.toString() && <div className="w-3 h-3 rounded-full bg-ai-blue"></div>}
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                        selectedFormId === form.id.toString() 
+                          ? 'border-ai-blue bg-ai-blue' 
+                          : 'border-gray-500'
+                      }`}>
+                        {selectedFormId === form.id.toString() && (
+                          <RiCheckLine className="text-white text-sm" />
+                        )}
                       </div>
                     </div>
                   </Card>
                 ))}
               </div>
-            </>
-          )}
+            ) : (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 rounded-full bg-dark-700/50 flex items-center justify-center mx-auto mb-4">
+                  <RiFileUserLine className="text-gray-500 text-2xl" />
+                </div>
+                <p className="text-gray-400 mb-2">No existing forms found</p>
+                <p className="text-gray-500 text-sm">Create your first form template to get started</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -764,21 +676,12 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
         animate="visible"
         exit="exit"
         variants={variants}
-        className="space-y-6"
+        className="h-full flex flex-col"
       >
-        <div className="mb-4">
-          <h2 className="text-xl font-display font-semibold text-transparent bg-clip-text bg-gradient-to-r from-ai-blue to-ai-teal mb-2">
-            Form Configuration
-          </h2>
-          <p className="text-gray-400">
-            {useExistingForm 
-              ? `Customize the selected form "${customFormTemplates.find(f => f.id === selectedFormId)?.name || existingForms.find(f => f.id.toString() === selectedFormId)?.name || 'Selected Form'}"` 
-              : "Configure your form by adding fields and sections."}
-          </p>
-        </div>
-        
         <FormEditorContext.Provider value={formEditorContextValue}>
-          {formEditor}
+          <div className="flex-1 h-full">
+            {formEditor}
+          </div>
         </FormEditorContext.Provider>
       </motion.div>
     );
@@ -1040,52 +943,98 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
   };
   
   return (
-    <Card variant="ai-dark" className="max-h-[90vh] overflow-auto border border-ai-blue/20 shadow-ai-glow">
+    <div className="w-full h-full bg-dark-900 flex flex-col">
       {/* Header */}
-      <div className="border-b border-dark-700/50 p-6">
+      <div className="border-b border-dark-700/50 p-3 flex-shrink-0">
         <div className="flex justify-between items-center">
-          <h2 className="text-xl font-display font-semibold text-transparent bg-clip-text bg-gradient-to-r from-ai-blue to-ai-teal">
-            Create Form - Step {currentStep} of 3
-          </h2>
-          <Button 
-            variant="ai-secondary" 
-            size="sm"
-            onClick={onClose}
-          >
-            Close
-          </Button>
+          <div className="flex items-center space-x-4">
+            <h2 className="text-xl font-display font-semibold text-transparent bg-clip-text bg-gradient-to-r from-ai-blue to-ai-teal">
+              Create Form - Step {currentStep} of 3
+            </h2>
+            <div className="flex space-x-2">
+              <Button 
+                variant="ai-secondary" 
+                size="sm"
+                onClick={handleBack}
+                leftIcon={<RiArrowLeftLine />}
+                disabled={saving}
+              >
+                {currentStep === 1 ? 'Cancel' : 'Back'}
+              </Button>
+              
+              <Button 
+                variant="ai-gradient" 
+                size="sm"
+                onClick={handleNext}
+                rightIcon={currentStep === 3 ? <RiCheckLine /> : <RiArrowRightLine />}
+                disabled={!canProceed() || saving}
+                glowing
+              >
+                {saving ? 'Saving...' : (currentStep === 3 ? 'Save' : 'Next')}
+              </Button>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            {currentStep === 2 && (
+              <>
+                <Button 
+                  variant="ai-secondary" 
+                  size="sm"
+                  onClick={onAddPage}
+                  leftIcon={<RiAddLine />}
+                >
+                  Add Page
+                </Button>
+                <Button 
+                  variant="ai-secondary" 
+                  size="sm"
+                  onClick={onPreview}
+                  leftIcon={<RiEyeLine />}
+                >
+                  Preview
+                </Button>
+              </>
+            )}
+            <Button 
+              variant="ai-secondary" 
+              size="sm"
+              onClick={onClose}
+            >
+              Close
+            </Button>
+          </div>
         </div>
         
         {/* Step indicator */}
-        <div className="flex items-center justify-between mt-6">
+        <div className="flex items-center justify-between mt-3">
           <div className="w-full flex items-center">
-            <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
+            <div className={`flex items-center justify-center w-6 h-6 rounded-full border-2 ${
               currentStep >= 1 ? 'border-ai-blue bg-ai-blue/20' : 'border-dark-600 bg-dark-700'
             }`}>
-              <RiFileUserLine className={`${currentStep >= 1 ? 'text-ai-blue' : 'text-gray-500'}`} />
+              <RiFileUserLine className={`text-xs ${currentStep >= 1 ? 'text-ai-blue' : 'text-gray-500'}`} />
             </div>
-            <div className={`flex-1 h-1 mx-2 ${
+            <div className={`flex-1 h-0.5 mx-2 ${
               currentStep > 1 ? 'bg-ai-blue' : 'bg-dark-700'
             }`}></div>
             
-            <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
+            <div className={`flex items-center justify-center w-6 h-6 rounded-full border-2 ${
               currentStep >= 2 ? 'border-ai-blue bg-ai-blue/20' : 'border-dark-600 bg-dark-700'
             }`}>
-              <RiSettings4Line className={`${currentStep >= 2 ? 'text-ai-blue' : 'text-gray-500'}`} />
+              <RiSettings4Line className={`text-xs ${currentStep >= 2 ? 'text-ai-blue' : 'text-gray-500'}`} />
             </div>
-            <div className={`flex-1 h-1 mx-2 ${
+            <div className={`flex-1 h-0.5 mx-2 ${
               currentStep > 2 ? 'bg-ai-blue' : 'bg-dark-700'
             }`}></div>
             
-            <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
+            <div className={`flex items-center justify-center w-6 h-6 rounded-full border-2 ${
               currentStep >= 3 ? 'border-ai-blue bg-ai-blue/20' : 'border-dark-600 bg-dark-700'
             }`}>
-              <RiFlowChart className={`${currentStep >= 3 ? 'text-ai-blue' : 'text-gray-500'}`} />
+              <RiFlowChart className={`text-xs ${currentStep >= 3 ? 'text-ai-blue' : 'text-gray-500'}`} />
             </div>
           </div>
         </div>
         
-        <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
+        <div className="flex justify-between items-center mt-1 text-xs text-gray-400">
           <span className={currentStep === 1 ? 'text-ai-blue font-medium' : ''}>Template</span>
           <span className={currentStep === 2 ? 'text-ai-blue font-medium' : ''}>Set Form</span>
           <span className={currentStep === 3 ? 'text-ai-blue font-medium' : ''}>Set Process</span>
@@ -1093,33 +1042,15 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
       </div>
       
       {/* Content */}
-      <div className={`${currentStep === 2 ? 'p-0' : 'p-6'}`}>
-        <AnimatePresence mode="wait">
-          {renderStepContent()}
-        </AnimatePresence>
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full">
+          <AnimatePresence mode="wait">
+            {renderStepContent()}
+          </AnimatePresence>
+        </div>
       </div>
       
-      {/* Footer */}
-      <div className="border-t border-dark-700/50 p-6 flex justify-between">
-        <Button 
-          variant="ai-secondary" 
-          onClick={handleBack}
-          leftIcon={<RiArrowLeftLine />}
-          disabled={saving}
-        >
-          {currentStep === 1 ? 'Cancel' : 'Back'}
-        </Button>
-        
-        <Button 
-          variant="ai-gradient" 
-          onClick={handleNext}
-          rightIcon={currentStep === 3 ? <RiCheckLine /> : <RiArrowRightLine />}
-          disabled={!canProceed() || saving}
-          glowing
-        >
-          {saving ? 'Saving...' : (currentStep === 3 ? 'Save' : 'Next')}
-        </Button>
-      </div>
+
 
       {/* People Selector Modal */}
       <AnimatePresence>
@@ -1134,8 +1065,8 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
           />
         )}
       </AnimatePresence>
-    </Card>
+    </div>
   );
 };
 
-export default FormCreationFlow; 
+export default FormCreationFlow;
