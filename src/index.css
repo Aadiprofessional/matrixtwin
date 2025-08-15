@@ -90,7 +90,18 @@
   }
   
   .input-ai {
-    @apply input border-ai-blue/30 focus:border-ai-blue focus:ring-ai-blue/50 shadow-sm hover:shadow-ai-glow transition-all duration-300;
+    @apply input border-ai-blue/30 focus:border-ai-blue/50 focus:ring-ai-blue/30 shadow-sm hover:shadow-ai-glow transition-all duration-300;
+  }
+  
+  /* Override browser autofill styling */
+  .input-ai:-webkit-autofill,
+  .input-ai:-webkit-autofill:hover,
+  .input-ai:-webkit-autofill:focus,
+  .input-ai:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px rgba(37, 42, 54, 0.5) inset !important;
+    -webkit-text-fill-color: white !important;
+    border: 1px solid rgba(30, 144, 255, 0.3) !important;
+    transition: background-color 5000s ease-in-out 0s;
   }
   
   /* Card styles */
@@ -323,4 +334,4 @@ a:hover {
   to {
     transform: rotate(0);
   }
-} 
+}

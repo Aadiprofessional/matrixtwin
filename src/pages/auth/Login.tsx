@@ -342,7 +342,7 @@ const Login: React.FC = () => {
                       placeholder={t('auth.verificationCode')}
                       value={twoFactorCode}
                       onChange={(e) => setTwoFactorCode(e.target.value)}
-                      className="bg-white/10 border-white/20 text-white placeholder-white/60"
+                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white placeholder:text-gray-500"
                       required
                     />
                   </div>
@@ -386,8 +386,8 @@ const Login: React.FC = () => {
           autoPlay
           loop
           muted
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ filter: 'brightness(0.3)' }}
+          className="absolute inset-0 w-full h-full object-cover opacity-50"
+          style={{ filter: 'brightness(2)' }}
         >
           <source src={BackgroundVideo} type="video/mp4" />
         </video>
@@ -447,7 +447,7 @@ const Login: React.FC = () => {
                     placeholder={t('auth.email')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="bg-white/10 border-white/20 text-white placeholder-white/60"
+                    className="input-ai bg-dark-800/50 border-ai-blue/30 text-white placeholder:text-gray-500"
                     required
                   />
                 </div>
@@ -458,13 +458,13 @@ const Login: React.FC = () => {
                     placeholder={t('auth.password')}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="bg-white/10 border-white/20 text-white placeholder-white/60 pr-12"
+                    className="input-ai bg-dark-800/50 border-ai-blue/30 text-white placeholder:text-gray-500 pr-12"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-ai-blue transition-colors"
                   >
                     {showPassword ? <RiIcons.RiEyeOffLine /> : <RiIcons.RiEyeLine />}
                   </button>

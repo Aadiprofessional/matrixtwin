@@ -645,15 +645,25 @@ ALWAYS include pageNumber property for each field (${i + 1} for this page). Prov
                     case 'select':
                     case 'multiselect':
                       const optionCount = fieldData.settings?.options?.length || 1;
+                      // Enhanced multiselect sizing - calculate based on actual options
+                      const multiSelectHeight = fieldType === 'multiselect' ? 
+                        Math.min(optionCount * 28 + 50, Math.max(200, optionCount * 20)) : 40;
                       return {
-                        width: Math.max(150, Math.min(baseWidth, 400)),
-                        height: fieldType === 'multiselect' ? Math.min(optionCount * 25 + 40, 150) : 40
+                        width: Math.max(150, Math.min(baseWidth, 450)),
+                        height: multiSelectHeight
                       };
                     case 'checkbox':
                     case 'radio':
+                      // Enhanced checkbox/radio sizing - calculate based on number of options
+                      const checkboxOptions = fieldData.settings?.options?.length || 1;
+                      const checkboxHeight = Math.max(30, Math.min(
+                        checkboxOptions * 32 + 20, // 32px per option + padding
+                        Math.max(baseHeight, checkboxOptions * 25)
+                      ));
+                      const checkboxWidth = Math.max(120, Math.min(baseWidth, 350));
                       return {
-                        width: Math.max(120, Math.min(baseWidth, 300)),
-                        height: Math.max(30, Math.min(baseHeight, 50))
+                        width: checkboxWidth,
+                        height: checkboxHeight
                       };
                     case 'date':
                     case 'time':
@@ -777,7 +787,7 @@ ALWAYS include pageNumber property for each field (${i + 1} for this page). Prov
                       for (let r = tableData.length; r < rows; r++) {
                         const newRow = [];
                         for (let c = 0; c < columns; c++) {
-                          newRow.push(`Data ${r+1},${c+1}`);
+                          newRow.push('');
                         }
                         tableData.push(newRow);
                       }
@@ -788,7 +798,7 @@ ALWAYS include pageNumber property for each field (${i + 1} for this page). Prov
                       if (row.length < columns) {
                         const filledRow = [...row];
                         for (let c = row.length; c < columns; c++) {
-                          filledRow.push(`Data ${rowIndex+1},${c+1}`);
+                          filledRow.push('');
                         }
                         return filledRow;
                       } else if (row.length > columns) {
@@ -1299,6 +1309,77 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [initialPosition, setInitialPosition] = useState({ x: 0, y: 0 });
   const [initialSize, setInitialSize] = useState({ width: 0, height: 0 });
+
+  // Calculate effective dimensions based on field type for consistent sizing
+  const getEffectiveDimensions = useCallback(() => {
+    const baseWidth = field.width || 200;
+    const baseHeight = field.height || 40;
+    
+    switch (field.type) {
+      case 'layoutTable':
+      case 'dataTable':
+        return {
+          width: Math.max(baseWidth, (field.settings?.columns || 3) * 100),
+          height: Math.max(baseHeight, (field.settings?.rows || 3) * 30)
+        };
+      case 'textarea':
+        const textLines = field.settings?.rows || 4;
+        return {
+          width: Math.max(baseWidth, 200),
+          height: Math.max(baseHeight, textLines * 20 + 20)
+        };
+      case 'select':
+      case 'multiselect':
+        const optionCount = field.settings?.options?.length || 1;
+        // Enhanced multiselect sizing - calculate based on actual options
+        const multiSelectHeight = field.type === 'multiselect' ? 
+          Math.min(optionCount * 28 + 50, Math.max(200, optionCount * 20)) : Math.max(baseHeight, 40);
+        return {
+          width: Math.max(baseWidth, 150),
+          height: multiSelectHeight
+        };
+      case 'checkbox':
+      case 'multipleChoice':
+        const checkboxOptions = field.settings?.options?.length || 1;
+        // Enhanced checkbox/radio sizing - calculate based on number of options
+        const checkboxHeight = Math.max(baseHeight, Math.min(
+          checkboxOptions * 32 + 20, // 32px per option + padding
+          Math.max(200, checkboxOptions * 25)
+        ));
+        return {
+          width: Math.max(baseWidth, 120),
+          height: checkboxHeight
+        };
+      case 'date':
+      case 'time':
+        return {
+          width: Math.max(baseWidth, 150),
+          height: Math.max(baseHeight, 35)
+        };
+      case 'number':
+        return {
+          width: Math.max(baseWidth, 100),
+          height: Math.max(baseHeight, 35)
+        };
+      case 'signature':
+        return {
+          width: Math.max(baseWidth, 250),
+          height: Math.max(baseHeight, 80)
+        };
+      case 'image':
+      case 'attachment':
+        return {
+          width: Math.max(baseWidth, 200),
+          height: Math.max(baseHeight, 100)
+        };
+      default: // text, email, etc.
+        return {
+          width: Math.max(baseWidth, 150),
+          height: Math.max(baseHeight, 35)
+        };
+    }
+  }, [field.type, field.width, field.height, field.settings]);
+
   
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -1312,16 +1393,8 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
     const rect = wrapperRef.current?.getBoundingClientRect();
     if (!rect) return;
     
-    // Calculate effective dimensions based on field type - use the same calculation as in the render function
-    const effectiveWidth = field.type === 'layoutTable' || field.type === 'dataTable' ? 
-      Math.max(field.width || 200, (field.settings?.columns || 3) * 100) : 
-      field.width || 200;
-      
-    const effectiveHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 
-      Math.max(field.height || 40, (field.settings?.rows || 3) * 30) : 
-      field.type === 'textarea' ? 
-        Math.max(field.height || 40, (field.settings?.rows || 3) * 20) : 
-        field.height || 40;
+    // Calculate effective dimensions based on field type
+    const { width: effectiveWidth, height: effectiveHeight } = getEffectiveDimensions();
     
     // Check if the click is within the effective dimensions
     const relativeX = e.clientX - rect.left;
@@ -1343,22 +1416,14 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
         wrapperRef.current.style.transition = 'box-shadow 0.2s ease, transform 0.2s ease';
       }
     }
-  }, [field.x, field.y, field.width, field.height, field.type, field.settings, onSelect, onUpdatePosition]);
+  }, [field.x, field.y, field.width, field.height, field.type, field.settings, onSelect, onUpdatePosition, getEffectiveDimensions]);
   
   const handleResizeMouseDown = useCallback((e: React.MouseEvent, direction: string) => {
     e.preventDefault();
     e.stopPropagation();
     
-    // Calculate effective dimensions based on field type - use the same calculation as in the render function
-    const effectiveWidth = field.type === 'layoutTable' || field.type === 'dataTable' ? 
-      Math.max(field.width || 200, (field.settings?.columns || 3) * 100) : 
-      field.width || 200;
-      
-    const effectiveHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 
-      Math.max(field.height || 40, (field.settings?.rows || 3) * 30) : 
-      field.type === 'textarea' ? 
-        Math.max(field.height || 40, (field.settings?.rows || 3) * 20) : 
-        field.height || 40;
+    // Calculate effective dimensions based on field type
+    const { width: effectiveWidth, height: effectiveHeight } = getEffectiveDimensions();
     
     setIsResizing(true);
     setResizeDirection(direction);
@@ -1368,7 +1433,7 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
     
     document.body.style.cursor = getResizeCursor(direction);
     document.body.style.userSelect = 'none';
-  }, [field.width, field.height, field.x, field.y, field.type, field.settings]);
+  }, [field.width, field.height, field.x, field.y, field.type, field.settings, getEffectiveDimensions]);
   
   const getResizeCursor = (direction: string) => {
     const cursors: { [key: string]: string } = {
@@ -1390,16 +1455,8 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
     const deltaX = e.clientX - dragStart.x;
     const deltaY = e.clientY - dragStart.y;
     
-    // Calculate effective dimensions based on field type - use the same calculation as in the render function
-    const effectiveWidth = field.type === 'layoutTable' || field.type === 'dataTable' ? 
-      Math.max(field.width || 200, (field.settings?.columns || 3) * 100) : 
-      field.width || 200;
-      
-    const effectiveHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 
-      Math.max(field.height || 40, (field.settings?.rows || 3) * 30) : 
-      field.type === 'textarea' ? 
-        Math.max(field.height || 40, (field.settings?.rows || 3) * 20) : 
-        field.height || 40;
+    // Calculate effective dimensions based on field type
+    const { width: effectiveWidth, height: effectiveHeight } = getEffectiveDimensions();
     
     if (isDragging && onUpdatePosition) {
       // Get the page container element and its dimensions
@@ -1421,16 +1478,72 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
         }
       }
       
-      // Use page dimensions for boundary constraints with proper padding
-      const padding = 24; // Account for page padding (increased for better boundaries)
-      const newX = Math.max(padding, Math.min(
-        pageWidth - effectiveWidth - padding,
-        initialPosition.x + deltaX
-      ));
-      const newY = Math.max(padding, Math.min(
-        pageHeight - effectiveHeight - padding,
-        initialPosition.y + deltaY
-      ));
+      // Calculate desired position without constraints
+      const padding = 24;
+      const desiredX = initialPosition.x + deltaX;
+      const desiredY = initialPosition.y + deltaY;
+      
+      // Enhanced boundary detection for multi-option widgets
+      // Calculate additional space requirements for content-heavy widgets
+      let additionalWidth = 0;
+      let additionalHeight = 0;
+      
+      if (field.type === 'checkbox' || field.type === 'multipleChoice') {
+        const options = field.settings?.options?.length || 1;
+        // Add extra space for checkbox labels and spacing
+        additionalWidth = Math.max(0, options * 15); // Extra width for longer option lists
+        additionalHeight = Math.max(0, (options - 3) * 10); // Extra height for more than 3 options
+      } else if (field.type === 'multiselect') {
+        const options = field.settings?.options?.length || 1;
+        // Add extra space for dropdown expansion
+        additionalHeight = Math.max(0, (options - 5) * 8); // Extra height for more than 5 options
+      } else if (field.type === 'textarea') {
+        const rows = field.settings?.rows || 4;
+        additionalHeight = Math.max(0, (rows - 4) * 5); // Extra height for more than 4 rows
+      }
+      
+      // Check if widget would extend beyond current page boundaries
+      const totalWidth = effectiveWidth + additionalWidth;
+      const totalHeight = effectiveHeight + additionalHeight;
+      const wouldExceedRight = desiredX + totalWidth + padding > pageWidth;
+      const wouldExceedBottom = desiredY + totalHeight + padding > pageHeight;
+      
+      // Calculate required page expansion with intelligent spacing
+      let newPageWidth = pageWidth;
+      let newPageHeight = pageHeight;
+      
+      if (wouldExceedRight) {
+        newPageWidth = Math.max(pageWidth, desiredX + totalWidth + padding * 2);
+      }
+      if (wouldExceedBottom) {
+        newPageHeight = Math.max(pageHeight, desiredY + totalHeight + padding * 2);
+      }
+      
+      // Page expansion disabled - maintain fixed page size
+      // if (newPageWidth > pageWidth || newPageHeight > pageHeight) {
+      //   const pageIndex = parseInt(pageContainer.getAttribute('data-page-index') || '0');
+      //   const expandEvent = new CustomEvent('expandPage', {
+      //     detail: {
+      //       pageIndex,
+      //       newWidth: newPageWidth,
+      //       newHeight: newPageHeight
+      //     }
+      //   });
+      //   window.dispatchEvent(expandEvent);
+      // }
+      
+      // Enhanced drag constraints: enforce hard boundaries within fixed page size
+      const currentPageWidth = pageWidth;
+      const currentPageHeight = pageHeight;
+      
+      // Enforce boundaries to keep widgets within the fixed page size
+      const maxX = Math.max(padding, currentPageWidth - totalWidth - padding);
+      const maxY = Math.max(padding, currentPageHeight - totalHeight - padding);
+      
+      const newX = Math.max(padding, Math.min(maxX, desiredX));
+      const newY = Math.max(padding, Math.min(maxY, desiredY));
+      
+      // Widgets are constrained within page boundaries
       
       // Apply smooth transition and update position immediately for responsive dragging
       wrapperRef.current.style.transition = 'none'; // Disable transition during drag for immediate response
@@ -1445,41 +1558,139 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
       let newX = initialPosition.x;
       let newY = initialPosition.y;
       
-      switch (resizeDirection) {
-        case 'se':
-          newWidth = Math.max(50, initialSize.width + deltaX);
-          newHeight = Math.max(20, initialSize.height + deltaY);
-          break;
-        case 'sw':
-          newWidth = Math.max(50, initialSize.width - deltaX);
-          newHeight = Math.max(20, initialSize.height + deltaY);
-          newX = initialPosition.x + Math.min(deltaX, initialSize.width - 50);
-          break;
-        case 'ne':
-          newWidth = Math.max(50, initialSize.width + deltaX);
-          newHeight = Math.max(20, initialSize.height - deltaY);
-          newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
-          break;
-        case 'nw':
-          newWidth = Math.max(50, initialSize.width - deltaX);
-          newHeight = Math.max(20, initialSize.height - deltaY);
-          newX = initialPosition.x + Math.min(deltaX, initialSize.width - 50);
-          newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
-          break;
-        case 'e':
-          newWidth = Math.max(50, initialSize.width + deltaX);
-          break;
-        case 'w':
-          newWidth = Math.max(50, initialSize.width - deltaX);
-          newX = initialPosition.x + Math.min(deltaX, initialSize.width - 50);
-          break;
-        case 's':
-          newHeight = Math.max(20, initialSize.height + deltaY);
-          break;
-        case 'n':
-          newHeight = Math.max(20, initialSize.height - deltaY);
-          newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
-          break;
+      // Enhanced resize functionality with modifier keys
+      const isShiftPressed = e.shiftKey; // Proportional scaling (maintain aspect ratio)
+      const isCtrlPressed = e.ctrlKey || e.metaKey; // Independent scaling (zoom-like behavior)
+      
+      if (isCtrlPressed) {
+        // Zoom-like behavior: scale from center
+        const scaleFactor = 1 + (deltaX + deltaY) / 200; // Adjust sensitivity
+        const clampedScale = Math.max(0.3, Math.min(3, scaleFactor)); // Limit scale range
+        
+        newWidth = Math.max(50, initialSize.width * clampedScale);
+        newHeight = Math.max(20, initialSize.height * clampedScale);
+        
+        // Adjust position to scale from center
+        const widthDiff = newWidth - initialSize.width;
+        const heightDiff = newHeight - initialSize.height;
+        newX = initialPosition.x - widthDiff / 2;
+        newY = initialPosition.y - heightDiff / 2;
+        
+      } else if (isShiftPressed && ['se', 'sw', 'ne', 'nw'].includes(resizeDirection)) {
+        // Proportional scaling: maintain aspect ratio for corner handles
+        const aspectRatio = initialSize.width / initialSize.height;
+        const avgDelta = (Math.abs(deltaX) + Math.abs(deltaY)) / 2;
+        const direction = (deltaX + deltaY) > 0 ? 1 : -1;
+        
+        switch (resizeDirection) {
+          case 'se':
+            newWidth = Math.max(50, initialSize.width + avgDelta * direction);
+            newHeight = Math.max(20, newWidth / aspectRatio);
+            break;
+          case 'sw':
+            newWidth = Math.max(50, initialSize.width - avgDelta * direction);
+            newHeight = Math.max(20, newWidth / aspectRatio);
+            newX = initialPosition.x + (initialSize.width - newWidth);
+            break;
+          case 'ne':
+            newWidth = Math.max(50, initialSize.width + avgDelta * direction);
+            newHeight = Math.max(20, newWidth / aspectRatio);
+            newY = initialPosition.y + (initialSize.height - newHeight);
+            break;
+          case 'nw':
+            newWidth = Math.max(50, initialSize.width - avgDelta * direction);
+            newHeight = Math.max(20, newWidth / aspectRatio);
+            newX = initialPosition.x + (initialSize.width - newWidth);
+            newY = initialPosition.y + (initialSize.height - newHeight);
+            break;
+        }
+        
+      } else {
+        // Standard resize behavior
+        switch (resizeDirection) {
+          case 'se':
+            newWidth = Math.max(50, initialSize.width + deltaX);
+            newHeight = Math.max(20, initialSize.height + deltaY);
+            break;
+          case 'sw':
+            newWidth = Math.max(50, initialSize.width - deltaX);
+            newHeight = Math.max(20, initialSize.height + deltaY);
+            newX = initialPosition.x + Math.min(deltaX, initialSize.width - 50);
+            break;
+          case 'ne':
+            newWidth = Math.max(50, initialSize.width + deltaX);
+            newHeight = Math.max(20, initialSize.height - deltaY);
+            newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
+            break;
+          case 'nw':
+            newWidth = Math.max(50, initialSize.width - deltaX);
+            newHeight = Math.max(20, initialSize.height - deltaY);
+            newX = initialPosition.x + Math.min(deltaX, initialSize.width - 50);
+            newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
+            break;
+          case 'e':
+            newWidth = Math.max(50, initialSize.width + deltaX);
+            break;
+          case 'w':
+            newWidth = Math.max(50, initialSize.width - deltaX);
+            newX = initialPosition.x + Math.min(deltaX, initialSize.width - 50);
+            break;
+          case 's':
+            newHeight = Math.max(20, initialSize.height + deltaY);
+            break;
+          case 'n':
+            newHeight = Math.max(20, initialSize.height - deltaY);
+            newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
+            break;
+        }
+      }
+      
+      // Check for page expansion during resize with intelligent space calculation
+      const pageContainer = wrapperRef.current.closest('[data-page-container]') as HTMLElement;
+      if (pageContainer) {
+        const computedStyle = window.getComputedStyle(pageContainer);
+        const pageWidth = parseInt(computedStyle.width) || 595;
+        const pageHeight = parseInt(computedStyle.height) || 842;
+        const padding = 24;
+        
+        // Calculate additional space requirements for content-heavy widgets during resize
+        let additionalWidth = 0;
+        let additionalHeight = 0;
+        
+        if (field.type === 'checkbox' || field.type === 'multipleChoice') {
+          const options = field.settings?.options?.length || 1;
+          // Add extra space for checkbox labels and spacing
+          additionalWidth = Math.max(0, options * 15); // Extra width for longer option lists
+          additionalHeight = Math.max(0, (options - 3) * 10); // Extra height for more than 3 options
+        } else if (field.type === 'multiselect') {
+          const options = field.settings?.options?.length || 1;
+          // Add extra space for dropdown expansion
+          additionalHeight = Math.max(0, (options - 5) * 8); // Extra height for more than 5 options
+        } else if (field.type === 'textarea') {
+          const rows = field.settings?.rows || 4;
+          additionalHeight = Math.max(0, (rows - 4) * 5); // Extra height for more than 4 rows
+        }
+        
+        // Check if resized widget would exceed page boundaries with additional space
+        const totalWidth = newWidth + additionalWidth;
+        const totalHeight = newHeight + additionalHeight;
+        const wouldExceedRight = newX + totalWidth + padding > pageWidth;
+        const wouldExceedBottom = newY + totalHeight + padding > pageHeight;
+        
+        // Page expansion disabled - maintain fixed page size
+        // if (wouldExceedRight || wouldExceedBottom) {
+        //   const newPageWidth = wouldExceedRight ? Math.max(pageWidth, newX + totalWidth + padding * 2) : pageWidth;
+        //   const newPageHeight = wouldExceedBottom ? Math.max(pageHeight, newY + totalHeight + padding * 2) : pageHeight;
+        //   const pageIndex = parseInt(pageContainer.getAttribute('data-page-index') || '0');
+        //   const expandEvent = new CustomEvent('expandPage', {
+        //     detail: {
+        //       pageIndex,
+        //       newWidth: newPageWidth,
+        //       newHeight: newPageHeight
+        //     }
+        //   });
+        //   window.dispatchEvent(expandEvent);
+        // }
       }
       
       // Apply changes immediately
@@ -1488,19 +1699,13 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
       wrapperRef.current.style.left = `${newX}px`;
       wrapperRef.current.style.top = `${newY}px`;
     }
-  }, [isDragging, isResizing, dragStart, initialPosition, initialSize, resizeDirection, field.width, field.height, onUpdatePosition]);
+  }, [isDragging, isResizing, dragStart, initialPosition, initialSize, resizeDirection, field.width, field.height, onUpdatePosition, getEffectiveDimensions]);
+  
+
   
   const handleMouseUp = useCallback(() => {
     // Calculate effective dimensions based on field type - use the same calculation as in the render function
-    const effectiveWidth = field.type === 'layoutTable' || field.type === 'dataTable' ? 
-      Math.max(field.width || 200, (field.settings?.columns || 3) * 100) : 
-      field.width || 200;
-      
-    const effectiveHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 
-      Math.max(field.height || 40, (field.settings?.rows || 3) * 30) : 
-      field.type === 'textarea' ? 
-        Math.max(field.height || 40, (field.settings?.rows || 3) * 20) : 
-        field.height || 40;
+    const { width: effectiveWidth, height: effectiveHeight } = getEffectiveDimensions();
     
     if (isDragging && wrapperRef.current && onUpdatePosition) {
       // Calculate the final position based on the current transform
@@ -1572,7 +1777,7 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
     setResizeDirection('');
     document.body.style.cursor = 'default';
     document.body.style.userSelect = 'auto';
-  }, [isDragging, isResizing, fieldId, field.type, field.width, field.height, field.settings, onUpdateSize, onUpdatePosition]);
+  }, [isDragging, isResizing, fieldId, field.type, field.width, field.height, field.settings, onUpdateSize, onUpdatePosition, getEffectiveDimensions]);
   
   useEffect(() => {
     if (isDragging || isResizing) {
@@ -1586,16 +1791,7 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
     }
   }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
   
-  // Calculate effective dimensions based on field type for consistent sizing
-  const effectiveWidth = field.type === 'layoutTable' || field.type === 'dataTable' ? 
-    Math.max(field.width || 200, (field.settings?.columns || 3) * 100) : 
-    field.width || 200;
-    
-  const effectiveHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 
-    Math.max(field.height || 40, (field.settings?.rows || 3) * 30) : 
-    field.type === 'textarea' ? 
-      Math.max(field.height || 40, (field.settings?.rows || 3) * 20) : 
-      field.height || 40;
+  const { width: effectiveWidth, height: effectiveHeight } = getEffectiveDimensions();
 
   return (
     <div 
@@ -1726,6 +1922,14 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
             <RiDragMove2Line className="inline mr-2 text-base" style={{ width: '16px', height: '16px' }} />
             Drag to move
           </div>
+          
+          {/* Resize instructions */}
+          <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-3 py-2 rounded text-xs font-medium pointer-events-none z-30 shadow-lg whitespace-nowrap">
+            <div className="text-center">
+              <div>Hold <span className="font-bold">Shift</span> for proportional resize</div>
+              <div>Hold <span className="font-bold">Ctrl/Cmd</span> for zoom-like scaling</div>
+            </div>
+          </div>
         </>
       )}
     </div>
@@ -1801,6 +2005,95 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       setZoomLevel(prev => Math.max(minZoom, Math.min(maxZoom, prev + delta)));
     }
   }, [minZoom, maxZoom]);
+
+  // Enhanced page expansion with automatic content-based sizing
+  useEffect(() => {
+    const handlePageExpansion = (event: CustomEvent) => {
+      const { pageIndex, newWidth, newHeight } = event.detail;
+      
+      setFormPages(prev => prev.map((page, index) => 
+        index === pageIndex 
+          ? {
+              ...page,
+              dimensions: {
+                ...page.dimensions,
+                width: newWidth,
+                height: newHeight
+              }
+            }
+          : page
+      ));
+    };
+
+    document.addEventListener('expandPage', handlePageExpansion as EventListener);
+    
+    return () => {
+      document.removeEventListener('expandPage', handlePageExpansion as EventListener);
+    };
+  }, [setFormPages]);
+  
+  // Auto-fit page size based on content
+  const autoFitPageToContent = useCallback((pageIndex: number) => {
+    const page = formPages[pageIndex];
+    if (!page || page.fields.length === 0) return;
+    
+    let maxX = 0;
+    let maxY = 0;
+    const padding = 48; // Extra padding around content
+    
+    page.fields.forEach(field => {
+      const x = field.x || 0;
+      const y = field.y || 0;
+      let width = field.width || 200;
+      let height = field.height || 40;
+      
+      // Calculate additional space for content-heavy widgets
+      if (field.type === 'checkbox' || field.type === 'multipleChoice') {
+        const options = field.settings?.options?.length || 1;
+        width += Math.max(0, options * 15);
+        height += Math.max(0, (options - 3) * 10);
+      } else if (field.type === 'multiselect') {
+        const options = field.settings?.options?.length || 1;
+        height += Math.max(0, (options - 5) * 8);
+      } else if (field.type === 'textarea') {
+        const rows = field.settings?.rows || 4;
+        height += Math.max(0, (rows - 4) * 5);
+      } else if (field.type === 'layoutTable' || field.type === 'dataTable') {
+        width = Math.max(width, (field.settings?.columns || 3) * 100);
+        height = Math.max(height, (field.settings?.rows || 3) * 30);
+      }
+      
+      maxX = Math.max(maxX, x + width);
+      maxY = Math.max(maxY, y + height);
+    });
+    
+    const newWidth = Math.max(page.dimensions.width, maxX + padding);
+    const newHeight = Math.max(page.dimensions.height, maxY + padding);
+    
+    // Only update if size needs to increase
+    if (newWidth > page.dimensions.width || newHeight > page.dimensions.height) {
+      setFormPages(prev => prev.map((p, index) => 
+        index === pageIndex 
+          ? {
+              ...p,
+              dimensions: {
+                ...p.dimensions,
+                width: newWidth,
+                height: newHeight
+              }
+            }
+          : p
+      ));
+    }
+  }, [formPages, setFormPages]);
+  
+  // Auto-fit disabled - maintain fixed page size
+  // useEffect(() => {
+  //   const timeoutId = setTimeout(() => {
+  //     autoFitPageToContent(currentPageIndex);
+  //   }, 100);
+  //   return () => clearTimeout(timeoutId);
+  // }, [formPages[currentPageIndex]?.fields, currentPageIndex, autoFitPageToContent]);
 
   // Handle keyboard delete
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -2169,7 +2462,110 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     return fieldBottom > pageHeight - 20; // 20px bottom margin
   };
 
-  // Function to distribute fields across pages with overflow handling
+  // Function to detect and group fields into logical rows
+  const detectFieldRows = (fields: any[]) => {
+    if (fields.length === 0) return [];
+    
+    // Sort fields by Y position first
+    const sortedFields = [...fields].sort((a, b) => (a.y || 0) - (b.y || 0));
+    
+    const rows: any[][] = [];
+    let currentRow: any[] = [];
+    let currentRowY = sortedFields[0].y || 0;
+    const rowTolerance = 20; // Fields within 20px vertically are considered same row
+    
+    sortedFields.forEach((field) => {
+      const fieldY = field.y || 0;
+      const fieldHeight = field.height || 40;
+      
+      // Check if this field belongs to the current row
+      // A field belongs to the same row if its Y position is within tolerance
+      // or if it overlaps vertically with the current row
+      const rowBottom = currentRowY + Math.max(...currentRow.map(f => f.height || 40));
+      const fieldBottom = fieldY + fieldHeight;
+      
+      const isInSameRow = 
+        Math.abs(fieldY - currentRowY) <= rowTolerance || // Same Y level
+        (fieldY < rowBottom && fieldBottom > currentRowY); // Vertical overlap
+      
+      if (currentRow.length === 0 || isInSameRow) {
+        // Add to current row
+        currentRow.push(field);
+        // Update row Y to be the minimum Y of all fields in the row
+        currentRowY = Math.min(currentRowY, fieldY);
+      } else {
+        // Start a new row
+        if (currentRow.length > 0) {
+          // Sort current row by X position before adding
+          currentRow.sort((a, b) => (a.x || 0) - (b.x || 0));
+          rows.push([...currentRow]);
+        }
+        currentRow = [field];
+        currentRowY = fieldY;
+      }
+    });
+    
+    // Add the last row
+    if (currentRow.length > 0) {
+      currentRow.sort((a, b) => (a.x || 0) - (b.x || 0));
+      rows.push(currentRow);
+    }
+    
+    return rows;
+  };
+  
+  // Function to calculate row height including spacing
+  const calculateRowHeight = (row: any[]) => {
+    if (row.length === 0) return 0;
+    const maxHeight = Math.max(...row.map(field => field.height || 40));
+    const verticalSpacing = 15; // Space between rows
+    return maxHeight + verticalSpacing;
+  };
+  
+  // Function to position fields within a row with proper spacing
+  const positionFieldsInRow = (row: any[], startY: number, pageWidth: number) => {
+    if (row.length === 0) return row;
+    
+    const margins = { left: 50, right: 50 };
+    const availableWidth = pageWidth - margins.left - margins.right;
+    const fieldSpacing = 10; // Horizontal spacing between fields
+    
+    // Calculate total width needed for all fields
+    const totalFieldWidth = row.reduce((sum, field) => sum + (field.width || 300), 0);
+    const totalSpacingWidth = (row.length - 1) * fieldSpacing;
+    const totalNeededWidth = totalFieldWidth + totalSpacingWidth;
+    
+    let currentX = margins.left;
+    
+    // If fields don't fit in one row, stack them or adjust positioning
+    if (totalNeededWidth > availableWidth && row.length > 1) {
+      // Try to fit fields by reducing spacing or wrapping to next line
+      const adjustedSpacing = Math.max(5, (availableWidth - totalFieldWidth) / (row.length - 1));
+      
+      return row.map((field, index) => {
+        const positionedField = {
+          ...field,
+          x: currentX,
+          y: startY
+        };
+        currentX += (field.width || 300) + adjustedSpacing;
+        return positionedField;
+      });
+    } else {
+      // Normal positioning with standard spacing
+      return row.map((field, index) => {
+        const positionedField = {
+          ...field,
+          x: currentX,
+          y: startY
+        };
+        currentX += (field.width || 300) + fieldSpacing;
+        return positionedField;
+      });
+    }
+  };
+
+  // Function to distribute fields across pages with intelligent row-based layout
   const distributeFieldsAcrossPages = (fields: any[], pageDimensions: any = {
     width: 595,
     height: 842,
@@ -2178,20 +2574,24 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   }) => {
     const pages: FormPage[] = [];
     let currentPageFields: any[] = [];
-    let currentY = 20; // Start with some padding from the top
+    let currentY = 50; // Start with top margin
     const pageHeight = pageDimensions.height;
-    const verticalSpacing = 15; // Spacing between fields
+    const pageWidth = pageDimensions.width;
+    const bottomMargin = 50;
+    
+    // Detect rows from the input fields
+    const rows = detectFieldRows(fields);
+    
+    console.log('Detected rows:', rows.length, rows);
 
-    // Sort fields by Y position
-    const sortedFields = [...fields].sort((a, b) => (a.y || 0) - (b.y || 0));
+    // Process each row
+    rows.forEach((row, rowIndex) => {
+      const rowHeight = calculateRowHeight(row);
+      const rowBottom = currentY + rowHeight;
 
-    // Process each field
-    sortedFields.forEach((field) => {
-      const fieldHeight = field.height || 40;
-      
-      // Check if this field would overflow the current page
-      if (currentY + fieldHeight + 20 > pageHeight) { // 20px bottom margin
-        // Create a new page with the current fields
+      // Check if row would overflow the page
+      if (rowBottom > pageHeight - bottomMargin) {
+        // Create a new page with current fields
         if (currentPageFields.length > 0) {
           pages.push({
             id: `page_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -2199,19 +2599,26 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             dimensions: { ...pageDimensions }
           });
         }
-
-        // Reset for the new page
+        
+        // Start a new page
         currentPageFields = [];
-        currentY = 20; // Reset Y position for the new page
+        currentY = 50; // Reset Y position for new page with top margin
       }
 
-      // Add the field to the current page with updated Y position
-      const processedField = { ...field };
-      processedField.y = currentY;
-      currentPageFields.push(processedField);
+      // Position all fields in this row
+      const positionedFields = positionFieldsInRow(row, currentY, pageWidth);
       
-      // Update currentY for the next field
-      currentY += fieldHeight + verticalSpacing;
+      // Add all fields from this row to current page
+      positionedFields.forEach(field => {
+        const updatedField = {
+          ...field,
+          pageNumber: pages.length + 1
+        };
+        currentPageFields.push(updatedField);
+      });
+      
+      // Move to next row position
+      currentY += rowHeight;
     });
 
     // Add the last page if it has fields
@@ -2662,7 +3069,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       <tr key={rowIndex} className={field.settings.stripedRows && rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         {row.map((cell: string, colIndex: number) => (
                           <td key={colIndex} className={`${field.settings.showBorders !== false ? 'border border-gray-300' : ''} p-1 text-center text-gray-800`}>
-                            {cell || `Data ${rowIndex + 1},${colIndex + 1}`}
+                            {cell || ''}
                           </td>
                         ))}
                       </tr>
@@ -2672,7 +3079,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       <tr key={rowIndex} className={field.settings.stripedRows && rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         {Array.from({ length: field.settings.columns || 3 }).map((_, colIndex) => (
                           <td key={colIndex} className={`${field.settings.showBorders !== false ? 'border border-gray-300' : ''} p-1 text-center text-gray-500`}>
-                            Data {rowIndex + 1},{colIndex + 1}
+                            
                           </td>
                         ))}
                       </tr>
@@ -2717,7 +3124,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       <tr key={rowIndex} className={field.settings.stripedRows && rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         {row.map((cell: string, colIndex: number) => (
                           <td key={colIndex} className={`${field.settings.showBorders !== false ? 'border border-gray-300' : ''} p-1 text-center text-gray-800`}>
-                            {cell || `Data ${rowIndex + 1},${colIndex + 1}`}
+                            {cell || ''}
                           </td>
                         ))}
                       </tr>
@@ -2727,7 +3134,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       <tr key={rowIndex} className={field.settings.stripedRows && rowIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         {Array.from({ length: field.settings.columns || 3 }).map((_, colIndex) => (
                           <td key={colIndex} className={`${field.settings.showBorders !== false ? 'border border-gray-300' : ''} p-1 text-center text-gray-500`}>
-                            Data {rowIndex + 1},{colIndex + 1}
+                            
                           </td>
                         ))}
                       </tr>
@@ -3736,7 +4143,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                             for (let i = oldRows; i < newRows; i++) {
                               const newRow = [];
                               for (let j = 0; j < columns; j++) {
-                                newRow.push(`Data ${i+1},${j+1}`);
+                                newRow.push('');
                               }
                               newData.push(newRow);
                             }
@@ -3785,9 +4192,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                             
                             for (let j = 0; j < newColumns; j++) {
                               if (j < oldColumns && i < currentData.length) {
-                                newRow.push(currentRow[j] || `Data ${i+1},${j+1}`);
+                                newRow.push(currentRow[j] || '');
                               } else {
-                                newRow.push(`Data ${i+1},${j+1}`);
+                                newRow.push('');
                               }
                             }
                             
@@ -3873,7 +4280,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                           const columns = selectedField.settings.columns || 3;
                           const newRow = [];
                           for (let i = 0; i < columns; i++) {
-                            newRow.push(`Data ${selectedField.settings.data.length + 1},${i+1}`);
+                            newRow.push('');
                           }
                           const newData = [...(selectedField.settings.data || []), newRow];
                           updateFieldSettings(selectedField.id, { 

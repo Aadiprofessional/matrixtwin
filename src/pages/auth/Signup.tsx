@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Turnstile } from '../../components/ui/Turnstile';
+import React, { useState, useEffect, useRef } from 'react';
+import { Turnstile } from '@marsidev/react-turnstile';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
@@ -28,10 +28,16 @@ const Signup: React.FC = () => {
   const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<any>(null);
   
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  
+  // Check if we're in localhost/development environment
+  const isLocalhost = window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1' || 
+                     window.location.hostname === '0.0.0.0';
   
   // Scroll to top when component mounts
   useEffect(() => {
@@ -40,20 +46,25 @@ const Signup: React.FC = () => {
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError('');
+    
+    if (!name || !email || !password || !confirmPassword) {
+      setError('All fields are required');
+      return;
+    }
     
     if (password !== confirmPassword) {
       setError('Passwords do not match');
-      setIsLoading(false);
+      return;
+    }
+
+    // Skip Turnstile validation for localhost
+    if (!isLocalhost && !turnstileToken) {
+      setError('Please complete the Turnstile verification');
       return;
     }
     
-    if (!turnstileToken) {
-      setError('Please complete the CAPTCHA verification');
-      setIsLoading(false);
-      return;
-    }
+    setIsLoading(true);
+    setError('');
     
     try {
       const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/signup', {
@@ -85,10 +96,30 @@ const Signup: React.FC = () => {
         throw new Error(data.message || 'Signup failed');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred during signup');
+      const error = err as Error;
+      console.error('Signup failed with error:', error);
+      setError(error.message);
+      
+      // Reset Turnstile on error (only if not localhost)
+      if (!isLocalhost && turnstileRef.current) {
+        turnstileRef.current.reset();
+        setTurnstileToken(null);
+      }
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  const handleTurnstileSuccess = (token: string) => {
+    setTurnstileToken(token);
+    if (error && token) {
+      setError('');
+    }
+  };
+
+  const handleTurnstileError = () => {
+    setTurnstileToken(null);
+    setError('Turnstile verification failed. Please try again.');
   };
   
   return (
@@ -319,14 +350,39 @@ const Signup: React.FC = () => {
                     </button>
                   </div>
                   
-                  <div className="mt-4">
-                    <Turnstile 
-                      siteKey={process.env.REACT_APP_TURNSTILE_SITE_KEY || "0x4AAAAAABrRlVmhV5uIuLDZ"}
-                      onSuccess={(token) => setTurnstileToken(token)}
-                      options={{ theme: "dark" }}
-                      className="flex justify-center"
-                    />
-                  </div>
+                  {/* Turnstile - Only show in production */}
+                  {!isLocalhost && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }} 
+                      animate={{ opacity: 1, y: 0 }} 
+                      transition={{ delay: 0.65, duration: 0.5 }} 
+                      className="mt-6 flex justify-center"
+                    >
+                      <Turnstile 
+                        ref={turnstileRef} 
+                        siteKey={process.env.REACT_APP_TURNSTILE_SITE_KEY || "0x4AAAAAABrRlVmhV5uIuLDZ"}
+                        onSuccess={handleTurnstileSuccess} 
+                        onError={handleTurnstileError} 
+                        options={{ 
+                          theme: 'dark' 
+                        }} 
+                      />
+                    </motion.div>
+                  )}
+                  
+                  {/* Development notice for localhost */}
+                  {isLocalhost && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }} 
+                      animate={{ opacity: 1, y: 0 }} 
+                      transition={{ delay: 0.65, duration: 0.5 }} 
+                      className="mt-6 flex justify-center"
+                    >
+                      <div className="text-sm text-yellow-400 bg-yellow-900/20 px-3 py-2 rounded-lg border border-yellow-500/30">
+                        Development Mode: Turnstile bypassed for localhost
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
                 
                 {error && (
