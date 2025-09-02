@@ -22,7 +22,7 @@ import { useAIChat } from '../contexts/AIChatContext';
 import { Button } from '../components/ui/Button';
 
 // Define API URL - adjust the port depending on your actual server setup
-const API_URL = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions';
+const API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 
 // Define speech recognition interface for TypeScript
 interface IWindow extends Window {
@@ -345,19 +345,17 @@ const VoiceCallPage: React.FC = () => {
       
       // Prepare the request data for Alibaba Cloud Dashscope API
       const requestData = {
-        model: "qwen-vl-max-latest",
+        model: "qwen-plus",
         messages: [
           {
+            role: "system",
+            content: "You are a helpful assistant."
+          },
+          {
             role: "user",
-            content: [
-              {
-                type: "text",
-                text: `${transcript} (Please respond in English as Matrix AI construction assistant)`
-              }
-            ]
+            content: `${transcript} (Please respond in English as Matrix AI construction assistant)`
           }
         ],
-        application_id: "baa26cf5fca64039b42cd0317a6eef00",
         stream: false
       };
       
@@ -365,7 +363,7 @@ const VoiceCallPage: React.FC = () => {
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer sk-9ea2cfb0ba3c46d9b4c38049a9b64cdb',
+          'Authorization': 'Bearer sk-9f7b91a0bb81406b9da7ff884ddd2592',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestData)
@@ -628,4 +626,4 @@ const VoiceCallPage: React.FC = () => {
   );
 };
 
-export default VoiceCallPage; 
+export default VoiceCallPage;

@@ -316,6 +316,22 @@ const Login: React.FC = () => {
           </video>
         </div>
         
+        {/* Logo and branding at top left */}
+        <div className="absolute top-8 left-8 z-20 flex items-center">
+          <div className="w-16 h-16 mr-4">
+            <img src={MatrixAILogo} alt="MatrixAI Logo" className="w-full h-full object-contain" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-ai-blue">MatrixTwin</h1>
+            <p className="text-sm text-gray-300">Intelligent Construction Management</p>
+          </div>
+        </div>
+        
+        {/* Company footer at bottom right */}
+        <div className="absolute bottom-4 right-8 z-20 text-right">
+          <p className="text-gray-400 text-sm">Powered by: MatrixAI Company Ltd</p>
+        </div>
+        
         {/* Content */}
         <div className="relative z-10 w-full max-w-md mx-auto p-6">
           <motion.div
@@ -323,7 +339,7 @@ const Login: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <Card className="backdrop-blur-md bg-white/10 border-white/20 shadow-2xl">
+            <Card variant="ai-dark" className="p-6 border border-ai-blue/20 shadow-ai-glow bg-dark-950/40 backdrop-blur-sm">
               <div className="p-8">
                 <div className="text-center mb-8">
                   <img src={MatrixAILogo} alt="MatrixAI Logo" className="h-16 mx-auto mb-4" />
@@ -393,6 +409,22 @@ const Login: React.FC = () => {
         </video>
       </div>
       
+      {/* Logo and branding at top left */}
+      <div className="absolute top-8 left-8 z-20 flex items-center">
+        <div className="w-16 h-16 mr-4">
+          <img src={MatrixAILogo} alt="MatrixAI Logo" className="w-full h-full object-contain" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-ai-blue">MatrixTwin</h1>
+          <p className="text-sm text-gray-300">Intelligent Construction Management</p>
+        </div>
+      </div>
+      
+      {/* Company footer at bottom right */}
+      <div className="absolute bottom-4 right-8 z-20 text-right">
+        <p className="text-gray-400 text-sm">Powered by: MatrixAI Company Ltd</p>
+      </div>
+      
       {/* Top Controls */}
       <div className="absolute top-4 right-4 z-20 flex items-center gap-3">
         <button
@@ -418,7 +450,7 @@ const Login: React.FC = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <Card className="backdrop-blur-md bg-white/10 border-white/20 shadow-2xl">
+          <Card variant="ai-dark" className="p-6 border border-ai-blue/20 shadow-ai-glow bg-dark-950/40 backdrop-blur-sm">
             <div className="p-8">
               <div className="text-center mb-8">
                 <img src={MatrixAILogo} alt="MatrixAI Logo" className="h-16 mx-auto mb-4" />

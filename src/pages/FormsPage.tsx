@@ -68,6 +68,37 @@ interface FormField {
   x?: number;
   y?: number;
   zIndex?: number;
+  gridRow?: number;
+  gridCol?: number;
+}
+
+// Grid system constants
+const GRID_CONSTANTS = {
+  ROWS: 9,
+  COLS: 2,
+  WIDGET_WIDTH_PERCENT: 45, // 45% of page width
+  MAX_WIDGETS_PER_ROW: 2,
+  GRID_GAP: 10 // Gap between grid cells in pixels
+} as const;
+
+// Grid cell interface
+interface GridCell {
+  row: number;
+  col: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  occupied: boolean;
+  fieldId?: string;
+}
+
+// Grid layout interface
+interface GridLayout {
+  cells: GridCell[][];
+  rowHeights: number[];
+  pageWidth: number;
+  pageHeight: number;
 }
 
 interface FormPage {
@@ -80,6 +111,125 @@ interface FormPage {
     size: 'A4' | 'A3' | 'A5';
   };
 }
+
+// Grid system utility functions
+const calculateGridLayout = (pageWidth: number, pageHeight: number, fields: FormField[]): GridLayout => {
+  const cellWidth = (pageWidth * GRID_CONSTANTS.WIDGET_WIDTH_PERCENT) / 100;
+  const availableHeight = pageHeight - (GRID_CONSTANTS.GRID_GAP * (GRID_CONSTANTS.ROWS + 1));
+  const baseCellHeight = availableHeight / GRID_CONSTANTS.ROWS;
+  
+  // Initialize grid cells
+  const cells: GridCell[][] = [];
+  const rowHeights: number[] = new Array(GRID_CONSTANTS.ROWS).fill(baseCellHeight);
+  
+  for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
+    cells[row] = [];
+    for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
+      const x = col === 0 ? GRID_CONSTANTS.GRID_GAP : pageWidth - cellWidth - GRID_CONSTANTS.GRID_GAP;
+      const y = GRID_CONSTANTS.GRID_GAP + (row * (baseCellHeight + GRID_CONSTANTS.GRID_GAP));
+      
+      cells[row][col] = {
+        row,
+        col,
+        x,
+        y,
+        width: cellWidth,
+        height: baseCellHeight,
+        occupied: false
+      };
+    }
+  }
+  
+  // Mark occupied cells and calculate row heights based on widgets
+  const rowMaxHeights: number[] = new Array(GRID_CONSTANTS.ROWS).fill(baseCellHeight);
+  
+  fields.forEach(field => {
+    let row: number, col: number;
+    
+    if (field.gridRow !== undefined && field.gridCol !== undefined) {
+      // Use existing grid coordinates
+      row = field.gridRow;
+      col = field.gridCol;
+    } else if (field.x !== undefined && field.y !== undefined) {
+      // Calculate grid position from x/y coordinates for fields without grid coordinates
+      const fieldCenterX = field.x + (field.width || cellWidth) / 2;
+      const fieldCenterY = field.y + (field.height || baseCellHeight) / 2;
+      
+      // Determine which column based on x position
+      col = fieldCenterX < pageWidth / 2 ? 0 : 1;
+      
+      // Determine which row based on y position
+      row = Math.floor((fieldCenterY - GRID_CONSTANTS.GRID_GAP) / (baseCellHeight + GRID_CONSTANTS.GRID_GAP));
+      row = Math.max(0, Math.min(row, GRID_CONSTANTS.ROWS - 1));
+    } else {
+      // Skip fields without position information
+      return;
+    }
+    
+    if (row >= 0 && row < GRID_CONSTANTS.ROWS && col >= 0 && col < GRID_CONSTANTS.COLS) {
+      cells[row][col].occupied = true;
+      cells[row][col].fieldId = field.id;
+      
+      // Update row height based on widget height
+      const widgetHeight = field.height || baseCellHeight;
+      rowMaxHeights[row] = Math.max(rowMaxHeights[row], widgetHeight);
+    }
+  });
+  
+  // Update cell heights and positions based on calculated row heights
+  let currentY = GRID_CONSTANTS.GRID_GAP;
+  for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
+    rowHeights[row] = rowMaxHeights[row];
+    
+    for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
+      cells[row][col].y = currentY;
+      cells[row][col].height = rowHeights[row];
+    }
+    
+    currentY += rowHeights[row] + GRID_CONSTANTS.GRID_GAP;
+  }
+  
+  return {
+    cells,
+    rowHeights,
+    pageWidth,
+    pageHeight
+  };
+};
+
+const findAvailableGridCell = (gridLayout: GridLayout): { row: number; col: number } | null => {
+  for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
+    for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
+      if (!gridLayout.cells[row][col].occupied) {
+        return { row, col };
+      }
+    }
+  }
+  return null;
+};
+
+const getGridCellFromPosition = (x: number, y: number, gridLayout: GridLayout): { row: number; col: number } | null => {
+  for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
+    for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
+      const cell = gridLayout.cells[row][col];
+      if (x >= cell.x && x <= cell.x + cell.width && 
+          y >= cell.y && y <= cell.y + cell.height) {
+        return { row, col };
+      }
+    }
+  }
+  return null;
+};
+
+const snapToGridCell = (row: number, col: number, gridLayout: GridLayout): { x: number; y: number; width: number; height: number } => {
+  const cell = gridLayout.cells[row][col];
+  return {
+    x: cell.x,
+    y: cell.y,
+    width: cell.width,
+    height: cell.height
+  };
+};
 
 // Calculate field accuracy based on dimensions, positioning, and typography
 const calculateFieldAccuracy = (field: any): number => {
@@ -191,6 +341,351 @@ const validateFieldDimensions = (field: any, documentAnalysis: any): { isValid: 
   };
 };
 
+// Grid-based widget auto-arrangement algorithm
+// Returns JSON format as specified in requirements
+const autoArrangeWidgetsGrid = (widgets: any[], pageWidth: number, pageHeight: number, gridGap: number = 1): any[] => {
+  if (!widgets || widgets.length === 0) return [];
+  
+  // Convert pixel dimensions to grid units (assuming 1 grid unit = ~50px)
+  const gridUnitSize = 50;
+  const gridWidth = Math.floor(pageWidth / gridUnitSize);
+  const gridHeight = Math.floor(pageHeight / gridUnitSize);
+  
+  // Create a 2D grid to track occupied spaces
+  const grid: boolean[][] = Array(gridHeight).fill(null).map(() => Array(gridWidth).fill(false));
+  
+  // Check if a widget can be placed at given grid position
+  const canPlaceWidget = (x: number, y: number, width: number, height: number): boolean => {
+    if (x < 0 || y < 0 || x + width > gridWidth || y + height > gridHeight) {
+      return false;
+    }
+    
+    for (let row = y; row < y + height; row++) {
+      for (let col = x; col < x + width; col++) {
+        if (grid[row][col]) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+  
+  // Mark grid cells as occupied
+  const markOccupied = (x: number, y: number, width: number, height: number): void => {
+    for (let row = y; row < y + height; row++) {
+      for (let col = x; col < x + width; col++) {
+        if (row >= 0 && row < gridHeight && col >= 0 && col < gridWidth) {
+          grid[row][col] = true;
+        }
+      }
+    }
+  };
+  
+  // Find next available position for a widget
+  const findNextPosition = (width: number, height: number): { x: number; y: number } | null => {
+    for (let y = 0; y <= gridHeight - height; y++) {
+      for (let x = 0; x <= gridWidth - width; x++) {
+        if (canPlaceWidget(x, y, width, height)) {
+          return { x, y };
+        }
+      }
+    }
+    return null;
+  };
+  
+  // Sort widgets by area (largest first) for better packing
+  const sortedWidgets = [...widgets].sort((a, b) => {
+    const areaA = (a.width || 2) * (a.height || 1);
+    const areaB = (b.width || 2) * (b.height || 1);
+    return areaB - areaA;
+  });
+  
+  const arrangedWidgets: any[] = [];
+  
+  sortedWidgets.forEach((widget, index) => {
+    // Ensure widget has valid dimensions
+    const widgetWidth = Math.max(1, Math.min(widget.width || 2, gridWidth));
+    const widgetHeight = Math.max(1, Math.min(widget.height || 1, gridHeight));
+    
+    // Find position for this widget
+    const position = findNextPosition(widgetWidth, widgetHeight);
+    
+    if (position) {
+      // Mark the area as occupied
+      markOccupied(position.x, position.y, widgetWidth, widgetHeight);
+      
+      // Add arranged widget to result
+      arrangedWidgets.push({
+        type: widget.type || 'text input',
+        x: position.x,
+        y: position.y,
+        width: widgetWidth,
+        height: widgetHeight,
+        id: widget.id || `widget-${index}`,
+        label: widget.label || widget.type || 'Widget'
+      });
+    } else {
+      // If no space available, try to resize and place
+      let placed = false;
+      for (let newHeight = Math.max(1, widgetHeight - 1); newHeight >= 1 && !placed; newHeight--) {
+        for (let newWidth = Math.max(1, widgetWidth - 1); newWidth >= 1 && !placed; newWidth--) {
+          const resizedPosition = findNextPosition(newWidth, newHeight);
+          if (resizedPosition) {
+            markOccupied(resizedPosition.x, resizedPosition.y, newWidth, newHeight);
+            arrangedWidgets.push({
+              type: widget.type || 'text input',
+              x: resizedPosition.x,
+              y: resizedPosition.y,
+              width: newWidth,
+              height: newHeight,
+              id: widget.id || `widget-${index}`,
+              label: widget.label || widget.type || 'Widget'
+            });
+            placed = true;
+          }
+        }
+      }
+      
+      // If still can't place, add to overflow (could be handled by creating new page)
+      if (!placed) {
+        console.warn(`Widget ${widget.type} could not be placed on page`);
+      }
+    }
+  });
+  
+  return arrangedWidgets;
+};
+
+// Example usage of the grid-based auto-arrangement algorithm
+// This demonstrates the solution to the user's requirements
+/*
+Example Input:
+const exampleWidgets = [
+  {"type": "text input", "width": 2, "height": 1},
+  {"type": "dropdown", "width": 2, "height": 1},
+  {"type": "checkbox", "width": 1, "height": 1},
+  {"type": "image", "width": 3, "height": 2}
+];
+
+const pageWidth = 6; // grid units
+const pageHeight = 10; // grid units
+const gridGap = 1;
+
+// Auto-arrange the widgets
+const arrangedWidgets = autoArrangeWidgetsGrid(exampleWidgets, pageWidth * 50, pageHeight * 50, gridGap);
+
+// Generate visualization
+const diagram = generateLayoutDiagram(arrangedWidgets, pageWidth * 50, pageHeight * 50);
+
+Example Output JSON:
+[
+  {"type": "image", "x": 0, "y": 0, "width": 3, "height": 2, "id": "widget-0", "label": "image"},
+  {"type": "text input", "x": 3, "y": 0, "width": 2, "height": 1, "id": "widget-1", "label": "text input"},
+  {"type": "dropdown", "x": 3, "y": 1, "width": 2, "height": 1, "id": "widget-2", "label": "dropdown"},
+  {"type": "checkbox", "x": 0, "y": 2, "width": 1, "height": 1, "id": "widget-3", "label": "checkbox"}
+]
+
+Example ASCII Diagram:
+Layout Diagram (6x10 grid):
+  0123456
+0 IIITT
+1 IIIDD
+2 C.....
+3 ......
+4 ......
+5 ......
+6 ......
+7 ......
+8 ......
+9 ......
+
+Legend:
+I = image
+T = text input
+D = dropdown
+C = checkbox
+. = empty space
+*/
+
+// Generate ASCII diagram for visualization
+const generateLayoutDiagram = (widgets: any[], pageWidth: number, pageHeight: number): string => {
+  const gridUnitSize = 50;
+  const gridWidth = Math.floor(pageWidth / gridUnitSize);
+  const gridHeight = Math.floor(pageHeight / gridUnitSize);
+  
+  // Create ASCII grid
+  const grid: string[][] = Array(gridHeight).fill(null).map(() => Array(gridWidth).fill('.'));
+  
+  // Map widget types to single characters
+  const typeMap: { [key: string]: string } = {
+    'text input': 'T',
+    'dropdown': 'D',
+    'checkbox': 'C',
+    'image': 'I',
+    'textarea': 'A',
+    'table': '#',
+    'button': 'B',
+    'select': 'S'
+  };
+  
+  // Place widgets on grid
+  widgets.forEach((widget, index) => {
+    const char = typeMap[widget.type] || (index + 1).toString().slice(-1);
+    
+    for (let y = widget.y; y < widget.y + widget.height && y < gridHeight; y++) {
+      for (let x = widget.x; x < widget.x + widget.width && x < gridWidth; x++) {
+        if (y >= 0 && x >= 0) {
+          grid[y][x] = char;
+        }
+      }
+    }
+  });
+  
+  // Convert to string
+  let diagram = `Layout Diagram (${gridWidth}x${gridHeight} grid):\n`;
+  diagram += '  ' + Array.from({length: gridWidth}, (_, i) => (i % 10).toString()).join('') + '\n';
+  
+  grid.forEach((row, y) => {
+    diagram += (y % 10).toString().padStart(2) + row.join('') + '\n';
+  });
+  
+  diagram += '\nLegend:\n';
+  Object.entries(typeMap).forEach(([type, char]) => {
+    diagram += `${char} = ${type}\n`;
+  });
+  diagram += '. = empty space\n';
+  
+  return diagram;
+};
+
+// Auto-arrange fields to prevent overlaps and ensure proper layout
+const autoArrangeFields = (fields: any[], documentAnalysis: any): any[] => {
+  if (!fields || fields.length === 0) return fields;
+  
+  // Get page dimensions and margins
+  const pageWidth = documentAnalysis?.pageWidth || 595;
+  const pageHeight = documentAnalysis?.pageHeight || 842;
+  const margins = documentAnalysis?.margins || { top: 50, bottom: 50, left: 50, right: 50 };
+  const gridGap = 10; // Minimum spacing between fields
+  
+  // Calculate available space
+  const availableWidth = pageWidth - margins.left - margins.right;
+  const availableHeight = pageHeight - margins.top - margins.bottom;
+  
+  // Group fields by page number
+  const fieldsByPage: { [key: number]: any[] } = {};
+  fields.forEach(field => {
+    const pageNum = field.pageNumber || 1;
+    if (!fieldsByPage[pageNum]) {
+      fieldsByPage[pageNum] = [];
+    }
+    fieldsByPage[pageNum].push({ ...field });
+  });
+  
+  const arrangedFields: any[] = [];
+  
+  // Process each page separately
+  Object.keys(fieldsByPage).forEach(pageNumStr => {
+    const pageNum = parseInt(pageNumStr);
+    const pageFields = fieldsByPage[pageNum];
+    
+    // Sort fields by original y position to maintain reading order
+    pageFields.sort((a, b) => (a.y || 0) - (b.y || 0));
+    
+    // Track occupied areas to prevent overlaps
+    const occupiedAreas: Array<{ x: number; y: number; width: number; height: number; fieldId: string }> = [];
+    
+    // Check if a position is available
+    const isPositionAvailable = (x: number, y: number, width: number, height: number, excludeFieldId?: string): boolean => {
+      // Check boundaries
+      if (x < margins.left || y < margins.top || 
+          x + width > pageWidth - margins.right || 
+          y + height > pageHeight - margins.bottom) {
+        return false;
+      }
+      
+      // Check overlaps with existing fields
+      return !occupiedAreas.some(area => {
+        if (excludeFieldId && area.fieldId === excludeFieldId) return false;
+        
+        return !(
+          x + width + gridGap <= area.x ||
+          area.x + area.width + gridGap <= x ||
+          y + height + gridGap <= area.y ||
+          area.y + area.height + gridGap <= y
+        );
+      });
+    };
+    
+    // Find next available position
+    const findNextAvailablePosition = (preferredX: number, preferredY: number, width: number, height: number): { x: number; y: number } => {
+      // Try preferred position first
+      if (isPositionAvailable(preferredX, preferredY, width, height)) {
+        return { x: preferredX, y: preferredY };
+      }
+      
+      // Search in a grid pattern starting from preferred position
+      const stepSize = 20;
+      let currentY = Math.max(margins.top, preferredY);
+      
+      while (currentY + height <= pageHeight - margins.bottom) {
+        let currentX = margins.left;
+        
+        while (currentX + width <= pageWidth - margins.right) {
+          if (isPositionAvailable(currentX, currentY, width, height)) {
+            return { x: currentX, y: currentY };
+          }
+          currentX += stepSize;
+        }
+        
+        currentY += stepSize;
+      }
+      
+      // If no position found, place at bottom with minimal overlap
+      const lastOccupiedY = Math.max(...occupiedAreas.map(area => area.y + area.height), margins.top);
+      return {
+        x: margins.left,
+        y: Math.min(lastOccupiedY + gridGap, pageHeight - margins.bottom - height)
+      };
+    };
+    
+    // Arrange fields on this page
+    pageFields.forEach(field => {
+      // Ensure field has valid dimensions
+      const fieldWidth = Math.max(50, Math.min(field.width || 200, availableWidth));
+      const fieldHeight = Math.max(20, Math.min(field.height || 40, availableHeight));
+      
+      // Find best position for this field
+      const originalX = field.x || margins.left;
+      const originalY = field.y || margins.top;
+      
+      const newPosition = findNextAvailablePosition(originalX, originalY, fieldWidth, fieldHeight);
+      
+      // Update field position and dimensions
+      const arrangedField = {
+        ...field,
+        x: newPosition.x,
+        y: newPosition.y,
+        width: fieldWidth,
+        height: fieldHeight
+      };
+      
+      // Add to occupied areas
+      occupiedAreas.push({
+        x: newPosition.x,
+        y: newPosition.y,
+        width: fieldWidth,
+        height: fieldHeight,
+        fieldId: field.id
+      });
+      
+      arrangedFields.push(arrangedField);
+    });
+  });
+  
+  return arrangedFields;
+};
+
 // Validate entire form structure and field relationships
 const validateFormStructure = (fields: any[], documentAnalysis: any): { validationReport: any; adjustedFields: any[] } => {
   const validationReport = {
@@ -276,6 +771,9 @@ interface ResizableWrapperProps {
   field: FormField;
   isSelected: boolean;
   onSelect: () => void;
+  currentFields: FormField[];
+  pageWidth: number;
+  pageHeight: number;
 }
 
 interface AIFormGeneratorProps {
@@ -332,6 +830,7 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
   const [generatedForm, setGeneratedForm] = useState<any>(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [processingPdf, setProcessingPdf] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -343,6 +842,125 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
     }
   };
 
+  // Helper function to convert LaTeX to form fields
+  const convertLatexToFormFields = async (latexCode: string): Promise<FormField[]> => {
+    const fields: FormField[] = [];
+    let yPosition = 50;
+    let fieldCounter = 0;
+
+    // Simple LaTeX parsing to extract form elements
+    const lines = latexCode.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Extract text labels
+      if (line.includes('\\textbf{') || line.includes('\\large') || line.includes('\\section{')) {
+        const labelMatch = line.match(/\{([^}]+)\}/);
+        if (labelMatch) {
+          const label = labelMatch[1];
+          fields.push({
+            id: `label-${fieldCounter++}`,
+            type: 'text',
+            label: label,
+            x: 50,
+            y: yPosition,
+            width: 300,
+            height: 30,
+            settings: {
+              hideTitle: true,
+              required: false,
+              placeholder: '',
+              readonly: true
+            }
+          });
+          yPosition += 40;
+        }
+      }
+      
+      // Extract text input fields
+      if (line.includes('\\underline{\\hspace{') || line.includes('\\framebox[')) {
+        const widthMatch = line.match(/\{(\d+)cm\}/) || line.match(/\[(\d+)cm\]/);
+        const width = widthMatch ? parseInt(widthMatch[1]) * 28 : 200; // Convert cm to pixels
+        
+        fields.push({
+          id: `input-${fieldCounter++}`,
+          type: 'text',
+          label: 'Input Field',
+          x: 50,
+          y: yPosition,
+          width: Math.max(width, 150),
+          height: 35,
+          settings: {
+            hideTitle: false,
+            required: false,
+            placeholder: 'Enter text...'
+          }
+        });
+        yPosition += 50;
+      }
+      
+      // Extract checkboxes
+      if (line.includes('$\\square$') || line.includes('\\checkbox')) {
+        const labelMatch = line.match(/\$\\square\$\s*(.+)/) || line.match(/\\checkbox\s*(.+)/);
+        const label = labelMatch ? labelMatch[1].trim() : 'Checkbox';
+        
+        fields.push({
+          id: `checkbox-${fieldCounter++}`,
+          type: 'checkbox',
+          label: label,
+          x: 50,
+          y: yPosition,
+          width: 200,
+          height: 30,
+          settings: {
+            hideTitle: false,
+            required: false,
+            options: [label]
+          }
+        });
+        yPosition += 40;
+      }
+      
+      // Extract tables
+      if (line.includes('\\begin{tabular}') || line.includes('\\begin{longtable}')) {
+        const tableLines = [];
+        let j = i + 1;
+        while (j < lines.length && !lines[j].includes('\\end{tabular}') && !lines[j].includes('\\end{longtable}')) {
+          tableLines.push(lines[j]);
+          j++;
+        }
+        
+        // Parse table structure
+        const rows = tableLines.filter(line => line.includes('&') || line.includes('\\\\'));
+        const numRows = Math.max(rows.length, 3);
+        const numCols = Math.max(rows[0]?.split('&').length || 3, 3);
+        
+        fields.push({
+          id: `table-${fieldCounter++}`,
+          type: 'layoutTable',
+          label: 'Table',
+          x: 50,
+          y: yPosition,
+          width: Math.min(numCols * 100, 500),
+          height: Math.min(numRows * 35, 300),
+          settings: {
+            hideTitle: false,
+            required: false,
+            rows: numRows,
+            columns: numCols,
+            showHeader: true,
+            showBorders: true
+          }
+        });
+        yPosition += Math.min(numRows * 35, 300) + 20;
+        i = j; // Skip processed table lines
+      }
+    }
+    
+    return fields;
+  };
+
   const generateFormFromImage = async () => {
     if (!selectedFile) return;
 
@@ -351,7 +969,6 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
 
     try {
       let imagesToProcess: string[] = [];
-      let globalDocumentAnalysis: any = {};
       
       if (selectedFile.type === 'application/pdf') {
         setProcessingPdf(true);
@@ -373,14 +990,14 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
         setGenerationProgress(30);
       }
 
-      // Process each image with AI
-      const allFields: any[] = [];
-      let formName = "";
-      let formDescription = "";
+      // Process each image with AI to generate fieldPairs
+      let allFieldsData: any[] = [];
+      let formName = '';
+      let formDescription = '';
       
       for (let i = 0; i < imagesToProcess.length; i++) {
         const image = imagesToProcess[i];
-        setGenerationProgress(30 + (i / imagesToProcess.length) * 40);
+        setGenerationProgress(30 + (i / imagesToProcess.length) * 50);
         
         const messages = [
           {
@@ -388,142 +1005,49 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
             content: [
               {
                 type: "text",
-                text: `You are an expert document analysis AI with MS Word-level precision. Analyze this form image (page ${i + 1} of ${imagesToProcess.length}) and extract ALL form fields with PIXEL-PERFECT accuracy. Return a JSON structure with the following format:
+                text: `You are an expert form analysis AI. Analyze this form image and identify all form fields, then organize them into PAIRS for optimal layout.
+
+IMPORTANT: Group related fields into pairs that can be placed side-by-side (like "First Name" + "Last Name", "Date" + "Time", "Address" + "City", etc.). If there's an odd number of fields, the last field can be alone.
+
+Respond with ONLY a JSON object in this exact format:
 
 {
   "formName": "Descriptive form name",
-  "formDescription": "Brief description of the form purpose",
-  "documentAnalysis": {
-    "pageWidth": 595,
-    "pageHeight": 842,
-    "margins": {"top": 50, "right": 50, "bottom": 50, "left": 50},
-    "detectedFontSizes": ["12px", "14px", "16px"],
-    "primaryFontSize": "12px",
-    "lineSpacing": 1.2,
-    "orientation": "portrait"
-  },
-  "fields": [
+  "formDescription": "Brief description",
+  "fieldPairs": [
     {
-      "id": "unique_field_id",
-      "type": "field_type",
-      "label": "Field Label",
-      "x": 50,
-      "y": 100,
-      "width": 300,
-      "height": 40,
-      "pageNumber": ${i + 1},
-      "typography": {
-        "fontSize": "12px",
-        "fontWeight": "normal",
-        "textAlign": "left",
-        "lineHeight": 1.2,
-        "letterSpacing": "normal"
-      },
-      "spacing": {
-        "marginTop": 5,
-        "marginBottom": 5,
-        "marginLeft": 0,
-        "marginRight": 0,
-        "paddingTop": 8,
-        "paddingBottom": 8,
-        "paddingLeft": 12,
-        "paddingRight": 12
-      },
-      "border": {
-        "width": 1,
-        "style": "solid",
-        "color": "#cccccc",
-        "radius": 4
-      },
-      "settings": {
-        "required": false,
-        "placeholder": "Enter text...",
-        "hideTitle": false,
-        "titleLayout": "horizontal",
-        // For select/checkbox/multipleChoice fields:
-        "options": ["Option 1", "Option 2", "Option 3"],
-        // For table fields:
-        "rows": 3,
-        "columns": 4,
-        "headers": ["Header 1", "Header 2", "Header 3", "Header 4"],
-        "data": [
-          ["Cell 1,1", "Cell 1,2", "Cell 1,3", "Cell 1,4"],
-          ["Cell 2,1", "Cell 2,2", "Cell 2,3", "Cell 2,4"]
-        ],
-        "showHeader": true,
-        "showBorders": true,
-        "stripedRows": true,
-        "resizableColumns": false,
-        "cellPadding": 8,
-        "headerHeight": 35,
-        "rowHeight": 30,
-        "columnWidths": [75, 75, 75, 75],
-        // For number fields:
-        "min": 0,
-        "max": 100,
-        "step": 1,
-        "numberFormat": "integer",
-        // For text fields:
-        "inputType": "text",
-        "maxLength": 255,
-        "pattern": "",
-        // For date fields:
-        "dateFormat": "YYYY-MM-DD",
-        "includeTime": false,
-        // For file fields:
-        "maxSize": "10MB",
-        "allowedTypes": ["image/*", "application/pdf"]
-      }
+      "pairId": "pair_1",
+      "fields": [
+        {
+          "type": "text",
+          "label": "Field Label 1",
+          "settings": {
+            "required": false,
+            "placeholder": "Enter text...",
+            "hideTitle": false
+          }
+        },
+        {
+          "type": "text", 
+          "label": "Field Label 2",
+          "settings": {
+            "required": false,
+            "placeholder": "Enter text...",
+            "hideTitle": false
+          }
+        }
+      ]
     }
   ]
 }
 
-Field types to use:
-- "text": Single line text input
-- "textarea": Multi-line text input
-- "number": Numeric input
-- "date": Date picker
-- "select": Dropdown selection
-- "checkbox": Multiple selection checkboxes
-- "multipleChoice": Single selection radio buttons
-- "image": Image upload
-- "attachment": File upload
-- "signature": Digital signature
-- "layoutTable": Simple table layout
-- "dataTable": Data table with headers
-- "intervalData": Time interval data collection
-- "annotation": Text annotation/notes
-- "subform": Nested form component
-- "member": User/department selection
-- "approvalKit": Approval workflow
+Supported field types: text, email, number, date, time, select, checkbox, multipleChoice, textarea, file, signature, layoutTable
 
-CRITICAL ANALYSIS REQUIREMENTS:
-1. **FONT SIZE DETECTION**: Measure and report the exact font size for each text element. Common sizes: 8px, 9px, 10px, 11px, 12px, 14px, 16px, 18px, 20px, 24px.
-2. **PIXEL-PERFECT POSITIONING**: Measure exact x, y coordinates relative to A4 page dimensions (595x842px portrait, 842x595px landscape). Use precise measurements, not estimates.
-3. **ACCURATE DIMENSIONS**: Calculate exact width and height for each field based on visual boundaries, text content, and spacing.
-4. **TABLE PRECISION**: For tables, measure individual cell dimensions, row heights, column widths, and extract exact text content. Calculate total table dimensions accurately.
-5. **SPACING ANALYSIS**: Detect margins, padding, line spacing, and letter spacing. Measure gaps between elements.
-6. **BORDER DETECTION**: Identify border styles, widths, colors, and corner radius for each field.
-7. **TYPOGRAPHY ANALYSIS**: Detect font weight (normal, bold), text alignment (left, center, right), and line height.
-8. **LAYOUT STRUCTURE**: Analyze document margins, detect grid patterns, alignment guides, and spacing consistency.
-9. **CONTENT EXTRACTION**: Extract exact text content, including special characters, numbers, and formatting.
-10. **FIELD RELATIONSHIPS**: Identify grouped fields, form sections, and hierarchical structures.
+For select/checkbox/multipleChoice fields, add "options": ["Option 1", "Option 2"] in settings.
+For textarea fields, add "rows": 3 in settings.
+For file fields, add "allowedTypes": ["image/*"] and "maxSize": "10MB" in settings.
 
-DIMENSION CALCULATION RULES:
-- Text fields: Width = content width + padding + borders, Height = font size + padding + borders
-- Tables: Width = sum of column widths + borders, Height = (row count × row height) + header height + borders
-- Textareas: Calculate based on visible lines and character width
-- Checkboxes/Radio: Standard 16px × 16px with label spacing
-- Signatures: Minimum 200px × 80px based on signature area
-
-QUALITY STANDARDS:
-- Positioning accuracy: ±2px tolerance
-- Dimension accuracy: ±3px tolerance
-- Font size accuracy: Exact match to detected size
-- Table cell alignment: Perfect grid alignment
-- Text content: 100% accurate extraction
-
-ALWAYS include pageNumber property for each field (${i + 1} for this page). Provide complete typography, spacing, and border information for MS Word-level precision.`
+Analyze the form systematically and create logical pairs of related fields.`
               },
               {
                 type: "image_url",
@@ -535,17 +1059,17 @@ ALWAYS include pageNumber property for each field (${i + 1} for this page). Prov
           }
         ];
 
-        const response = await fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', {
+        const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': 'Bearer sk-0d874843ff2542c38940adcbeb2b2cc4',
+            'Authorization': 'Bearer sk-9f7b91a0bb81406b9da7ff884ddd2592',
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: "qwen-vl-max",
+            model: "qwen-vl-plus",
             messages: messages,
             stream: false,
-            temperature: 0.1, // Lower temperature for more consistent results
+            temperature: 0.1,
             max_tokens: 4000
           })
         });
@@ -556,441 +1080,119 @@ ALWAYS include pageNumber property for each field (${i + 1} for this page). Prov
 
         const data = await response.json();
         const aiResponse = data.choices[0].message.content;
-
-        // Parse the AI response to extract form structure
-        let pageFormData: any;
+        
+        console.log('AI fieldPairs Response for page', i + 1, ':', aiResponse);
+        
         try {
-          // Try to extract JSON from the response
-          console.log(`Processing AI response for page ${i + 1}:`, aiResponse.substring(0, 200) + '...');
-          const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            console.log(`Found JSON match for page ${i + 1}`);
-            pageFormData = JSON.parse(jsonMatch[0]);
-            console.log(`Parsed form data for page ${i + 1}:`, pageFormData);
-            
-            // Set form name and description from the first page
-            if (i === 0) {
-              formName = pageFormData.formName || "Generated Form";
-              formDescription = pageFormData.formDescription || "Form generated from uploaded document";
-              console.log("Form name and description set from first page:", formName, formDescription);
-              
-              // Store document analysis from first page for validation
-              if (pageFormData.documentAnalysis) {
-                globalDocumentAnalysis = pageFormData.documentAnalysis;
-              }
-            }
-            
-            // Validate and process the extracted data
-              if (pageFormData.fields && Array.isArray(pageFormData.fields)) {
-                console.log(`Processing ${pageFormData.fields.length} fields for page ${i + 1}`);
-                const processedFields = pageFormData.fields.map((field: any, index: number) => {
-                // Calculate intelligent dimensions based on field type
-                const calculateDimensions = (fieldType: string, fieldData: any) => {
-                  const baseWidth = field.width || 300;
-                  const baseHeight = field.height || 40;
+          // Clean the AI response by removing markdown code blocks
+          let cleanedResponse = aiResponse.trim();
+          if (cleanedResponse.startsWith('```json')) {
+            cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+          } else if (cleanedResponse.startsWith('```')) {
+            cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+          }
+          
+          // Parse the JSON response
+          const parsedResponse = JSON.parse(cleanedResponse);
+          
+          if (i === 0) {
+            formName = parsedResponse.formName || `Generated Form ${Date.now()}`;
+            formDescription = parsedResponse.formDescription || 'AI-generated form from image analysis';
+          }
+          
+          // Process fieldPairs and convert to form fields
+          if (parsedResponse.fieldPairs && Array.isArray(parsedResponse.fieldPairs)) {
+            let currentY = 50;
+            const convertedFields = parsedResponse.fieldPairs.flatMap((pair: any, pairIndex: number) => {
+              if (pair.fields && Array.isArray(pair.fields)) {
+                const pairFields = pair.fields.map((field: any, fieldIndex: number) => {
+                  const isTableField = field.type === 'layoutTable' || field.type === 'dataTable';
                   
-                  switch (fieldType) {
-                    case 'table':
-                       // Advanced table dimension analysis
-                       const tableData = fieldData.settings?.tableData || {};
-                       const rows = fieldData.settings?.rows || tableData.rows || 3;
-                       const columns = fieldData.settings?.columns || tableData.columns || 3;
-                       
-                       // Calculate dynamic cell dimensions based on content
-                       let totalWidth = 0;
-                       let totalHeight = 0;
-                       
-                       if (tableData.cellDimensions && Array.isArray(tableData.cellDimensions)) {
-                         // Use AI-detected cell dimensions
-                         const cellDims = tableData.cellDimensions;
-                         totalWidth = cellDims.reduce((sum: number, row: any[]) => {
-                           const rowWidth = row.reduce((rowSum: number, cell: any) => rowSum + (cell.width || 80), 0);
-                           return Math.max(sum, rowWidth);
-                         }, 0);
-                         totalHeight = cellDims.reduce((sum: number, row: any[]) => {
-                           const maxRowHeight = Math.max(...row.map((cell: any) => cell.height || 30));
-                           return sum + maxRowHeight;
-                         }, 0);
-                       } else {
-                         // Fallback to uniform cell sizing with content-aware adjustments
-                         const avgContentLength = tableData.avgContentLength || 10;
-                         const maxContentLength = tableData.maxContentLength || 20;
-                         
-                         // Dynamic cell width based on content
-                         const baseCellWidth = Math.max(60, Math.min(avgContentLength * 8, 120));
-                         const baseCellHeight = Math.max(25, Math.min(maxContentLength > 50 ? 40 : 30, 50));
-                         
-                         // Account for column width variations
-                         const columnWidths = tableData.columnWidths || Array(columns).fill(baseCellWidth);
-                         const rowHeights = tableData.rowHeights || Array(rows).fill(baseCellHeight);
-                         
-                         totalWidth = columnWidths.reduce((sum: number, width: number) => sum + width, 0);
-                         totalHeight = rowHeights.reduce((sum: number, height: number) => sum + height, 0);
-                       }
-                       
-                       // Add padding and borders
-                       const tablePadding = 20;
-                       const borderWidth = (fieldData.border?.width || 1) * 2;
-                       
-                       return {
-                         width: Math.min(totalWidth + tablePadding + borderWidth, 550),
-                         height: Math.min(totalHeight + tablePadding + borderWidth, 400)
-                       };
-                    case 'textarea':
-                      const textLines = fieldData.settings?.rows || 4;
-                      return {
-                        width: Math.max(200, Math.min(baseWidth, 500)),
-                        height: Math.max(textLines * 20 + 20, Math.min(baseHeight * 3, 200))
-                      };
-                    case 'select':
-                    case 'multiselect':
-                      const optionCount = fieldData.settings?.options?.length || 1;
-                      // Enhanced multiselect sizing - calculate based on actual options
-                      const multiSelectHeight = fieldType === 'multiselect' ? 
-                        Math.min(optionCount * 28 + 50, Math.max(200, optionCount * 20)) : 40;
-                      return {
-                        width: Math.max(150, Math.min(baseWidth, 450)),
-                        height: multiSelectHeight
-                      };
-                    case 'checkbox':
-                    case 'radio':
-                      // Enhanced checkbox/radio sizing - calculate based on number of options
-                      const checkboxOptions = fieldData.settings?.options?.length || 1;
-                      const checkboxHeight = Math.max(30, Math.min(
-                        checkboxOptions * 32 + 20, // 32px per option + padding
-                        Math.max(baseHeight, checkboxOptions * 25)
-                      ));
-                      const checkboxWidth = Math.max(120, Math.min(baseWidth, 350));
-                      return {
-                        width: checkboxWidth,
-                        height: checkboxHeight
-                      };
-                    case 'date':
-                    case 'time':
-                      return {
-                        width: Math.max(150, Math.min(baseWidth, 250)),
-                        height: Math.max(35, Math.min(baseHeight, 45))
-                      };
-                    case 'number':
-                      return {
-                        width: Math.max(100, Math.min(baseWidth, 200)),
-                        height: Math.max(35, Math.min(baseHeight, 45))
-                      };
-                    default: // text, email, etc.
-                      return {
-                        width: Math.max(150, Math.min(baseWidth, 400)),
-                        height: Math.max(35, Math.min(baseHeight, 45))
-                      };
-                  }
-                };
-                
-                const dimensions = calculateDimensions(field.type || 'text', field);
-                
-                // Apply document layout analysis for positioning
-                const applyLayoutAnalysis = (x: number, y: number, fieldType: string) => {
-                  const docAnalysis = pageFormData.documentAnalysis || {};
-                  const margins = docAnalysis.margins || { top: 50, bottom: 50, left: 50, right: 50 };
-                  const gridSize = docAnalysis.gridSize || 10;
-                  
-                  // Snap to grid for precision positioning
-                  const snappedX = Math.round(x / gridSize) * gridSize;
-                  const snappedY = Math.round(y / gridSize) * gridSize;
-                  
-                  // Ensure fields respect document margins
-                  const adjustedX = Math.max(margins.left, Math.min(snappedX, 595 - margins.right - dimensions.width));
-                  const adjustedY = Math.max(margins.top, Math.min(snappedY, 842 - margins.bottom - dimensions.height));
-                  
-                  // Apply field-specific positioning rules
-                  if (fieldType === 'table') {
-                    // Tables often need more spacing
-                    return {
-                      x: Math.max(adjustedX, margins.left + 10),
-                      y: Math.max(adjustedY, margins.top + 10)
+                  if (isTableField) {
+                    // Table fields take full width and their own row
+                    const tableField = {
+                      id: `field-${Date.now()}-${pairIndex}-${fieldIndex}`,
+                      type: field.type || 'layoutTable',
+                      label: field.label || 'Untitled Table',
+                      settings: field.settings || {},
+                      x: 20, // Small margin from left
+                      y: currentY,
+                      width: 555, // Full width minus margins (595 - 40)
+                      height: field.type === 'dataTable' ? 200 : 150,
+                      pageNumber: i + 1
                     };
+                    currentY += (field.type === 'dataTable' ? 220 : 170); // Add spacing after table
+                    return tableField;
+                  } else {
+                    // Regular fields follow the paired layout
+                    const regularField = {
+                      id: `field-${Date.now()}-${pairIndex}-${fieldIndex}`,
+                      type: field.type || 'text',
+                      label: field.label || 'Untitled Field',
+                      settings: field.settings || {},
+                      x: fieldIndex === 0 ? 50 : 320, // First field left, second field right
+                      y: currentY,
+                      width: 250,
+                      height: 40,
+                      pageNumber: i + 1
+                    };
+                    return regularField;
                   }
-                  
-                  return { x: adjustedX, y: adjustedY };
-                };
+                });
                 
-                const position = applyLayoutAnalysis(field.x || 50, field.y || 50, field.type || 'text');
-                
-                // Ensure all required properties are present
-                const processedField = {
-                  id: field.id || `field-${Date.now()}-${index}-page${i+1}`,
-                  type: field.type || 'text',
-                  label: field.label || `Field ${index + 1}`,
-                  x: position.x,
-                  y: position.y,
-                  width: Math.max(50, Math.min(dimensions.width, 595)),
-                  height: Math.max(20, Math.min(dimensions.height, 400)),
-                  pageNumber: field.pageNumber || (i + 1),
-                  // Preserve typography information from AI analysis
-                  typography: {
-                    fontSize: field.typography?.fontSize || pageFormData.documentAnalysis?.primaryFontSize || '12px',
-                    fontWeight: field.typography?.fontWeight || 'normal',
-                    textAlign: field.typography?.textAlign || 'left',
-                    lineHeight: field.typography?.lineHeight || pageFormData.documentAnalysis?.lineSpacing || 1.2,
-                    letterSpacing: field.typography?.letterSpacing || 'normal'
-                  },
-                  // Preserve spacing information
-                  spacing: {
-                    marginTop: field.spacing?.marginTop || 5,
-                    marginBottom: field.spacing?.marginBottom || 5,
-                    marginLeft: field.spacing?.marginLeft || 0,
-                    marginRight: field.spacing?.marginRight || 0,
-                    paddingTop: field.spacing?.paddingTop || 8,
-                    paddingBottom: field.spacing?.paddingBottom || 8,
-                    paddingLeft: field.spacing?.paddingLeft || 12,
-                    paddingRight: field.spacing?.paddingRight || 12
-                  },
-                  // Preserve border information
-                  border: {
-                    width: field.border?.width || 1,
-                    style: field.border?.style || 'solid',
-                    color: field.border?.color || '#cccccc',
-                    radius: field.border?.radius || 4
-                  },
-                  settings: {
-                    required: field.settings?.required || false,
-                    placeholder: field.settings?.placeholder || '',
-                    hideTitle: field.settings?.hideTitle || false,
-                    titleLayout: field.settings?.titleLayout || 'horizontal',
-                    ...field.settings
-                  }
-                };
-
-                // Process field-specific settings
-                switch (field.type) {
-                  case 'select':
-                  case 'checkbox':
-                  case 'multipleChoice':
-                    processedField.settings.options = field.settings?.options || ['Option 1', 'Option 2', 'Option 3'];
-                    break;
-                    
-                  case 'layoutTable':
-                  case 'dataTable':
-                    // Get rows and columns from settings or calculate from data if available
-                    const data = field.settings?.data || [];
-                    const rows = field.settings?.rows || (data.length > 0 ? data.length : 3);
-                    const columns = field.settings?.columns || 
-                      (data.length > 0 && data[0].length > 0 ? data[0].length : 3);
-                    
-                    // Generate headers if not provided
-                    let headers = field.settings?.headers || [];
-                    if (headers.length === 0 && columns > 0) {
-                      headers = Array.from({ length: columns }, (_, i) => `Header ${i + 1}`);
-                    }
-                    
-                    // Generate data if not provided or incomplete
-                    let tableData = [...data];
-                    if (tableData.length < rows) {
-                      for (let r = tableData.length; r < rows; r++) {
-                        const newRow = [];
-                        for (let c = 0; c < columns; c++) {
-                          newRow.push('');
-                        }
-                        tableData.push(newRow);
-                      }
-                    }
-                    
-                    // Ensure each row has the correct number of columns
-                    tableData = tableData.map((row, rowIndex) => {
-                      if (row.length < columns) {
-                        const filledRow = [...row];
-                        for (let c = row.length; c < columns; c++) {
-                          filledRow.push('');
-                        }
-                        return filledRow;
-                      } else if (row.length > columns) {
-                        return row.slice(0, columns);
-                      }
-                      return row;
-                    });
-                    
-                    processedField.settings.rows = rows;
-                    processedField.settings.columns = columns;
-                    processedField.settings.headers = headers;
-                    processedField.settings.data = tableData;
-                    processedField.settings.showHeader = field.settings?.showHeader !== false;
-                    processedField.settings.showBorders = field.settings?.showBorders !== false;
-                    processedField.settings.stripedRows = field.settings?.stripedRows !== false;
-                    processedField.settings.resizableColumns = field.settings?.resizableColumns || false;
-                    
-                    if (field.type === 'dataTable') {
-                      processedField.settings.sortableColumns = field.settings?.sortableColumns || false;
-                      processedField.settings.filterableColumns = field.settings?.filterableColumns || false;
-                      processedField.settings.pagination = field.settings?.pagination || false;
-                    }
-                    
-                    processedField.width = Math.max(400, processedField.width);
-                    processedField.height = Math.max(150, processedField.height);
-                    break;
-                    
-                  case 'number':
-                    processedField.settings.min = field.settings?.min;
-                    processedField.settings.max = field.settings?.max;
-                    processedField.settings.step = field.settings?.step || 1;
-                    processedField.settings.numberFormat = field.settings?.numberFormat || 'integer';
-                    break;
-                    
-                  case 'text':
-                    processedField.settings.inputType = field.settings?.inputType || 'text';
-                    processedField.settings.maxLength = field.settings?.maxLength;
-                    processedField.settings.pattern = field.settings?.pattern || '';
-                    break;
-                    
-                  case 'textarea':
-                    processedField.height = Math.max(80, processedField.height);
-                    processedField.settings.rows = field.settings?.rows || 3;
-                    break;
-                    
-                  case 'date':
-                    processedField.settings.dateFormat = field.settings?.dateFormat || 'YYYY-MM-DD';
-                    processedField.settings.includeTime = field.settings?.includeTime || false;
-                    break;
-                    
-                  case 'image':
-                  case 'attachment':
-                    processedField.settings.maxSize = field.settings?.maxSize || '10MB';
-                    processedField.settings.allowedTypes = field.settings?.allowedTypes || ['image/*'];
-                    processedField.height = Math.max(80, processedField.height);
-                    break;
-                    
-                  case 'signature':
-                    processedField.height = Math.max(80, processedField.height);
-                    break;
+                // Update Y position for next pair (only if not table fields)
+                const hasTableField = pair.fields.some((field: any) => field.type === 'layoutTable' || field.type === 'dataTable');
+                if (!hasTableField) {
+                  currentY += 80; // Standard spacing for regular field pairs
                 }
-
-                return processedField;
-              });
-
-              allFields.push(...processedFields);
-            }
+                
+                return pairFields;
+              }
+              return [];
+            });
+            
+            // Accumulate all fields
+             allFieldsData = allFieldsData.concat(convertedFields);
           }
         } catch (parseError) {
-          console.error('Error parsing AI response:', parseError);
+          console.error('Failed to parse AI response as JSON:', parseError);
           console.log('Raw AI response:', aiResponse);
-          
-          // Fallback: create a simple text field if parsing fails
-          allFields.push({
-            id: `field-${Date.now()}-fallback`,
-            type: 'text',
-            label: 'Generated Field',
-            x: 50,
-            y: 50 + (allFields.length * 60),
-            width: 300,
-            height: 40,
-            pageNumber: i + 1,
-            settings: {
-              required: false,
-              placeholder: 'Enter text...',
-              hideTitle: false,
-              titleLayout: 'horizontal'
-            }
-          });
         }
       }
-
+      
       setGenerationProgress(80);
-
-      // Apply field validation and adjustments
-      const documentAnalysis = globalDocumentAnalysis || {};
-      const { validationReport, adjustedFields } = validateFormStructure(allFields, documentAnalysis);
       
-      // Log validation results for debugging
-      console.log('Field Validation Report:', validationReport);
-      if (validationReport.issuesFound.length > 0) {
-        console.warn('Validation issues found:', validationReport.issuesFound);
-      }
+      // Use the accumulated field data
+      const convertedFields = allFieldsData;
       
-      // Use adjusted fields instead of original allFields
-      const validatedFields = adjustedFields;
-      
-      setGenerationProgress(85);
-
-      // Organize fields by page number and create multiple form pages
-      const fieldsByPage: { [key: number]: any[] } = {};
-      
-      // Group validated fields by page number
-      validatedFields.forEach(field => {
-        const pageNum = field.pageNumber || 1;
-        if (!fieldsByPage[pageNum]) {
-          fieldsByPage[pageNum] = [];
-        }
-        fieldsByPage[pageNum].push(field);
-      });
-      
-      // Create pages array with fields for each page
-      const pages = Object.keys(fieldsByPage).map(pageNumStr => {
-        const pageNum = parseInt(pageNumStr);
-        return {
-          id: `page-${Date.now()}-${pageNum}`,
-          fields: fieldsByPage[pageNum],
+      // Create form structure
+      const formStructure = {
+        name: formName,
+        description: formDescription,
+        pages: [{
+          id: `page-${Date.now()}`,
+          fields: convertedFields,
           dimensions: {
             width: 595,
             height: 842,
-            orientation: 'portrait',
-            size: 'A4'
+            orientation: 'portrait' as const,
+            size: 'A4' as const
           }
-        };
-      });
-      
-      // If no pages were created, add a default page
-      if (pages.length === 0) {
-        pages.push({
-          id: `page-${Date.now()}-1`,
-          fields: [
-            {
-              id: `field-${Date.now()}`,
-              type: 'text',
-              label: 'Generated Field',
-              settings: { 
-                hideTitle: false, 
-                required: false, 
-                titleLayout: 'horizontal',
-                placeholder: 'Enter text...'
-              },
-              x: 50,
-              y: 50,
-              width: 300,
-              height: 40
-            }
-          ],
-          dimensions: {
-            width: 595,
-            height: 842,
-            orientation: 'portrait',
-            size: 'A4'
-          }
-        });
-      }
-      
-      // Create final form structure
-      console.log('Creating final form structure with pages:', pages);
-      const formData = {
-        name: formName || selectedFile.name.replace(/\.[^/.]+$/, "") + " - AI Generated Form",
-        description: formDescription || `Form generated from uploaded ${selectedFile.type === 'application/pdf' ? 'PDF' : 'image'}`,
-        pages: pages,
-        validationReport: validationReport,
-        metadata: {
-          generatedAt: new Date().toISOString(),
-          sourceFile: selectedFile.name,
-          totalFields: validationReport.totalFields,
-          validFields: validationReport.validFields,
-          accuracyScore: Math.round((validationReport.validFields / validationReport.totalFields) * 100) || 0
-        }
+        }]
       };
-
-      console.log('Final form data:', formData);
+      
       setGenerationProgress(100);
-      setGeneratedForm(formData);
+      
+      console.log('Generated form structure:', formStructure);
+      setGeneratedForm(formStructure);
       setPreviewMode(true);
-
+      
     } catch (error) {
-      console.error('Error generating form:', error);
-      alert(`Failed to generate form: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
+      console.error('Error generating form from image:', error);
+      setError(`Failed to generate form: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsGenerating(false);
+      setGenerationProgress(0);
       setProcessingPdf(false);
     }
   };
@@ -1157,77 +1359,7 @@ ALWAYS include pageNumber property for each field (${i + 1} for this page). Prov
                   </div>
                 </div>
                 
-                {/* Visual Form Preview with Dimension Accuracy */}
-                <div className="border border-dark-600 rounded-lg p-4 bg-dark-900/50 mb-4">
-                  <h4 className="font-medium mb-3 flex items-center justify-between">
-                    <span>Visual Form Preview</span>
-                    <div className="flex gap-2">
-                      <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs">✓ Dimensions</span>
-                      <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs">✓ Typography</span>
-                      <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded text-xs">✓ Positioning</span>
-                    </div>
-                  </h4>
-                  
-                  {generatedForm?.pages?.map((page: {fields: any[]}, pageIndex: number) => (
-                    <div key={`preview-${pageIndex}`} className="mb-4">
-                      <div className="text-sm font-medium text-ai-teal mb-2">
-                        Page {pageIndex + 1} Preview (A4: 595×842px)
-                      </div>
-                      
-                      {/* Miniature form preview */}
-                      <div className="bg-gray-100 rounded-lg p-4 relative overflow-hidden">
-                        <div 
-                          className="bg-white border border-gray-300 relative mx-auto shadow-sm"
-                          style={{
-                            width: '297px', // Half scale of A4 width (595/2)
-                            height: '421px', // Half scale of A4 height (842/2)
-                            transform: 'scale(0.7)',
-                            transformOrigin: 'top center'
-                          }}
-                        >
-                          {/* Grid overlay for precision */}
-                          <div className="absolute inset-0 opacity-10">
-                            {Array.from({ length: 30 }, (_, i) => (
-                              <div key={`h-${i}`} className="absolute w-full border-t border-gray-400" style={{ top: `${i * 14}px` }} />
-                            ))}
-                            {Array.from({ length: 21 }, (_, i) => (
-                              <div key={`v-${i}`} className="absolute h-full border-l border-gray-400" style={{ left: `${i * 14}px` }} />
-                            ))}
-                          </div>
-                          
-                          {/* Field boundaries */}
-                          {page.fields?.map((field: any, fieldIndex: number) => {
-                            const accuracy = calculateFieldAccuracy(field);
-                            return (
-                              <div
-                                key={fieldIndex}
-                                className={`absolute border-2 rounded transition-all duration-200 hover:z-10 group ${
-                                  accuracy >= 90 ? 'border-green-400 bg-green-50' :
-                                  accuracy >= 75 ? 'border-yellow-400 bg-yellow-50' :
-                                  'border-red-400 bg-red-50'
-                                }`}
-                                style={{
-                                  left: `${(field.x || 0) / 2}px`,
-                                  top: `${(field.y || 0) / 2}px`,
-                                  width: `${(field.width || 100) / 2}px`,
-                                  height: `${(field.height || 30) / 2}px`,
-                                }}
-                                title={`${field.label} (${accuracy}% accuracy)`}
-                              >
-                                <div className="absolute -top-6 left-0 opacity-0 group-hover:opacity-100 bg-black text-white text-xs px-2 py-1 rounded whitespace-nowrap z-20">
-                                  {field.label} - {accuracy}% accurate
-                                </div>
-                                <div className="text-xs p-1 truncate" style={{ fontSize: `${Math.max(6, (parseInt(field.typography?.fontSize) || 12) / 2)}px` }}>
-                                  {field.type}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+
                 
                 <div className="border border-dark-600 rounded-lg p-4 bg-dark-900/50">
                   <h4 className="font-medium mb-3">Form Fields ({generatedForm?.pages?.reduce((total: number, page: {fields: any[]}) => total + page.fields.length, 0) || 0})</h4>
@@ -1300,7 +1432,10 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
   onUpdatePosition, 
   field, 
   isSelected, 
-  onSelect 
+  onSelect,
+  currentFields,
+  pageWidth,
+  pageHeight
 }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isResizing, setIsResizing] = useState(false);
@@ -1478,175 +1613,69 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
         }
       }
       
-      // Calculate desired position without constraints
-      const padding = 24;
+      // Calculate desired position
       const desiredX = initialPosition.x + deltaX;
       const desiredY = initialPosition.y + deltaY;
       
-      // Enhanced boundary detection for multi-option widgets
-      // Calculate additional space requirements for content-heavy widgets
-      let additionalWidth = 0;
-      let additionalHeight = 0;
+      // Create grid layout for positioning
+      const gridLayout = calculateGridLayout(pageWidth, pageHeight, currentFields);
       
-      if (field.type === 'checkbox' || field.type === 'multipleChoice') {
-        const options = field.settings?.options?.length || 1;
-        // Add extra space for checkbox labels and spacing
-        additionalWidth = Math.max(0, options * 15); // Extra width for longer option lists
-        additionalHeight = Math.max(0, (options - 3) * 10); // Extra height for more than 3 options
-      } else if (field.type === 'multiselect') {
-        const options = field.settings?.options?.length || 1;
-        // Add extra space for dropdown expansion
-        additionalHeight = Math.max(0, (options - 5) * 8); // Extra height for more than 5 options
-      } else if (field.type === 'textarea') {
-        const rows = field.settings?.rows || 4;
-        additionalHeight = Math.max(0, (rows - 4) * 5); // Extra height for more than 4 rows
+      // Get the nearest grid cell for the desired position
+      const gridCell = getGridCellFromPosition(desiredX, desiredY, gridLayout);
+      if (gridCell) {
+        const snapPosition = snapToGridCell(gridCell.row, gridCell.col, gridLayout);
+      
+        // Apply smooth transition and update position immediately for responsive dragging
+        wrapperRef.current.style.transition = 'none'; // Disable transition during drag for immediate response
+        wrapperRef.current.style.transform = `translate(${snapPosition.x - (field.x || 0)}px, ${snapPosition.y - (field.y || 0)}px)`;
+        wrapperRef.current.style.left = `${field.x || 0}px`;
+        wrapperRef.current.style.top = `${field.y || 0}px`;
+        wrapperRef.current.style.zIndex = '1000'; // Bring to front while dragging
       }
-      
-      // Check if widget would extend beyond current page boundaries
-      const totalWidth = effectiveWidth + additionalWidth;
-      const totalHeight = effectiveHeight + additionalHeight;
-      const wouldExceedRight = desiredX + totalWidth + padding > pageWidth;
-      const wouldExceedBottom = desiredY + totalHeight + padding > pageHeight;
-      
-      // Calculate required page expansion with intelligent spacing
-      let newPageWidth = pageWidth;
-      let newPageHeight = pageHeight;
-      
-      if (wouldExceedRight) {
-        newPageWidth = Math.max(pageWidth, desiredX + totalWidth + padding * 2);
-      }
-      if (wouldExceedBottom) {
-        newPageHeight = Math.max(pageHeight, desiredY + totalHeight + padding * 2);
-      }
-      
-      // Page expansion disabled - maintain fixed page size
-      // if (newPageWidth > pageWidth || newPageHeight > pageHeight) {
-      //   const pageIndex = parseInt(pageContainer.getAttribute('data-page-index') || '0');
-      //   const expandEvent = new CustomEvent('expandPage', {
-      //     detail: {
-      //       pageIndex,
-      //       newWidth: newPageWidth,
-      //       newHeight: newPageHeight
-      //     }
-      //   });
-      //   window.dispatchEvent(expandEvent);
-      // }
-      
-      // Enhanced drag constraints: enforce hard boundaries within fixed page size
-      const currentPageWidth = pageWidth;
-      const currentPageHeight = pageHeight;
-      
-      // Enforce boundaries to keep widgets within the fixed page size
-      const maxX = Math.max(padding, currentPageWidth - totalWidth - padding);
-      const maxY = Math.max(padding, currentPageHeight - totalHeight - padding);
-      
-      const newX = Math.max(padding, Math.min(maxX, desiredX));
-      const newY = Math.max(padding, Math.min(maxY, desiredY));
-      
-      // Widgets are constrained within page boundaries
-      
-      // Apply smooth transition and update position immediately for responsive dragging
-      wrapperRef.current.style.transition = 'none'; // Disable transition during drag for immediate response
-      wrapperRef.current.style.transform = `translate(${newX - (field.x || 0)}px, ${newY - (field.y || 0)}px)`;
-      wrapperRef.current.style.left = `${field.x || 0}px`;
-      wrapperRef.current.style.top = `${field.y || 0}px`;
-      wrapperRef.current.style.zIndex = '1000'; // Bring to front while dragging
       
     } else if (isResizing) {
-      let newWidth = initialSize.width;
+      // Get page dimensions for width calculation
+      const pageContainer = wrapperRef.current.closest('[data-page-container]') as HTMLElement;
+      let pageWidth = 595;
+      
+      if (pageContainer) {
+        const computedStyle = window.getComputedStyle(pageContainer);
+        pageWidth = parseInt(computedStyle.width) || 595;
+      }
+      
+      // Enforce fixed width constraint (45% of page width)
+      const fixedWidth = pageWidth * (GRID_CONSTANTS.WIDGET_WIDTH_PERCENT / 100);
+      
+      let newWidth = fixedWidth; // Always use fixed width
       let newHeight = initialSize.height;
       let newX = initialPosition.x;
       let newY = initialPosition.y;
       
-      // Enhanced resize functionality with modifier keys
-      const isShiftPressed = e.shiftKey; // Proportional scaling (maintain aspect ratio)
-      const isCtrlPressed = e.ctrlKey || e.metaKey; // Independent scaling (zoom-like behavior)
-      
-      if (isCtrlPressed) {
-        // Zoom-like behavior: scale from center
-        const scaleFactor = 1 + (deltaX + deltaY) / 200; // Adjust sensitivity
-        const clampedScale = Math.max(0.3, Math.min(3, scaleFactor)); // Limit scale range
-        
-        newWidth = Math.max(50, initialSize.width * clampedScale);
-        newHeight = Math.max(20, initialSize.height * clampedScale);
-        
-        // Adjust position to scale from center
-        const widthDiff = newWidth - initialSize.width;
-        const heightDiff = newHeight - initialSize.height;
-        newX = initialPosition.x - widthDiff / 2;
-        newY = initialPosition.y - heightDiff / 2;
-        
-      } else if (isShiftPressed && ['se', 'sw', 'ne', 'nw'].includes(resizeDirection)) {
-        // Proportional scaling: maintain aspect ratio for corner handles
-        const aspectRatio = initialSize.width / initialSize.height;
-        const avgDelta = (Math.abs(deltaX) + Math.abs(deltaY)) / 2;
-        const direction = (deltaX + deltaY) > 0 ? 1 : -1;
-        
-        switch (resizeDirection) {
-          case 'se':
-            newWidth = Math.max(50, initialSize.width + avgDelta * direction);
-            newHeight = Math.max(20, newWidth / aspectRatio);
-            break;
-          case 'sw':
-            newWidth = Math.max(50, initialSize.width - avgDelta * direction);
-            newHeight = Math.max(20, newWidth / aspectRatio);
-            newX = initialPosition.x + (initialSize.width - newWidth);
-            break;
-          case 'ne':
-            newWidth = Math.max(50, initialSize.width + avgDelta * direction);
-            newHeight = Math.max(20, newWidth / aspectRatio);
-            newY = initialPosition.y + (initialSize.height - newHeight);
-            break;
-          case 'nw':
-            newWidth = Math.max(50, initialSize.width - avgDelta * direction);
-            newHeight = Math.max(20, newWidth / aspectRatio);
-            newX = initialPosition.x + (initialSize.width - newWidth);
-            newY = initialPosition.y + (initialSize.height - newHeight);
-            break;
-        }
-        
-      } else {
-        // Standard resize behavior
-        switch (resizeDirection) {
-          case 'se':
-            newWidth = Math.max(50, initialSize.width + deltaX);
-            newHeight = Math.max(20, initialSize.height + deltaY);
-            break;
-          case 'sw':
-            newWidth = Math.max(50, initialSize.width - deltaX);
-            newHeight = Math.max(20, initialSize.height + deltaY);
-            newX = initialPosition.x + Math.min(deltaX, initialSize.width - 50);
-            break;
-          case 'ne':
-            newWidth = Math.max(50, initialSize.width + deltaX);
-            newHeight = Math.max(20, initialSize.height - deltaY);
-            newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
-            break;
-          case 'nw':
-            newWidth = Math.max(50, initialSize.width - deltaX);
-            newHeight = Math.max(20, initialSize.height - deltaY);
-            newX = initialPosition.x + Math.min(deltaX, initialSize.width - 50);
-            newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
-            break;
-          case 'e':
-            newWidth = Math.max(50, initialSize.width + deltaX);
-            break;
-          case 'w':
-            newWidth = Math.max(50, initialSize.width - deltaX);
-            newX = initialPosition.x + Math.min(deltaX, initialSize.width - 50);
-            break;
-          case 's':
-            newHeight = Math.max(20, initialSize.height + deltaY);
-            break;
-          case 'n':
-            newHeight = Math.max(20, initialSize.height - deltaY);
-            newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
-            break;
-        }
+      // Only allow height resizing to maintain grid constraints
+      switch (resizeDirection) {
+        case 'se':
+        case 's':
+          newHeight = Math.max(20, initialSize.height + deltaY);
+          break;
+        case 'sw':
+          newHeight = Math.max(20, initialSize.height + deltaY);
+          break;
+        case 'ne':
+        case 'n':
+          newHeight = Math.max(20, initialSize.height - deltaY);
+          newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
+          break;
+        case 'nw':
+          newHeight = Math.max(20, initialSize.height - deltaY);
+          newY = initialPosition.y + Math.min(deltaY, initialSize.height - 20);
+          break;
+        case 'e':
+        case 'w':
+          // Width resizing disabled - maintain fixed width
+          break;
       }
       
       // Check for page expansion during resize with intelligent space calculation
-      const pageContainer = wrapperRef.current.closest('[data-page-container]') as HTMLElement;
       if (pageContainer) {
         const computedStyle = window.getComputedStyle(pageContainer);
         const pageWidth = parseInt(computedStyle.width) || 595;
@@ -1724,35 +1753,36 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
         }
       }
       
-      // Get the page container element and its dimensions for proper boundary calculation
-      const pageContainer = wrapperRef.current.closest('[data-page-container]') as HTMLElement;
-      let pageWidth = 595;
-      let pageHeight = 842;
-      
-      if (pageContainer) {
-        const computedStyle = window.getComputedStyle(pageContainer);
-        pageWidth = parseInt(computedStyle.width) || 595;
-        pageHeight = parseInt(computedStyle.height) || 842;
+      // For table widgets, implement row-based positioning with 100% width
+      if (field.type === 'layoutTable' || field.type === 'dataTable') {
+        // Tables take full width and position themselves in rows
+        const tableWidth = pageWidth - 24; // Full width minus padding
+        const tableX = 12; // Standard left padding
+        
+        // Reset all visual enhancements and apply final position
+        wrapperRef.current.style.transform = 'none';
+        wrapperRef.current.style.transition = 'all 0.3s ease-out';
+        wrapperRef.current.style.zIndex = field.zIndex?.toString() || '1';
+        wrapperRef.current.style.boxShadow = '';
+        
+        // Update field with full width and constrained Y position
+        onUpdateSize(fieldId, tableWidth, effectiveHeight);
+        onUpdatePosition(fieldId, tableX, Math.max(0, Math.min(finalY, pageHeight - effectiveHeight - 24)));
+      } else {
+        // For non-table widgets, allow free positioning without grid constraints
+        // Ensure the widget stays within page bounds
+        const constrainedX = Math.max(0, Math.min(finalX, pageWidth - effectiveWidth - 24));
+        const constrainedY = Math.max(0, Math.min(finalY, pageHeight - effectiveHeight - 24));
+        
+        // Reset all visual enhancements and apply final position
+        wrapperRef.current.style.transform = 'none';
+        wrapperRef.current.style.transition = 'all 0.3s ease-out';
+        wrapperRef.current.style.zIndex = field.zIndex?.toString() || '1';
+        wrapperRef.current.style.boxShadow = '';
+        
+        // Update the field position to the free position (no grid snapping)
+        onUpdatePosition(fieldId, constrainedX, constrainedY);
       }
-      
-      const padding = 24;
-       const newX = Math.max(padding, Math.min(
-         pageWidth - effectiveWidth - padding,
-         finalX
-       ));
-       const newY = Math.max(padding, Math.min(
-         pageHeight - effectiveHeight - padding,
-         finalY
-       ));
-      
-      // Reset all visual enhancements and apply final position
-       wrapperRef.current.style.transform = 'none';
-       wrapperRef.current.style.transition = 'all 0.3s ease-out'; // Smooth transition back
-       wrapperRef.current.style.zIndex = field.zIndex?.toString() || '1'; // Reset z-index
-       wrapperRef.current.style.boxShadow = ''; // Reset shadow
-       
-       // Update the field position
-       onUpdatePosition(fieldId, newX, newY);
     }
     
     if (isResizing && wrapperRef.current) {
@@ -1760,14 +1790,33 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
       const parentRect = wrapperRef.current.parentElement?.getBoundingClientRect();
       
       if (parentRect) {
-        const newX = rect.left - parentRect.left - 12;
-        const newY = rect.top - parentRect.top - 12;
-        const newWidth = rect.width;
+        // Get page dimensions for width calculation
+        const pageContainer = wrapperRef.current.closest('[data-page-container]') as HTMLElement;
+        let pageWidth = 595;
+        
+        if (pageContainer) {
+          const computedStyle = window.getComputedStyle(pageContainer);
+          pageWidth = parseInt(computedStyle.width) || 595;
+        }
+        
+        // Enforce fixed width constraint
+        const fixedWidth = pageWidth * (GRID_CONSTANTS.WIDGET_WIDTH_PERCENT / 100);
         const newHeight = rect.height;
         
-        onUpdateSize(fieldId, newWidth, newHeight);
-        if (onUpdatePosition) {
-          onUpdatePosition(fieldId, Math.max(0, newX), Math.max(0, newY));
+        // Snap position to grid
+        const currentX = rect.left - parentRect.left - 12;
+        const currentY = rect.top - parentRect.top - 12;
+        const gridLayout = calculateGridLayout(pageWidth, pageHeight, currentFields);
+        const gridCell = getGridCellFromPosition(currentX, currentY, gridLayout);
+        if (gridCell) {
+          const snapPosition = snapToGridCell(gridCell.row, gridCell.col, gridLayout);
+        
+          onUpdateSize(fieldId, fixedWidth, newHeight);
+          if (onUpdatePosition) {
+            onUpdatePosition(fieldId, snapPosition.x, snapPosition.y);
+          }
+        } else {
+          onUpdateSize(fieldId, fixedWidth, newHeight);
         }
       }
     }
@@ -1796,11 +1845,7 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
   return (
     <div 
       ref={wrapperRef} 
-      className={`absolute border-2 transition-all duration-200 group ${
-        isSelected 
-          ? 'border-ai-blue shadow-lg shadow-ai-blue/20' 
-          : 'border-transparent hover:border-ai-blue/50 hover:shadow-md'
-      } ${isDragging ? 'cursor-grabbing z-50' : 'cursor-grab'} ${isResizing ? 'z-50' : ''}`}
+      className={`absolute transition-all duration-200 group ${isDragging ? 'cursor-grabbing z-50' : 'cursor-grab'} ${isResizing ? 'z-50' : ''}`}
       style={{ 
         // Use effective dimensions for both width/height and min-width/min-height
         // This ensures the border properly follows the content boundaries
@@ -1811,11 +1856,9 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
         left: field.x || 0,
         top: field.y || 0,
         zIndex: isSelected ? 10 : (field.zIndex || 1),
-        boxSizing: 'border-box', // Ensure border is included in the dimensions
-        padding: '0', // Remove any padding that might affect border positioning
-        overflow: 'visible', // Allow resize handles to extend outside
-        borderWidth: '2px', // Ensure consistent border width
-        borderStyle: 'solid' // Ensure border is solid
+        boxSizing: 'border-box', // Ensure consistent box sizing
+        padding: '0', // Remove any padding that might affect positioning
+        overflow: 'visible' // Allow resize handles to extend outside
       }}
       onMouseDown={handleMouseDown}
     >
@@ -1839,28 +1882,7 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
         {children}
       </div>
       
-      {/* Hover instruction - full coverage with consistent effective dimensions */}
-      {!isSelected && (
-        <div 
-          className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-ai-blue/10 rounded-sm"
-          style={{
-            // Use 100% to fill the parent container which now has the correct effective dimensions
-            width: '100%',
-            height: '100%',
-            boxSizing: 'border-box',
-            padding: '0',
-            margin: '0',
-            top: '0',
-            left: '0',
-            right: '0',
-            bottom: '0',
-            pointerEvents: 'none', // Allow clicks to pass through to the parent
-            borderRadius: '0' // Ensure no rounded corners that might affect border coverage
-          }}
-        >
-          <span className="text-ai-blue text-sm font-medium px-2 py-1 bg-white/80 rounded shadow-sm">Click to select & drag</span>
-        </div>
-      )}
+
       
       {/* Resize handles - only visible when selected */}
       {isSelected && (
@@ -1917,11 +1939,7 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
             style={{ pointerEvents: 'auto' }}
           />
           
-          {/* Move indicator */}
-          <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-ai-blue text-white px-3 py-2 rounded text-sm font-medium pointer-events-none z-30 shadow-lg">
-            <RiDragMove2Line className="inline mr-2 text-base" style={{ width: '16px', height: '16px' }} />
-            Drag to move
-          </div>
+
           
           {/* Resize instructions */}
           <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-3 py-2 rounded text-xs font-medium pointer-events-none z-30 shadow-lg whitespace-nowrap">
@@ -1937,11 +1955,18 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
 };
 
 // Enhanced Draggable Widget with proper drag and drop
-const DraggableWidget = ({ type, icon, label }: { type: string, icon: React.ReactNode, label: string }) => {
+const DraggableWidget = ({ type, icon, label, onDragStart, onDragEnd }: { 
+  type: string, 
+  icon: React.ReactNode, 
+  label: string,
+  onDragStart?: () => void,
+  onDragEnd?: () => void
+}) => {
   const [isDragging, setIsDragging] = useState(false);
   
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     setIsDragging(true);
+    onDragStart?.(); // Notify parent component
     e.dataTransfer.setData('application/json', JSON.stringify({ type, label }));
     e.dataTransfer.setData('text/plain', type); // Also set as text/plain for compatibility
     e.dataTransfer.effectAllowed = 'copy';
@@ -1949,6 +1974,7 @@ const DraggableWidget = ({ type, icon, label }: { type: string, icon: React.Reac
   
   const handleDragEnd = () => {
     setIsDragging(false);
+    onDragEnd?.(); // Notify parent component
   };
   
   return (
@@ -2175,38 +2201,108 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     startY: 0
   });
   
-  // Function to update field size
+  // Function to update field size with grid constraints
   const updateFieldSize = (fieldId: string, width: number, height: number) => {
     saveToHistory();
-    setFormPages(prev => prev.map((page, index) => 
-      index === currentPageIndex 
-        ? {
-            ...page,
-            fields: page.fields.map(field => 
-              field.id === fieldId 
-                ? { ...field, width, height }
-                : field
-            )
-          }
-        : page
-    ));
+    const currentDimensions = getCurrentPageDimensions();
+    
+    setFormPages(prev => prev.map((page, index) => {
+      if (index !== currentPageIndex) return page;
+      
+      const updatedFields = page.fields.map(field => {
+        if (field.id === fieldId) {
+          // Enforce fixed width constraint (45% of page width)
+          const fixedWidth = (currentDimensions.width * GRID_CONSTANTS.WIDGET_WIDTH_PERCENT) / 100;
+          return { ...field, width: fixedWidth, height };
+        }
+        return field;
+      });
+      
+      // Recalculate grid layout with updated fields
+      const gridLayout = calculateGridLayout(currentDimensions.width, currentDimensions.height, updatedFields);
+      
+      // Update field positions based on new grid layout
+      const finalFields = updatedFields.map(field => {
+        if (field.gridRow !== undefined && field.gridCol !== undefined) {
+          const cellPosition = snapToGridCell(field.gridRow, field.gridCol, gridLayout);
+          return {
+            ...field,
+            x: cellPosition.x,
+            y: cellPosition.y,
+            width: cellPosition.width
+          };
+        }
+        return field;
+      });
+      
+      return { ...page, fields: finalFields };
+    }));
   };
   
-  // Function to update field position
+  // Function to update field position with grid constraints
   const updateFieldPosition = (fieldId: string, x: number, y: number) => {
     saveToHistory();
-    setFormPages(prev => prev.map((page, index) => 
-      index === currentPageIndex 
-        ? {
-            ...page,
-            fields: page.fields.map(field => 
-              field.id === fieldId 
-                ? { ...field, x, y }
-                : field
-            )
+    const currentDimensions = getCurrentPageDimensions();
+    
+    setFormPages(prev => prev.map((page, index) => {
+      if (index !== currentPageIndex) return page;
+      
+      const currentFields = page.fields;
+      // Exclude the field being moved from collision detection
+      const otherFields = currentFields.filter(field => field.id !== fieldId);
+      const gridLayout = calculateGridLayout(currentDimensions.width, currentDimensions.height, otherFields);
+      
+      // Find the target grid cell from the new position
+      const targetCell = getGridCellFromPosition(x, y, gridLayout);
+      
+      const updatedFields = currentFields.map(field => {
+        if (field.id === fieldId) {
+          if (targetCell && !gridLayout.cells[targetCell.row][targetCell.col].occupied) {
+            // Snap to the target grid cell
+            const cellPosition = snapToGridCell(targetCell.row, targetCell.col, gridLayout);
+            return {
+              ...field,
+              x: cellPosition.x,
+              y: cellPosition.y,
+              gridRow: targetCell.row,
+              gridCol: targetCell.col
+            };
+          } else {
+            // Find the nearest available cell
+            const availableCell = findAvailableGridCell(gridLayout);
+            if (availableCell) {
+              const cellPosition = snapToGridCell(availableCell.row, availableCell.col, gridLayout);
+              return {
+                ...field,
+                x: cellPosition.x,
+                y: cellPosition.y,
+                gridRow: availableCell.row,
+                gridCol: availableCell.col
+              };
+            }
           }
-        : page
-    ));
+        }
+        return field;
+      });
+      
+      // Recalculate grid layout with updated positions
+      const finalGridLayout = calculateGridLayout(currentDimensions.width, currentDimensions.height, updatedFields);
+      
+      // Update all field positions to reflect new row heights
+      const finalFields = updatedFields.map(field => {
+        if (field.gridRow !== undefined && field.gridCol !== undefined) {
+          const cellPosition = snapToGridCell(field.gridRow, field.gridCol, finalGridLayout);
+          return {
+            ...field,
+            x: cellPosition.x,
+            y: cellPosition.y
+          };
+        }
+        return field;
+      });
+      
+      return { ...page, fields: finalFields };
+    }));
   };
   
   const saveToHistory = () => {
@@ -2232,22 +2328,84 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     if (next) setFormPages(next);
   };
   
-  // Enhanced addFormField function with position support
-  const addFormField = (type: string, x?: number, y?: number) => {
+  // Enhanced addFormField function with grid-based positioning
+  const addFormField = (type: string, x?: number, y?: number, targetGridRow?: number, targetGridCol?: number) => {
     saveToHistory();
     const currentDimensions = getCurrentPageDimensions();
     
-    // Default field dimensions
-    const defaultWidth = type === 'layoutTable' || type === 'dataTable' ? 400 : 300;
+    // Calculate grid layout for current page
+    const currentFields = formPages[currentPageIndex].fields;
+    const gridLayout = calculateGridLayout(currentDimensions.width, currentDimensions.height, currentFields);
+    
+    // Fixed widget width (45% of page width) for all widgets
+    const widgetWidth = (currentDimensions.width * GRID_CONSTANTS.WIDGET_WIDTH_PERCENT) / 100;
+    
+    // Default field height based on type
     const defaultHeight = type === 'layoutTable' || type === 'dataTable' ? 200 : 
                           type === 'signature' ? 80 : 
                           type === 'textarea' ? 80 :
                           type === 'image' || type === 'attachment' ? 120 : 40;
     
-    // Calculate constraints based on current page dimensions
-    const padding = 24; // 12px padding on each side
-    const maxX = currentDimensions.width - defaultWidth - padding;
-    const maxY = currentDimensions.height - defaultHeight - padding;
+    // Find available grid cell
+    const findAvailableCell = (preferredRow?: number, preferredCol?: number): {row: number, col: number, x: number, y: number} | null => {
+      // If specific cell is requested, check if it's available
+      if (preferredRow !== undefined && preferredCol !== undefined) {
+        if (preferredRow >= 0 && preferredRow < GRID_CONSTANTS.ROWS && 
+            preferredCol >= 0 && preferredCol < GRID_CONSTANTS.COLS &&
+            !gridLayout.cells[preferredRow][preferredCol].occupied) {
+          const cell = gridLayout.cells[preferredRow][preferredCol];
+          return { row: preferredRow, col: preferredCol, x: cell.x, y: cell.y };
+        }
+      }
+      
+      // If drop coordinates are provided, find nearest available cell
+      if (x !== undefined && y !== undefined) {
+        let nearestCell = null;
+        let minDistance = Infinity;
+        
+        for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
+          for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
+            if (!gridLayout.cells[row][col].occupied) {
+              const cell = gridLayout.cells[row][col];
+              const distance = Math.sqrt(Math.pow(cell.x - x, 2) + Math.pow(cell.y - y, 2));
+              if (distance < minDistance) {
+                minDistance = distance;
+                nearestCell = { row, col, x: cell.x, y: cell.y };
+              }
+            }
+          }
+        }
+        
+        if (nearestCell) return nearestCell;
+      }
+      
+      // Find first available cell (top to bottom, left to right)
+      for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
+        for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
+          if (!gridLayout.cells[row][col].occupied) {
+            const cell = gridLayout.cells[row][col];
+            return { row, col, x: cell.x, y: cell.y };
+          }
+        }
+      }
+      
+      // If no cells available, return null to prevent overlap
+      return null;
+    };
+    
+    // Get the target cell
+    const targetCell = findAvailableCell(targetGridRow, targetGridCol);
+    
+    // If no available cell found, show alert and return
+    if (!targetCell) {
+      alert('No available grid cells. Please remove some widgets to add new ones.');
+      return;
+    }
+    
+    const finalX = targetCell.x;
+    const finalY = targetCell.y;
+    const gridRow = targetCell.row;
+    const gridCol = targetCell.col;
     
     const newField: FormField = {
       id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -2273,11 +2431,13 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
         filterableColumns: false,
         pagination: false
       },
-      width: defaultWidth,
+      width: widgetWidth,
       height: defaultHeight,
-      x: x !== undefined ? Math.max(0, Math.min(x, maxX)) : 50,
-      y: y !== undefined ? Math.max(0, Math.min(y, maxY)) : 50,
-      zIndex: 1
+      x: finalX,
+      y: finalY,
+      zIndex: 1,
+      gridRow,
+      gridCol
     };
 
     setFormPages(prev => prev.map((page, index) => 
@@ -2311,22 +2471,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       const x = e.clientX - canvasRect.left;
       const y = e.clientY - canvasRect.top;
       
-      // Field dimensions for constraint calculation
-      const fieldWidth = data.type === 'layoutTable' || data.type === 'dataTable' ? 400 : 300;
-      const fieldHeight = data.type === 'layoutTable' || data.type === 'dataTable' ? 200 : 
-                         data.type === 'signature' ? 80 : 
-                         data.type === 'textarea' ? 80 :
-                         data.type === 'image' || data.type === 'attachment' ? 120 : 40;
-      
-      // Ensure the field is dropped within the canvas bounds
-      const padding = 24; // Account for canvas padding
-      const canvasWidth = currentDimensions.width - padding;
-      const canvasHeight = currentDimensions.height - padding;
-      
-      const constrainedX = Math.max(0, Math.min(x - 12, canvasWidth - fieldWidth)); // Subtract half field width for better centering
-      const constrainedY = Math.max(0, Math.min(y - 12, canvasHeight - fieldHeight)); // Subtract half field height for better centering
-      
-      addFormField(data.type, constrainedX, constrainedY);
+      // Use grid-based positioning
+      addFormField(data.type, x, y);
     } catch (error) {
       console.error('Error handling drop:', error);
     }
@@ -2633,24 +2779,224 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     return pages;
   };
 
+  // Process paired fields from AI response
+  const processPairedFields = (formData: any): FormPage[] => {
+    console.log('processPairedFields called with:', formData);
+    const { formName, formDescription, fieldPairs } = formData;
+    console.log('Extracted fieldPairs:', fieldPairs);
+    const processedFields: FormField[] = [];
+    
+    const defaultDimensions = {
+      width: 595,
+      height: 842,
+      orientation: 'portrait' as const,
+      size: 'A4' as const
+    };
+    
+    // Fixed widget width (45% of page width) for all widgets
+    const widgetWidth = (defaultDimensions.width * GRID_CONSTANTS.WIDGET_WIDTH_PERCENT) / 100;
+    console.log('Widget width calculated:', widgetWidth);
+    
+    let currentRow = 0;
+    let currentCol = 0;
+    let currentPageIndex = 0;
+    const pages: FormPage[] = [];
+    
+    // Initialize first page
+    pages.push({
+      id: `page_${Date.now()}_${currentPageIndex}`,
+      fields: [],
+      dimensions: defaultDimensions
+    });
+    console.log('Initialized first page');
+    
+    // Process each pair
+    fieldPairs.forEach((pair: any, pairIndex: number) => {
+      console.log(`Processing pair ${pairIndex}:`, pair);
+      const { fields } = pair;
+      
+      // Check if we need to move to next row (if current row is full)
+      if (currentCol >= GRID_CONSTANTS.COLS) {
+        currentRow++;
+        currentCol = 0;
+      }
+      
+      // Check if we need a new page
+      if (currentRow >= GRID_CONSTANTS.ROWS) {
+        // Create new page
+        currentPageIndex++;
+        pages.push({
+          id: `page_${Date.now()}_${currentPageIndex}`,
+          fields: [],
+          dimensions: defaultDimensions
+        });
+        currentRow = 0;
+        currentCol = 0;
+      }
+      
+      // Calculate grid layout for current page
+      const gridLayout = calculateGridLayout(
+        defaultDimensions.width, 
+        defaultDimensions.height, 
+        pages[currentPageIndex].fields
+      );
+      
+      // Place fields in the pair side by side
+      fields.forEach((field: any, fieldIndex: number) => {
+        // Ensure we don't exceed column limit
+        if (currentCol >= GRID_CONSTANTS.COLS) {
+          currentRow++;
+          currentCol = 0;
+          
+          // Check if we need a new page again
+          if (currentRow >= GRID_CONSTANTS.ROWS) {
+            currentPageIndex++;
+            pages.push({
+              id: `page_${Date.now()}_${currentPageIndex}`,
+              fields: [],
+              dimensions: defaultDimensions
+            });
+            currentRow = 0;
+            currentCol = 0;
+          }
+        }
+        
+        const cell = gridLayout.cells[currentRow][currentCol];
+        
+        // Default field height based on type
+        const defaultHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 200 : 
+                              field.type === 'signature' ? 80 : 
+                              field.type === 'textarea' ? 80 :
+                              field.type === 'image' || field.type === 'attachment' ? 120 : 40;
+        
+        const processedField: FormField = {
+          id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: field.type || 'text',
+          label: field.label || 'Generated Field',
+          width: widgetWidth,
+          height: defaultHeight,
+          x: cell.x,
+          y: cell.y,
+          zIndex: 1,
+          gridRow: currentRow,
+          gridCol: currentCol,
+          settings: {
+            required: field.settings?.required || false,
+            placeholder: field.settings?.placeholder || 'Enter text...',
+            hideTitle: field.settings?.hideTitle || false,
+            titleLayout: field.settings?.titleLayout || 'horizontal',
+            ...field.settings
+          }
+        };
+        
+        // Field-specific settings processing
+        switch (field.type) {
+          case 'select':
+          case 'checkbox':
+          case 'multipleChoice':
+            processedField.settings.options = field.settings?.options || ['Option 1', 'Option 2', 'Option 3'];
+            processedField.settings.allowMultiple = field.type === 'checkbox';
+            break;
+            
+          case 'textarea':
+            processedField.settings.rows = field.settings?.rows || 3;
+            break;
+            
+          case 'file':
+            processedField.settings.maxSize = field.settings?.maxSize || '10MB';
+            processedField.settings.allowedTypes = field.settings?.allowedTypes || ['image/*'];
+            break;
+        }
+        
+        // Add field to current page
+        pages[currentPageIndex].fields.push(processedField);
+        console.log(`Added field to page ${currentPageIndex}:`, processedField.label);
+        
+        // Move to next column for next field in pair
+        currentCol++;
+      });
+      
+      // After processing a pair, move to next row
+      currentRow++;
+      currentCol = 0;
+    });
+    
+    console.log('Final pages before filtering:', pages.map(p => ({ id: p.id, fieldCount: p.fields.length })));
+    const filteredPages = pages.filter(page => page.fields.length > 0);
+    console.log('Filtered pages:', filteredPages.map(p => ({ id: p.id, fieldCount: p.fields.length })));
+    return filteredPages; // Remove empty pages
+  };
+
   const handleAIFormGenerated = (formData: any) => {
     console.log('Received AI generated form data:', formData);
     saveToHistory();
     
+    // Handle new paired field structure
+    if (formData.fieldPairs && formData.fieldPairs.length > 0) {
+      const processedPages = processPairedFields(formData);
+      setFormPages(processedPages);
+      setCurrentPageIndex(0);
+      setShowAIGenerator(false);
+      return;
+    }
+    
     if (formData.pages && formData.pages.length > 0) {
       // The form data already has pages structure, process each page
       const processedPages = formData.pages.map((page: any) => {
-        // Process the fields in each page
-        const processedFields = page.fields.map((field: any) => {
+        // Process the fields in each page using grid positioning
+        const processedFields: FormField[] = [];
+        const currentDimensions = page.dimensions || {
+          width: 595,
+          height: 842,
+          orientation: 'portrait' as const,
+          size: 'A4' as const
+        };
+        
+        // Calculate grid layout for this page
+        const gridLayout = calculateGridLayout(currentDimensions.width, currentDimensions.height, []);
+        
+        page.fields.forEach((field: any, index: number) => {
+          // Find available grid cell for this field
+          const findAvailableCell = (): {row: number, col: number, x: number, y: number} | null => {
+            for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
+              for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
+                if (!gridLayout.cells[row][col].occupied) {
+                  const cell = gridLayout.cells[row][col];
+                  // Mark this cell as occupied for subsequent fields
+                  gridLayout.cells[row][col].occupied = true;
+                  return { row, col, x: cell.x, y: cell.y };
+                }
+              }
+            }
+            return null;
+          };
+          
+          const targetCell = findAvailableCell();
+          if (!targetCell) {
+            console.warn(`No available grid cell for AI-generated field ${index + 1}. Skipping field.`);
+            return;
+          }
+          
+          // Fixed widget width (45% of page width) for all widgets
+          const widgetWidth = (currentDimensions.width * GRID_CONSTANTS.WIDGET_WIDTH_PERCENT) / 100;
+          
+          // Default field height based on type
+          const defaultHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 200 : 
+                                field.type === 'signature' ? 80 : 
+                                field.type === 'textarea' ? 80 :
+                                field.type === 'image' || field.type === 'attachment' ? 120 : 40;
+          
           const baseField = {
             id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             type: field.type || 'text',
             label: field.label || 'Generated Field',
-            width: field.width || 300,
-            height: field.height || 40,
-            x: field.x || 0,
-            y: field.y || 0,
-            zIndex: 1
+            width: widgetWidth,
+            height: field.height || defaultHeight,
+            x: targetCell.x,
+            y: targetCell.y,
+            zIndex: 1,
+            gridRow: targetCell.row,
+            gridCol: targetCell.col
           };
 
           // Process settings based on field type
@@ -2739,10 +3085,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               break;
           }
 
-          return {
+          const finalField = {
             ...baseField,
             settings
           };
+          
+          processedFields.push(finalField);
         });
 
         return {
@@ -2785,17 +3133,60 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       setCurrentPageIndex(0); // Set to the first page
     } else if (formData.fields && formData.fields.length > 0) {
       // Legacy support for form data with only fields property
-      // Process the form data to ensure all fields have proper structure
-      const processedFields = formData.fields.map((field: any) => {
+      // Process the form data using grid positioning
+      const processedFields: FormField[] = [];
+      const defaultDimensions = {
+        width: 595,
+        height: 842,
+        orientation: 'portrait' as const,
+        size: 'A4' as const
+      };
+      
+      // Calculate grid layout
+      const gridLayout = calculateGridLayout(defaultDimensions.width, defaultDimensions.height, []);
+      
+      formData.fields.forEach((field: any, index: number) => {
+        // Find available grid cell for this field
+        const findAvailableCell = (): {row: number, col: number, x: number, y: number} | null => {
+          for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
+            for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
+              if (!gridLayout.cells[row][col].occupied) {
+                const cell = gridLayout.cells[row][col];
+                // Mark this cell as occupied for subsequent fields
+                gridLayout.cells[row][col].occupied = true;
+                return { row, col, x: cell.x, y: cell.y };
+              }
+            }
+          }
+          return null;
+        };
+        
+        const targetCell = findAvailableCell();
+        if (!targetCell) {
+          console.warn(`No available grid cell for AI-generated field ${index + 1}. Skipping field.`);
+          return;
+        }
+        
+        // Fixed widget width (45% of page width) for all widgets
+        const widgetWidth = (defaultDimensions.width * GRID_CONSTANTS.WIDGET_WIDTH_PERCENT) / 100;
+        
+        // Default field height based on type
+        const defaultHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 200 : 
+                              field.type === 'signature' ? 80 : 
+                              field.type === 'textarea' ? 80 :
+                              field.type === 'image' || field.type === 'attachment' ? 120 : 40;
+        
         const baseField = {
           id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: field.type || 'text',
           label: field.label || 'Generated Field',
-          width: field.width || 300,
-          height: field.height || 40,
-          x: field.x || 0,
-          y: field.y || 0,
-          zIndex: 1
+          width: widgetWidth,
+          height: field.height || defaultHeight,
+          x: targetCell.x,
+          y: targetCell.y,
+          zIndex: 1,
+          gridRow: targetCell.row,
+          gridCol: targetCell.col
         };
 
         // Process settings based on field type (same as above)
@@ -2808,20 +3199,15 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
         };
 
         // Field-specific settings processing (simplified for brevity)
-        return {
+        const finalField = {
           ...baseField,
           settings
         };
+        
+        processedFields.push(finalField);
       });
 
       // Check for overflow and distribute fields across multiple pages if needed
-      const defaultDimensions = {
-        width: 595,
-        height: 842,
-        orientation: 'portrait' as const,
-        size: 'A4' as const
-      };
-      
       // Create pages with overflow handling
       const pages = distributeFieldsAcrossPages(processedFields, defaultDimensions);
       
@@ -3304,71 +3690,99 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     type="text"
                     icon={<RiText className="mr-2" />}
                     label="Text Field"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="textarea"
                     icon={<RiFileEditLine className="mr-2" />}
                     label="Textarea"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="number"
                     icon={<span className="mr-2">123</span>}
                     label="Input Box"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="multipleChoice"
                     icon={<RiCheckboxMultipleLine className="mr-2" />}
                     label="Multiple Choice"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="checkbox"
                     icon={<RiCheckboxLine className="mr-2" />}
                     label="Checkbox"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="select"
                     icon={<RiListOrdered className="mr-2" />}
                     label="Dropdown"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="date"
                     icon={<RiCalendarLine className="mr-2" />}
                     label="Date"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="intervalData"
                     icon={<RiSignalWifiLine className="mr-2" />}
                     label="Interval Data"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="image"
                     icon={<RiImageLine className="mr-2" />}
                     label="Image"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="attachment"
                     icon={<RiAttachmentLine className="mr-2" />}
                     label="Attachment"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="annotation"
                     icon={<RiPencilLine className="mr-2" />}
                     label="Annotation"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="signature"
                     icon={<span className="mr-2">✍️</span>}
                     label="Signature"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="subform"
                     icon={<RiApps2Line className="mr-2" />}
                     label="Subform"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
                     type="member"
                     icon={<RiUserLine className="mr-2" />}
                     label="Member/Department"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
                   />
                 </div>
               </div>
@@ -3381,6 +3795,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                   type="approvalKit"
                   icon={<RiSettings4Line className="mr-2" />}
                   label="Approval Kit"
+                  onDragStart={() => setIsDragging(true)}
+                  onDragEnd={() => setIsDragging(false)}
                 />
               </div>
             )}
@@ -3392,11 +3808,15 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                   type="layoutTable"
                   icon={<RiLayoutLine className="mr-2" />}
                   label="Layout Tables"
+                  onDragStart={() => setIsDragging(true)}
+                  onDragEnd={() => setIsDragging(false)}
                 />
                 <DraggableWidget 
                   type="dataTable"
                   icon={<RiTableLine className="mr-2" />}
                   label="Data Tables"
+                  onDragStart={() => setIsDragging(true)}
+                  onDragEnd={() => setIsDragging(false)}
                 />
               </div>
             )}
@@ -3613,7 +4033,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     >
                       {/* Canvas content */}
                       <div 
-                        className="relative w-full h-full p-6"
+                        className="relative w-full h-full"
                         data-canvas="true"
                         data-page-container="true"
                         data-page-index={pageIndex}
@@ -3629,6 +4049,46 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                           }
                         }}
                       >
+                        {/* Grid Overlay - Show only available cells */}
+                        {isDragging && (() => {
+                          const gridLayout = calculateGridLayout(pageWidth, pageHeight, page.fields);
+                          
+                          return (
+                            <div className="absolute inset-0 pointer-events-none z-40">
+                              {gridLayout.cells.map((row, rowIndex) => 
+                                row.map((cell, colIndex) => {
+                                  // Only render available (non-occupied) cells
+                                  if (cell.occupied) return null;
+                                  
+                                  return (
+                                    <div
+                                      key={`grid-${pageIndex}-${rowIndex}-${colIndex}`}
+                                      className="absolute border border-green-400 bg-green-50/30 transition-colors duration-200"
+                                      style={{
+                                        left: cell.x,
+                                        top: cell.y,
+                                        width: cell.width,
+                                        height: cell.height,
+                                        borderStyle: 'dashed',
+                                        borderWidth: '2px'
+                                      }}
+                                    >
+                                      <div className="absolute top-1 left-1 text-xs text-green-700 bg-white/90 px-1 rounded font-medium">
+                                        {rowIndex + 1},{colIndex + 1}
+                                      </div>
+                                      <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="text-green-600 text-xs font-medium bg-white/80 px-2 py-1 rounded">
+                                          Available
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          );
+                        })()}
+                        
                         {/* Drop zone indicator */}
                         {isDragging && (
                           <div className="absolute inset-0 bg-ai-blue/5 border-2 border-dashed border-ai-blue rounded-lg flex items-center justify-center z-50">
@@ -3639,7 +4099,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                         )}
                         
                         {page.fields.length === 0 ? (
-                          <div className="absolute inset-6 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-300 rounded-lg">
+                          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-300 rounded-lg">
                             <RiDragMove2Line className="text-6xl mb-4" />
                             <p className="text-lg font-medium">Drop form fields here</p>
                             <p className="text-sm mt-2">Drag widgets from the left panel to create your form</p>
@@ -3687,8 +4147,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                                 setSelectedField(field);
                                 setCurrentPageIndex(pageIndex);
                               }}
+                              currentFields={page.fields}
+                              pageWidth={page.dimensions.width}
+                              pageHeight={page.dimensions.height}
                             >
-                              <div className="w-full h-full bg-white border border-gray-200 rounded p-2">
+                              <div className="w-full h-full">
                                 {renderWidgetPreview(field)}
                               </div>
                             </ResizableWrapper>
@@ -4699,7 +5162,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       }}
                     >
                       {/* Print-ready content */}
-                      <div className="relative w-full h-full p-6" style={{ minHeight: `${page.dimensions.height - 48}px` }}>
+                      <div className="relative w-full h-full" style={{ minHeight: `${page.dimensions.height - 48}px` }}>
                         {page.fields.length === 0 ? (
                           <div className="flex items-center justify-center h-full text-gray-400">
                             <div className="text-center">
@@ -4730,7 +5193,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                                 height: field.height || 40,
                               }}
                             >
-                              <div className="w-full h-full bg-white border border-gray-200 rounded shadow-sm hover:shadow-md transition-shadow duration-200">
+                              <div className="w-full h-full">
                                 {renderWidgetPreview(field)}
                               </div>
                             </div>
@@ -4831,6 +5294,61 @@ const FormsPage: React.FC = () => {
       size: 'A4' as const 
     } 
   }]);
+
+  // Migrate existing fields to grid system on component mount
+  useEffect(() => {
+    const migrateFieldsToGrid = () => {
+      setFormPages(prevPages => {
+        return prevPages.map(page => {
+          const fieldsNeedingMigration = page.fields.filter(field => 
+            field.gridRow === undefined || field.gridCol === undefined
+          );
+          
+          if (fieldsNeedingMigration.length === 0) {
+            return page; // No migration needed
+          }
+          
+          const currentDimensions = page.dimensions;
+          const pageWidth = currentDimensions.width;
+          const pageHeight = currentDimensions.height;
+          
+          // Calculate grid layout for existing fields that already have grid coordinates
+          const fieldsWithGrid = page.fields.filter(field => 
+            field.gridRow !== undefined && field.gridCol !== undefined
+          );
+          const gridLayout = calculateGridLayout(pageWidth, pageHeight, fieldsWithGrid);
+          
+          // Migrate fields without grid coordinates
+          const migratedFields = page.fields.map(field => {
+            if (field.gridRow === undefined || field.gridCol === undefined) {
+              // Find an available cell for this field
+              const availableCell = findAvailableGridCell(gridLayout);
+              if (availableCell) {
+                const cellPosition = snapToGridCell(availableCell.row, availableCell.col, gridLayout);
+                // Mark this cell as occupied for subsequent fields
+                gridLayout.cells[availableCell.row][availableCell.col].occupied = true;
+                
+                return {
+                  ...field,
+                  x: cellPosition.x,
+                  y: cellPosition.y,
+                  width: cellPosition.width,
+                  gridRow: availableCell.row,
+                  gridCol: availableCell.col
+                };
+              }
+            }
+            return field;
+          });
+          
+          return { ...page, fields: migratedFields };
+        });
+      });
+    };
+    
+    // Run migration after component mounts
+    migrateFieldsToGrid();
+  }, []); // Empty dependency array - run only once on mount
   
   // Add formsList state
   const [formsList, setFormsList] = useState([

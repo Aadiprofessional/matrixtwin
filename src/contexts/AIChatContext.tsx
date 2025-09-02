@@ -252,14 +252,14 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
       console.log('🚀 Sending request to API...');
       
       // Make the streaming request to the Dashscope API
-      const response = await fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', {
+      const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer sk-0d874843ff2542c38940adcbeb2b2cc4',
+          'Authorization': 'Bearer sk-9f7b91a0bb81406b9da7ff884ddd2592',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: "qwen-vl-max",
+          model: "qwen-plus",
           messages: messages,
           stream: true
         })
@@ -385,4 +385,4 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
       {children}
     </AIChatContext.Provider>
   );
-}; 
+};
