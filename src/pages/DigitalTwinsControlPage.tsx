@@ -183,7 +183,7 @@ const DigitalTwinsControlPage: React.FC = () => {
       warning: { bg: 'bg-yellow-900/40', text: 'text-yellow-400', label: 'Warning' },
       on: { bg: 'bg-green-900/40', text: 'text-green-400', label: 'On' },
       off: { bg: 'bg-gray-900/40', text: 'text-gray-400', label: 'Off' },
-      auto: { bg: 'bg-blue-900/40', text: 'text-blue-400', label: 'Auto' },
+      auto: { bg: 'bg-orange-900/40', text: 'text-orange-400', label: 'Auto' },
     };
     
     const config = statusConfig[status];
@@ -206,7 +206,7 @@ const DigitalTwinsControlPage: React.FC = () => {
           <Link to="/digital-twins" className="dtc-back-button text-gray-400 hover:text-white mr-4" style={baseStyle}>
             <RiArrowGoBackLine className="text-xl" />
           </Link>
-          <RiFlashlightLine className="dtc-header-icon text-ai-blue text-3xl mr-3" style={baseStyle} />
+          <RiFlashlightLine className="dtc-header-icon text-portfolio-orange text-3xl mr-3" style={baseStyle} />
           <h1 className="dtc-title text-2xl font-bold text-white" style={baseStyle}>
             Smart Control
           </h1>
@@ -257,7 +257,7 @@ const DigitalTwinsControlPage: React.FC = () => {
             onClick={() => setActiveTab('systems')}
             className={`px-4 py-2 font-medium text-sm focus:outline-none ${
               activeTab === 'systems' 
-                ? 'text-ai-blue border-b-2 border-ai-blue' 
+                ? 'text-portfolio-orange border-b-2 border-portfolio-orange' 
                 : 'text-gray-400 hover:text-gray-300'
             }`}
             style={baseStyle}
@@ -268,7 +268,7 @@ const DigitalTwinsControlPage: React.FC = () => {
             onClick={() => setActiveTab('schedule')}
             className={`px-4 py-2 font-medium text-sm focus:outline-none ${
               activeTab === 'schedule' 
-                ? 'text-ai-blue border-b-2 border-ai-blue' 
+                ? 'text-portfolio-orange border-b-2 border-portfolio-orange' 
                 : 'text-gray-400 hover:text-gray-300'
             }`}
             style={baseStyle}
@@ -287,7 +287,7 @@ const DigitalTwinsControlPage: React.FC = () => {
                   onClick={() => setSelectedZone(zone.id)}
                   className={`px-4 py-2 text-sm ${
                     selectedZone === zone.id
-                      ? 'bg-ai-blue text-white'
+                      ? 'bg-portfolio-orange text-white'
                       : 'text-gray-300 hover:bg-dark-700'
                   }`}
                   style={baseStyle}
@@ -307,7 +307,7 @@ const DigitalTwinsControlPage: React.FC = () => {
                 >
                   <div className="flex items-center justify-between mb-3" style={baseStyle}>
                     <div className="flex items-center" style={baseStyle}>
-                      <div className="text-ai-blue text-xl mr-2" style={baseStyle}>
+                      <div className="text-portfolio-orange text-xl mr-2" style={baseStyle}>
                         {system.icon}
                       </div>
                       <div style={baseStyle}>
@@ -360,7 +360,7 @@ const DigitalTwinsControlPage: React.FC = () => {
                   style={baseStyle}
                 >
                   <div className="flex items-center" style={baseStyle}>
-                    <div className="text-ai-blue text-xl mr-3" style={baseStyle}>
+                    <div className="text-portfolio-orange text-xl mr-3" style={baseStyle}>
                       <RiHistoryLine />
                     </div>
                     <div style={baseStyle}>
@@ -377,7 +377,7 @@ const DigitalTwinsControlPage: React.FC = () => {
                     <button
                       onClick={() => handleTaskToggle(task.id)}
                       className={`w-12 h-6 rounded-full transition-colors ${
-                        task.enabled ? 'bg-ai-blue' : 'bg-gray-600'
+                        task.enabled ? 'bg-portfolio-orange' : 'bg-gray-600'
                       }`}
                       style={baseStyle}
                     >

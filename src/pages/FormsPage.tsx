@@ -11,6 +11,7 @@ import { DailyCleaningInspectionTemplate } from '../components/forms/DailyCleani
 import { MonthlyReturnTemplate } from '../components/forms/MonthlyReturnTemplate';
 import { InspectionCheckFormTemplate } from '../components/forms/InspectionCheckFormTemplate';
 import { SurveyCheckFormTemplate } from '../components/forms/SurveyCheckFormTemplate';
+import ExcelGrid from '../components/forms/ExcelGrid';
 import { 
   RiAddLine, 
   RiSearchLine, 
@@ -52,7 +53,13 @@ import {
   RiFilePdfLine,
   RiArrowLeftLine,
   RiArrowRightLine,
-  RiPrinterLine
+  RiPrinterLine,
+  RiFileCopyLine,
+  RiScissorsCutLine,
+  RiClipboardLine,
+  RiInsertRowTop,
+  RiInsertRowBottom,
+  RiDeleteRow
 } from 'react-icons/ri';
 import { IconType } from 'react-icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -70,40 +77,79 @@ interface FormField {
   zIndex?: number;
   gridRow?: number;
   gridCol?: number;
+  cellId?: string; // New: Reference to the cell this field is in
+  gridPosition?: { row: number; col: number }; // Excel-like grid position
 }
 
-// Grid system constants
-const GRID_CONSTANTS = {
-  ROWS: 9,
-  COLS: 2,
-  WIDGET_WIDTH_PERCENT: 45, // 45% of page width
-  MAX_WIDGETS_PER_ROW: 2,
-  GRID_GAP: 10 // Gap between grid cells in pixels
-} as const;
+// New Excel-like Grid System Interfaces
+interface MergeInfo {
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+  isMaster: boolean;
+}
 
-// Grid cell interface
 interface GridCell {
+  id: string;
   row: number;
   col: number;
   x: number;
   y: number;
   width: number;
   height: number;
-  occupied: boolean;
-  fieldId?: string;
+  fieldId?: string; // ID of the form field in this cell
+  isEmpty: boolean;
+  mergeInfo?: MergeInfo; // Information about merged cells
 }
 
-// Grid layout interface
-interface GridLayout {
-  cells: GridCell[][];
-  rowHeights: number[];
-  pageWidth: number;
-  pageHeight: number;
+interface GridRow {
+  id: string;
+  index: number;
+  height: number;
+  y: number;
+  isResizing?: boolean;
 }
+
+interface GridColumn {
+  id: string;
+  index: number;
+  width: number;
+  x: number;
+  isResizing?: boolean;
+}
+
+interface ExcelGrid {
+  rows: GridRow[];
+  columns: GridColumn[];
+  cells: GridCell[][];
+  totalWidth: number;
+  totalHeight: number;
+  mergedCells?: Map<string, MergeInfo>;
+}
+
+// Grid configuration constants
+const EXCEL_GRID_CONFIG = {
+  DEFAULT_ROWS: 10,
+  DEFAULT_COLS: 6,
+  MIN_ROW_HEIGHT: 30,
+  MIN_COL_WIDTH: 80,
+  DEFAULT_ROW_HEIGHT: 50,
+  DEFAULT_COL_WIDTH: 120,
+  RESIZE_HANDLE_SIZE: 8,
+  GRID_BORDER_WIDTH: 1,
+  HEADER_HEIGHT: 25,
+  HEADER_WIDTH: 40
+} as const;
+
+// Grid cell constants for widget operations
+const GRID_CELL_WIDTH = 120;
+const GRID_CELL_HEIGHT = 50;
 
 interface FormPage {
   id: string;
   fields: FormField[];
+  grid: ExcelGrid;
   dimensions: {
     width: number;
     height: number;
@@ -112,106 +158,104 @@ interface FormPage {
   };
 }
 
-// Grid system utility functions
-const calculateGridLayout = (pageWidth: number, pageHeight: number, fields: FormField[]): GridLayout => {
-  const cellWidth = (pageWidth * GRID_CONSTANTS.WIDGET_WIDTH_PERCENT) / 100;
-  const availableHeight = pageHeight - (GRID_CONSTANTS.GRID_GAP * (GRID_CONSTANTS.ROWS + 1));
-  const baseCellHeight = availableHeight / GRID_CONSTANTS.ROWS;
-  
-  // Initialize grid cells
+// Excel Grid Utility Functions
+const createInitialGrid = (rows: number = EXCEL_GRID_CONFIG.DEFAULT_ROWS, cols: number = EXCEL_GRID_CONFIG.DEFAULT_COLS): ExcelGrid => {
+  const gridRows: GridRow[] = [];
+  const gridColumns: GridColumn[] = [];
   const cells: GridCell[][] = [];
-  const rowHeights: number[] = new Array(GRID_CONSTANTS.ROWS).fill(baseCellHeight);
   
-  for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
+  // Create columns
+  let currentX = EXCEL_GRID_CONFIG.HEADER_WIDTH;
+  for (let col = 0; col < cols; col++) {
+    gridColumns.push({
+      id: `col-${col}`,
+      index: col,
+      width: EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH,
+      x: currentX
+    });
+    currentX += EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
+  }
+  
+  // Create rows
+  let currentY = EXCEL_GRID_CONFIG.HEADER_HEIGHT;
+  for (let row = 0; row < rows; row++) {
+    gridRows.push({
+      id: `row-${row}`,
+      index: row,
+      height: EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT,
+      y: currentY
+    });
+    currentY += EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT;
+  }
+  
+  // Create cells
+  for (let row = 0; row < rows; row++) {
     cells[row] = [];
-    for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
-      const x = col === 0 ? GRID_CONSTANTS.GRID_GAP : pageWidth - cellWidth - GRID_CONSTANTS.GRID_GAP;
-      const y = GRID_CONSTANTS.GRID_GAP + (row * (baseCellHeight + GRID_CONSTANTS.GRID_GAP));
-      
+    for (let col = 0; col < cols; col++) {
       cells[row][col] = {
+        id: `cell-${row}-${col}`,
         row,
         col,
-        x,
-        y,
-        width: cellWidth,
-        height: baseCellHeight,
-        occupied: false
+        x: gridColumns[col].x,
+        y: gridRows[row].y,
+        width: gridColumns[col].width,
+        height: gridRows[row].height,
+        isEmpty: true
       };
     }
   }
   
-  // Mark occupied cells and calculate row heights based on widgets
-  const rowMaxHeights: number[] = new Array(GRID_CONSTANTS.ROWS).fill(baseCellHeight);
-  
-  fields.forEach(field => {
-    let row: number, col: number;
-    
-    if (field.gridRow !== undefined && field.gridCol !== undefined) {
-      // Use existing grid coordinates
-      row = field.gridRow;
-      col = field.gridCol;
-    } else if (field.x !== undefined && field.y !== undefined) {
-      // Calculate grid position from x/y coordinates for fields without grid coordinates
-      const fieldCenterX = field.x + (field.width || cellWidth) / 2;
-      const fieldCenterY = field.y + (field.height || baseCellHeight) / 2;
-      
-      // Determine which column based on x position
-      col = fieldCenterX < pageWidth / 2 ? 0 : 1;
-      
-      // Determine which row based on y position
-      row = Math.floor((fieldCenterY - GRID_CONSTANTS.GRID_GAP) / (baseCellHeight + GRID_CONSTANTS.GRID_GAP));
-      row = Math.max(0, Math.min(row, GRID_CONSTANTS.ROWS - 1));
-    } else {
-      // Skip fields without position information
-      return;
-    }
-    
-    if (row >= 0 && row < GRID_CONSTANTS.ROWS && col >= 0 && col < GRID_CONSTANTS.COLS) {
-      cells[row][col].occupied = true;
-      cells[row][col].fieldId = field.id;
-      
-      // Update row height based on widget height
-      const widgetHeight = field.height || baseCellHeight;
-      rowMaxHeights[row] = Math.max(rowMaxHeights[row], widgetHeight);
-    }
-  });
-  
-  // Update cell heights and positions based on calculated row heights
-  let currentY = GRID_CONSTANTS.GRID_GAP;
-  for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
-    rowHeights[row] = rowMaxHeights[row];
-    
-    for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
-      cells[row][col].y = currentY;
-      cells[row][col].height = rowHeights[row];
-    }
-    
-    currentY += rowHeights[row] + GRID_CONSTANTS.GRID_GAP;
-  }
-  
   return {
+    rows: gridRows,
+    columns: gridColumns,
     cells,
-    rowHeights,
-    pageWidth,
-    pageHeight
+    totalWidth: currentX,
+    totalHeight: currentY
   };
 };
 
-const findAvailableGridCell = (gridLayout: GridLayout): { row: number; col: number } | null => {
-  for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
-    for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
-      if (!gridLayout.cells[row][col].occupied) {
-        return { row, col };
+const updateGridAfterResize = (grid: ExcelGrid): ExcelGrid => {
+  const updatedCells: GridCell[][] = [];
+  
+  // Recalculate cell positions and dimensions
+  for (let row = 0; row < grid.rows.length; row++) {
+    updatedCells[row] = [];
+    for (let col = 0; col < grid.columns.length; col++) {
+      const existingCell = grid.cells[row][col];
+      updatedCells[row][col] = {
+        ...existingCell,
+        x: grid.columns[col].x,
+        y: grid.rows[row].y,
+        width: grid.columns[col].width,
+        height: grid.rows[row].height
+      };
+    }
+  }
+  
+  return {
+    ...grid,
+    cells: updatedCells,
+    totalWidth: grid.columns[grid.columns.length - 1]?.x + grid.columns[grid.columns.length - 1]?.width + EXCEL_GRID_CONFIG.HEADER_WIDTH,
+    totalHeight: grid.rows[grid.rows.length - 1]?.y + grid.rows[grid.rows.length - 1]?.height + EXCEL_GRID_CONFIG.HEADER_HEIGHT
+  };
+};
+
+const findAvailableGridCell = (grid: ExcelGrid): { row: number; col: number; x: number; y: number } | null => {
+  for (let row = 0; row < grid.rows.length; row++) {
+    for (let col = 0; col < grid.columns.length; col++) {
+      if (grid.cells[row][col].isEmpty) {
+        const cell = grid.cells[row][col];
+        return { row, col, x: cell.x, y: cell.y };
       }
     }
   }
   return null;
 };
 
-const getGridCellFromPosition = (x: number, y: number, gridLayout: GridLayout): { row: number; col: number } | null => {
-  for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
-    for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
-      const cell = gridLayout.cells[row][col];
+const getGridCellFromPosition = (x: number, y: number, grid: ExcelGrid): { row: number; col: number } | null => {
+  for (let row = 0; row < grid.rows.length; row++) {
+    for (let col = 0; col < grid.columns.length; col++) {
+      const cell = grid.cells[row][col];
       if (x >= cell.x && x <= cell.x + cell.width && 
           y >= cell.y && y <= cell.y + cell.height) {
         return { row, col };
@@ -221,14 +265,266 @@ const getGridCellFromPosition = (x: number, y: number, gridLayout: GridLayout): 
   return null;
 };
 
-const snapToGridCell = (row: number, col: number, gridLayout: GridLayout): { x: number; y: number; width: number; height: number } => {
-  const cell = gridLayout.cells[row][col];
+// Helper function to find merged cell information for a given cell
+const findMergedCellInfo = (row: number, col: number, grid: ExcelGrid): MergeInfo | null => {
+  // First check if the cell has mergeInfo directly
+  const cell = grid.cells[row]?.[col];
+  if (cell?.mergeInfo) {
+    return cell.mergeInfo;
+  }
+  
+  // Then check the grid's mergedCells map
+  if (grid.mergedCells) {
+    const entries = Array.from(grid.mergedCells.entries());
+    for (const [key, mergeInfo] of entries) {
+      if (row >= mergeInfo.startRow && row <= mergeInfo.endRow &&
+          col >= mergeInfo.startCol && col <= mergeInfo.endCol) {
+        return mergeInfo;
+      }
+    }
+  }
+  
+  return null;
+};
+
+const snapToGridCell = (row: number, col: number, grid: ExcelGrid): { x: number; y: number; width: number; height: number } => {
+  // Add null checks for grid and its properties
+  if (!grid || !grid.cells || !grid.cells[row] || !grid.cells[row][col]) {
+    // Return default position if grid or cell is not available
+    return {
+      x: col * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH,
+      y: row * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT,
+      width: EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH,
+      height: EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT
+    };
+  }
+  
+  const cell = grid.cells[row][col];
+  
+  // Check if this cell is part of a merged cell
+  const mergeInfo = findMergedCellInfo(row, col, grid);
+  if (mergeInfo) {
+    // Calculate the total width and height of the merged area
+    let totalWidth = 0;
+    let totalHeight = 0;
+    
+    // Sum up widths of all columns in the merge
+    for (let c = mergeInfo.startCol; c <= mergeInfo.endCol; c++) {
+      const colCell = grid.cells[mergeInfo.startRow]?.[c];
+      if (colCell) {
+        totalWidth += colCell.width;
+      }
+    }
+    
+    // Sum up heights of all rows in the merge
+    for (let r = mergeInfo.startRow; r <= mergeInfo.endRow; r++) {
+      const rowCell = grid.cells[r]?.[mergeInfo.startCol];
+      if (rowCell) {
+        totalHeight += rowCell.height;
+      }
+    }
+    
+    // Use the position of the master cell (top-left) and the calculated total dimensions
+    const masterCell = grid.cells[mergeInfo.startRow][mergeInfo.startCol];
+    return {
+      x: masterCell.x,
+      y: masterCell.y,
+      width: totalWidth,
+      height: totalHeight
+    };
+  }
+  
+  // For non-merged cells, return the original cell dimensions
   return {
     x: cell.x,
     y: cell.y,
     width: cell.width,
     height: cell.height
   };
+};
+
+const addRowToGrid = (grid: ExcelGrid, insertIndex?: number): ExcelGrid => {
+  const newRowIndex = insertIndex ?? grid.rows.length;
+  const newRowY = newRowIndex === 0 ? EXCEL_GRID_CONFIG.HEADER_HEIGHT : 
+                  newRowIndex >= grid.rows.length ? 
+                  grid.rows[grid.rows.length - 1].y + grid.rows[grid.rows.length - 1].height :
+                  grid.rows[newRowIndex].y;
+  
+  const newRow: GridRow = {
+    id: `row-${Date.now()}`,
+    index: newRowIndex,
+    height: EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT,
+    y: newRowY
+  };
+  
+  // Insert the new row
+  const updatedRows = [...grid.rows];
+  updatedRows.splice(newRowIndex, 0, newRow);
+  
+  // Update indices and positions of subsequent rows
+  for (let i = newRowIndex + 1; i < updatedRows.length; i++) {
+    updatedRows[i].index = i;
+    updatedRows[i].y = updatedRows[i - 1].y + updatedRows[i - 1].height;
+  }
+  
+  // Create new cells for the new row
+  const updatedCells = [...grid.cells];
+  const newCellRow: GridCell[] = [];
+  
+  for (let col = 0; col < grid.columns.length; col++) {
+    newCellRow.push({
+      id: `cell-${newRowIndex}-${col}`,
+      row: newRowIndex,
+      col,
+      x: grid.columns[col].x,
+      y: newRow.y,
+      width: grid.columns[col].width,
+      height: newRow.height,
+      isEmpty: true
+    });
+  }
+  
+  updatedCells.splice(newRowIndex, 0, newCellRow);
+  
+  // Update row indices in existing cells
+  for (let row = newRowIndex + 1; row < updatedCells.length; row++) {
+    for (let col = 0; col < updatedCells[row].length; col++) {
+      updatedCells[row][col].row = row;
+      updatedCells[row][col].id = `cell-${row}-${col}`;
+      updatedCells[row][col].y = updatedRows[row].y;
+    }
+  }
+  
+  return updateGridAfterResize({
+    ...grid,
+    rows: updatedRows,
+    cells: updatedCells
+  });
+};
+
+const addColumnToGrid = (grid: ExcelGrid, insertIndex?: number): ExcelGrid => {
+  const newColIndex = insertIndex ?? grid.columns.length;
+  const newColX = newColIndex === 0 ? EXCEL_GRID_CONFIG.HEADER_WIDTH : 
+                  newColIndex >= grid.columns.length ? 
+                  grid.columns[grid.columns.length - 1].x + grid.columns[grid.columns.length - 1].width :
+                  grid.columns[newColIndex].x;
+  
+  const newColumn: GridColumn = {
+    id: `col-${Date.now()}`,
+    index: newColIndex,
+    width: EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH,
+    x: newColX
+  };
+  
+  // Insert the new column
+  const updatedColumns = [...grid.columns];
+  updatedColumns.splice(newColIndex, 0, newColumn);
+  
+  // Update indices and positions of subsequent columns
+  for (let i = newColIndex + 1; i < updatedColumns.length; i++) {
+    updatedColumns[i].index = i;
+    updatedColumns[i].x = updatedColumns[i - 1].x + updatedColumns[i - 1].width;
+  }
+  
+  // Add new cells for the new column
+  const updatedCells = grid.cells.map((row, rowIndex) => {
+    const newCell: GridCell = {
+      id: `cell-${rowIndex}-${newColIndex}`,
+      row: rowIndex,
+      col: newColIndex,
+      x: newColumn.x,
+      y: grid.rows[rowIndex].y,
+      width: newColumn.width,
+      height: grid.rows[rowIndex].height,
+      isEmpty: true
+    };
+    
+    const updatedRow = [...row];
+    updatedRow.splice(newColIndex, 0, newCell);
+    
+    // Update column indices in existing cells
+    for (let col = newColIndex + 1; col < updatedRow.length; col++) {
+      updatedRow[col].col = col;
+      updatedRow[col].id = `cell-${rowIndex}-${col}`;
+      updatedRow[col].x = updatedColumns[col].x;
+    }
+    
+    return updatedRow;
+  });
+  
+  return updateGridAfterResize({
+    ...grid,
+    columns: updatedColumns,
+    cells: updatedCells
+  });
+};
+
+const findCellByFieldId = (grid: ExcelGrid, fieldId: string): GridCell | null => {
+  // Add null checks for grid and its properties
+  if (!grid || !grid.cells || !grid.rows || !grid.columns) {
+    return null;
+  }
+  
+  for (let row = 0; row < grid.rows.length; row++) {
+    for (let col = 0; col < grid.columns.length; col++) {
+      // Check if the row exists and the cell exists
+      if (grid.cells[row] && grid.cells[row][col]) {
+        const cell = grid.cells[row][col];
+        if (cell && cell.fieldId === fieldId) {
+          return cell;
+        }
+      }
+    }
+  }
+  return null;
+};
+
+const resizeGridRow = (grid: ExcelGrid, rowIndex: number, newHeight: number): ExcelGrid => {
+  const minHeight = EXCEL_GRID_CONFIG.MIN_ROW_HEIGHT;
+  const constrainedHeight = Math.max(minHeight, newHeight);
+  
+  const updatedRows = grid.rows.map((row, index) => {
+    if (index === rowIndex) {
+      return { ...row, height: constrainedHeight };
+    }
+    return row;
+  });
+  
+  // Update Y positions for subsequent rows
+  let currentY = EXCEL_GRID_CONFIG.HEADER_HEIGHT;
+  for (let i = 0; i < updatedRows.length; i++) {
+    updatedRows[i].y = currentY;
+    currentY += updatedRows[i].height;
+  }
+  
+  return updateGridAfterResize({
+    ...grid,
+    rows: updatedRows
+  });
+};
+
+const resizeGridColumn = (grid: ExcelGrid, colIndex: number, newWidth: number): ExcelGrid => {
+  const minWidth = EXCEL_GRID_CONFIG.MIN_COL_WIDTH;
+  const constrainedWidth = Math.max(minWidth, newWidth);
+  
+  const updatedColumns = grid.columns.map((col, index) => {
+    if (index === colIndex) {
+      return { ...col, width: constrainedWidth };
+    }
+    return col;
+  });
+  
+  // Update X positions for subsequent columns
+  let currentX = EXCEL_GRID_CONFIG.HEADER_WIDTH;
+  for (let i = 0; i < updatedColumns.length; i++) {
+    updatedColumns[i].x = currentX;
+    currentX += updatedColumns[i].width;
+  }
+  
+  return updateGridAfterResize({
+    ...grid,
+    columns: updatedColumns
+  });
 };
 
 // Calculate field accuracy based on dimensions, positioning, and typography
@@ -338,6 +634,60 @@ const validateFieldDimensions = (field: any, documentAnalysis: any): { isValid: 
     isValid: issues.length === 0,
     issues,
     adjustedField: issues.length > 0 ? adjustedField : undefined
+  };
+};
+
+// Recalculate form field dimensions based on grid cell changes
+const recalculateFieldDimensions = (field: FormField, grid: ExcelGrid): FormField => {
+  // Add null checks for field and grid
+  if (!field || !field.id || !grid) {
+    return field;
+  }
+  
+  // Find the cell that contains this field
+  const fieldCell = findCellByFieldId(grid, field.id);
+  if (!fieldCell) {
+    // If field is not found in grid, return original field
+    return field;
+  }
+
+  // Get the current position and dimensions from the grid
+  const cellPosition = snapToGridCell(fieldCell.row, fieldCell.col, grid);
+  
+  // Update field with new dimensions
+  return {
+    ...field,
+    x: cellPosition.x,
+    y: cellPosition.y,
+    width: cellPosition.width,
+    height: cellPosition.height
+  };
+};
+
+// Update all form fields in a page based on current grid state
+const updateAllFieldDimensions = (page: FormPage, updatedGrid: ExcelGrid): FormPage => {
+  // Add null checks for page and fields
+  if (!page || !page.fields || !Array.isArray(page.fields)) {
+    return page;
+  }
+  
+  const updatedFields = page.fields.map(field => {
+    // Check if field exists and has required properties
+    if (!field || !field.id) {
+      return field;
+    }
+    
+    // Only update fields that have grid positioning
+    if (field.gridRow !== undefined && field.gridCol !== undefined) {
+      return recalculateFieldDimensions(field, updatedGrid);
+    }
+    return field;
+  }).filter(field => field !== null && field !== undefined); // Remove any null/undefined fields
+
+  return {
+    ...page,
+    fields: updatedFields,
+    grid: updatedGrid
   };
 };
 
@@ -744,12 +1094,15 @@ interface FormBuilderProps {
   setCurrentPageIndex: React.Dispatch<React.SetStateAction<number>>;
   selectedField: FormField | null;
   setSelectedField: React.Dispatch<React.SetStateAction<FormField | null>>;
+  selectedCell: { row: number; col: number } | null;
+  setSelectedCell: React.Dispatch<React.SetStateAction<{ row: number; col: number } | null>>;
   isDragging: boolean;
   setIsDragging: React.Dispatch<React.SetStateAction<boolean>>;
   activeTab: string;
   setActiveTab: React.Dispatch<React.SetStateAction<string>>;
   showPreview: boolean;
   setShowPreview: React.Dispatch<React.SetStateAction<boolean>>;
+  onFieldContextMenu: (e: React.MouseEvent, fieldId: string) => void;
 }
 
 interface ResizeData {
@@ -774,6 +1127,8 @@ interface ResizableWrapperProps {
   currentFields: FormField[];
   pageWidth: number;
   pageHeight: number;
+  formPages: FormPage[];
+  currentPageIndex: number;
 }
 
 interface AIFormGeneratorProps {
@@ -990,8 +1345,8 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
         setGenerationProgress(30);
       }
 
-      // Process each image with AI to generate fieldPairs
-      let allFieldsData: any[] = [];
+      // Process each image with AI to generate grid-based form
+      let allFieldsData: any = { fields: [], grid: null };
       let formName = '';
       let formDescription = '';
       
@@ -1005,49 +1360,93 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
             content: [
               {
                 type: "text",
-                text: `You are an expert form analysis AI. Analyze this form image and identify all form fields, then organize them into PAIRS for optimal layout.
+                text: `You are an expert form analysis AI. Analyze this form image and detect its grid structure and form fields to generate a grid-based layout.
 
-IMPORTANT: Group related fields into pairs that can be placed side-by-side (like "First Name" + "Last Name", "Date" + "Time", "Address" + "City", etc.). If there's an odd number of fields, the last field can be alone.
+IMPORTANT GRID ANALYSIS:
+1. GRID DETECTION: Analyze the form's layout structure and determine the optimal grid size (rows x columns) that would best represent the form layout. Consider:
+   - How many logical rows the form has
+   - How many columns would best organize the content
+   - Typical grid sizes: 10x10, 15x10, 20x15, etc. (adjust based on form complexity)
+
+2. CELL MAPPING: For each form field, determine:
+   - Which grid cell(s) it should occupy (row, column)
+   - If it should span multiple cells (merged cells)
+   - The field type and properties
+
+3. MERGED CELLS: Identify areas that should span multiple cells:
+   - Wide text fields, headers, or titles
+   - Large text areas or tables
+   - Signature areas or file upload zones
 
 Respond with ONLY a JSON object in this exact format:
 
 {
   "formName": "Descriptive form name",
   "formDescription": "Brief description",
-  "fieldPairs": [
+  "gridStructure": {
+    "rows": 15,
+    "columns": 10,
+    "cellWidth": 60,
+    "cellHeight": 40
+  },
+  "mergedCells": [
     {
-      "pairId": "pair_1",
-      "fields": [
-        {
-          "type": "text",
-          "label": "Field Label 1",
-          "settings": {
-            "required": false,
-            "placeholder": "Enter text...",
-            "hideTitle": false
-          }
-        },
-        {
-          "type": "text", 
-          "label": "Field Label 2",
-          "settings": {
-            "required": false,
-            "placeholder": "Enter text...",
-            "hideTitle": false
-          }
-        }
-      ]
+      "id": "merge_1",
+      "startRow": 1,
+      "startCol": 1,
+      "endRow": 1,
+      "endCol": 5,
+      "reason": "Form title header"
+    }
+  ],
+  "gridFields": [
+    {
+      "id": "field_1",
+      "type": "text",
+      "label": "Field Label",
+      "gridPosition": {
+        "row": 2,
+        "col": 1,
+        "rowSpan": 1,
+        "colSpan": 2
+      },
+      "settings": {
+        "required": false,
+        "placeholder": "Enter text...",
+        "hideTitle": false
+      }
+    },
+    {
+      "id": "field_2",
+      "type": "dataTable",
+      "label": "Table Title",
+      "gridPosition": {
+        "row": 5,
+        "col": 1,
+        "rowSpan": 4,
+        "colSpan": 8
+      },
+      "settings": {
+        "rows": 5,
+        "columns": 3,
+        "showHeader": true,
+        "showBorders": true,
+        "columnHeaders": ["Column 1", "Column 2", "Column 3"]
+      }
     }
   ]
 }
 
-Supported field types: text, email, number, date, time, select, checkbox, multipleChoice, textarea, file, signature, layoutTable
+Supported field types: text, email, number, date, time, select, checkbox, multipleChoice, textarea, file, signature, layoutTable, dataTable
 
-For select/checkbox/multipleChoice fields, add "options": ["Option 1", "Option 2"] in settings.
-For textarea fields, add "rows": 3 in settings.
-For file fields, add "allowedTypes": ["image/*"] and "maxSize": "10MB" in settings.
+GRID POSITIONING RULES:
+- row/col start from 1 (not 0)
+- rowSpan/colSpan indicate how many cells the field spans
+- Ensure fields don't overlap
+- Leave some empty cells for spacing when appropriate
+- Consider logical grouping and visual hierarchy
 
-Analyze the form systematically and create logical pairs of related fields.`
+Analyze the form systematically and create an optimal grid layout that represents the form structure accurately.`
               },
               {
                 type: "image_url",
@@ -1100,59 +1499,99 @@ Analyze the form systematically and create logical pairs of related fields.`
             formDescription = parsedResponse.formDescription || 'AI-generated form from image analysis';
           }
           
-          // Process fieldPairs and convert to form fields
-          if (parsedResponse.fieldPairs && Array.isArray(parsedResponse.fieldPairs)) {
-            let currentY = 50;
-            const convertedFields = parsedResponse.fieldPairs.flatMap((pair: any, pairIndex: number) => {
-              if (pair.fields && Array.isArray(pair.fields)) {
-                const pairFields = pair.fields.map((field: any, fieldIndex: number) => {
-                  const isTableField = field.type === 'layoutTable' || field.type === 'dataTable';
-                  
-                  if (isTableField) {
-                    // Table fields take full width and their own row
-                    const tableField = {
-                      id: `field-${Date.now()}-${pairIndex}-${fieldIndex}`,
-                      type: field.type || 'layoutTable',
-                      label: field.label || 'Untitled Table',
-                      settings: field.settings || {},
-                      x: 20, // Small margin from left
-                      y: currentY,
-                      width: 555, // Full width minus margins (595 - 40)
-                      height: field.type === 'dataTable' ? 200 : 150,
-                      pageNumber: i + 1
-                    };
-                    currentY += (field.type === 'dataTable' ? 220 : 170); // Add spacing after table
-                    return tableField;
-                  } else {
-                    // Regular fields follow the paired layout
-                    const regularField = {
-                      id: `field-${Date.now()}-${pairIndex}-${fieldIndex}`,
-                      type: field.type || 'text',
-                      label: field.label || 'Untitled Field',
-                      settings: field.settings || {},
-                      x: fieldIndex === 0 ? 50 : 320, // First field left, second field right
-                      y: currentY,
-                      width: 250,
-                      height: 40,
-                      pageNumber: i + 1
-                    };
-                    return regularField;
-                  }
+          // Process grid-based response and convert to form structure
+          if (parsedResponse.gridStructure && parsedResponse.gridFields) {
+            const gridStructure = parsedResponse.gridStructure;
+            const mergedCells = parsedResponse.mergedCells || [];
+            const gridFields = parsedResponse.gridFields || [];
+            
+            // Create grid structure
+            const grid = {
+              rows: gridStructure.rows || 15,
+              columns: gridStructure.columns || 10,
+              cellWidth: gridStructure.cellWidth || 60,
+              cellHeight: gridStructure.cellHeight || 40,
+              cells: new Map(),
+              mergedCells: new Map()
+            };
+            
+            // Initialize grid cells
+            for (let row = 1; row <= grid.rows; row++) {
+              for (let col = 1; col <= grid.columns; col++) {
+                const cellId = `${row}-${col}`;
+                grid.cells.set(cellId, {
+                  id: cellId,
+                  row,
+                  col,
+                  content: '',
+                  fieldId: null,
+                  isHeader: false,
+                  style: {}
                 });
-                
-                // Update Y position for next pair (only if not table fields)
-                const hasTableField = pair.fields.some((field: any) => field.type === 'layoutTable' || field.type === 'dataTable');
-                if (!hasTableField) {
-                  currentY += 80; // Standard spacing for regular field pairs
-                }
-                
-                return pairFields;
               }
-              return [];
+            }
+            
+            // Apply merged cells
+            mergedCells.forEach((merge: any) => {
+              const mergeId = `${merge.startRow}-${merge.startCol}_${merge.endRow}-${merge.endCol}`;
+              grid.mergedCells.set(mergeId, {
+                id: mergeId,
+                startRow: merge.startRow,
+                startCol: merge.startCol,
+                endRow: merge.endRow,
+                endCol: merge.endCol,
+                reason: merge.reason || 'AI detected merge'
+              });
             });
             
-            // Accumulate all fields
-             allFieldsData = allFieldsData.concat(convertedFields);
+            // Convert grid fields to form fields and populate cells
+            const convertedFields = gridFields.map((field: any) => {
+              const fieldId = field.id || `field-${Date.now()}-${Math.random()}`;
+              const gridPos = field.gridPosition;
+              
+              // Calculate position based on grid
+              const x = (gridPos.col - 1) * grid.cellWidth;
+              const y = (gridPos.row - 1) * grid.cellHeight;
+              const width = gridPos.colSpan * grid.cellWidth;
+              const height = gridPos.rowSpan * grid.cellHeight;
+              
+              // Populate grid cells with field reference
+              for (let row = gridPos.row; row < gridPos.row + gridPos.rowSpan; row++) {
+                for (let col = gridPos.col; col < gridPos.col + gridPos.colSpan; col++) {
+                  const cellId = `${row}-${col}`;
+                  const cell = grid.cells.get(cellId);
+                  if (cell) {
+                    cell.fieldId = fieldId;
+                    cell.content = field.label;
+                  }
+                }
+              }
+              
+              return {
+                id: fieldId,
+                type: field.type || 'text',
+                label: field.label || 'Untitled Field',
+                settings: field.settings || {},
+                x,
+                y,
+                width,
+                height,
+                pageNumber: i + 1,
+                gridPosition: gridPos
+              };
+            });
+            
+            // Store grid information for this page
+            if (i === 0) {
+              // Store grid structure for the first page (we'll use this as the base)
+              allFieldsData = {
+                fields: convertedFields,
+                grid: grid
+              };
+            } else {
+              // For additional pages, just add fields
+              allFieldsData.fields = allFieldsData.fields.concat(convertedFields);
+            }
           }
         } catch (parseError) {
           console.error('Failed to parse AI response as JSON:', parseError);
@@ -1163,18 +1602,27 @@ Analyze the form systematically and create logical pairs of related fields.`
       setGenerationProgress(80);
       
       // Use the accumulated field data
-      const convertedFields = allFieldsData;
+      const convertedFields = allFieldsData.fields || [];
+      const gridData = allFieldsData.grid;
       
-      // Create form structure
+      // Create form structure with grid information
       const formStructure = {
         name: formName,
         description: formDescription,
         pages: [{
           id: `page-${Date.now()}`,
           fields: convertedFields,
+          grid: gridData ? {
+            rows: gridData.rows,
+            columns: gridData.columns,
+            cellWidth: gridData.cellWidth,
+            cellHeight: gridData.cellHeight,
+            cells: gridData.cells,
+            mergedCells: gridData.mergedCells
+          } : null,
           dimensions: {
-            width: 595,
-            height: 842,
+            width: gridData ? gridData.columns * gridData.cellWidth : 595,
+            height: gridData ? gridData.rows * gridData.cellHeight : 842,
             orientation: 'portrait' as const,
             size: 'A4' as const
           }
@@ -1205,7 +1653,7 @@ Analyze the form systematically and create logical pairs of related fields.`
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-dark-900/80 backdrop-blur-md border border-white/10 flex items-center justify-center p-4 z-50">
       <motion.div
         className="w-full max-w-4xl max-h-[90vh] overflow-auto"
         initial={{ opacity: 0, scale: 0.95 }}
@@ -1213,9 +1661,9 @@ Analyze the form systematically and create logical pairs of related fields.`
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ duration: 0.3 }}
       >
-        <Card variant="ai-dark" className="p-6 border border-ai-blue/20 shadow-ai-glow">
+        <Card variant="ai-dark" className="p-6 border border-portfolio-orange/20 shadow-ai-glow">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-display font-semibold text-transparent bg-clip-text bg-gradient-to-r from-ai-blue to-ai-teal flex items-center">
+            <h2 className="text-xl font-display font-semibold text-transparent bg-clip-text bg-gradient-to-r from-portfolio-orange to-orange-500 flex items-center">
               <RiRobotLine className="mr-2" />
               AI Form Generator
             </h2>
@@ -1230,7 +1678,7 @@ Analyze the form systematically and create logical pairs of related fields.`
                 <p className="text-gray-300 mb-4">
                   Upload an image or PDF of a form, and our AI will automatically generate a digital version for you.
                 </p>
-                <div className="border-2 border-dashed border-ai-blue/30 rounded-lg p-8 hover:border-ai-blue/50 transition-colors">
+                <div className="border-2 border-dashed border-portfolio-orange/30 rounded-lg p-8 hover:border-portfolio-orange/50 transition-colors">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -1242,7 +1690,7 @@ Analyze the form systematically and create logical pairs of related fields.`
                     {selectedFile?.type === 'application/pdf' ? (
                       <RiFilePdfLine className="text-4xl text-red-500 mb-4" />
                     ) : (
-                      <RiUploadLine className="text-4xl text-ai-blue mb-4" />
+                      <RiUploadLine className="text-4xl text-portfolio-orange mb-4" />
                     )}
                     <p className="text-lg font-medium mb-2">
                       {selectedFile ? selectedFile.name : 'Click to upload or drag and drop'}
@@ -1269,7 +1717,7 @@ Analyze the form systematically and create logical pairs of related fields.`
                       {selectedFile.type === 'application/pdf' ? (
                         <RiFilePdfLine className="text-red-500 mr-2" />
                       ) : (
-                        <RiFileTextLine className="text-ai-blue mr-2" />
+                        <RiFileTextLine className="text-portfolio-orange mr-2" />
                       )}
                       <span className="font-medium">{selectedFile.name}</span>
                       <span className="text-xs text-gray-400 ml-2">
@@ -1330,7 +1778,7 @@ Analyze the form systematically and create logical pairs of related fields.`
                     <div className="mt-4">
                       <div className="bg-dark-700 rounded-full h-2 overflow-hidden">
                         <div 
-                          className="bg-gradient-to-r from-ai-blue to-ai-teal h-full transition-all duration-500"
+                          className="bg-gradient-to-r from-portfolio-orange to-orange-500 h-full transition-all duration-500"
                           style={{ width: `${generationProgress}%` }}
                         />
                       </div>
@@ -1345,7 +1793,7 @@ Analyze the form systematically and create logical pairs of related fields.`
           ) : (
             <div className="space-y-6">
               <div className="bg-dark-800/50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold mb-2 text-ai-blue">
+                <h3 className="text-lg font-semibold mb-2 text-portfolio-orange">
                   Generated Form Preview
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -1366,7 +1814,7 @@ Analyze the form systematically and create logical pairs of related fields.`
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {generatedForm?.pages?.map((page: {fields: any[]}, pageIndex: number) => (
                       <React.Fragment key={`page-${pageIndex}`}>
-                        <div className="text-sm font-medium text-ai-teal mb-2 mt-3 first:mt-0">
+                        <div className="text-sm font-medium text-orange-400 mb-2 mt-3 first:mt-0">
                           Page {pageIndex + 1} ({page.fields.length} fields)
                         </div>
                         {page.fields.map((field: any, fieldIndex: number) => {
@@ -1374,7 +1822,7 @@ Analyze the form systematically and create logical pairs of related fields.`
                           return (
                             <div key={`${pageIndex}-${fieldIndex}`} className="flex items-center justify-between p-2 bg-dark-800/50 rounded">
                               <div className="flex items-center">
-                                <span className="text-ai-blue mr-2">{field.type}</span>
+                                <span className="text-portfolio-orange mr-2">{field.type}</span>
                                 <span>{field.label}</span>
                                 <span className={`ml-2 text-xs px-2 py-1 rounded ${
                                   accuracy >= 90 ? 'bg-green-500/20 text-green-400' :
@@ -1435,7 +1883,9 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
   onSelect,
   currentFields,
   pageWidth,
-  pageHeight
+  pageHeight,
+  formPages,
+  currentPageIndex
 }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isResizing, setIsResizing] = useState(false);
@@ -1445,8 +1895,80 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
   const [initialPosition, setInitialPosition] = useState({ x: 0, y: 0 });
   const [initialSize, setInitialSize] = useState({ width: 0, height: 0 });
 
-  // Calculate effective dimensions based on field type for consistent sizing
+  // Calculate effective dimensions based on field type and cell constraints for auto-fit
   const getEffectiveDimensions = useCallback(() => {
+    // Get the current cell dimensions for this field
+    const currentPage = formPages[currentPageIndex];
+    const fieldCell = findCellByFieldId(currentPage.grid, field.id);
+    
+    // Cell padding to ensure widgets don't touch cell borders
+    const CELL_PADDING = 8;
+    
+    if (fieldCell) {
+      // Auto-fit within cell boundaries with padding
+      const maxWidth = Math.max(50, fieldCell.width - (CELL_PADDING * 2));
+      const maxHeight = Math.max(20, fieldCell.height - (CELL_PADDING * 2));
+      
+      // Calculate minimum dimensions based on field type
+      let minWidth = 50;
+      let minHeight = 20;
+      
+      switch (field.type) {
+        case 'layoutTable':
+        case 'dataTable':
+          minWidth = Math.min(maxWidth, (field.settings?.columns || 3) * 60);
+          minHeight = Math.min(maxHeight, (field.settings?.rows || 3) * 25);
+          break;
+        case 'textarea':
+          const textLines = field.settings?.rows || 4;
+          minWidth = Math.min(maxWidth, 120);
+          minHeight = Math.min(maxHeight, textLines * 18 + 10);
+          break;
+        case 'select':
+        case 'multiselect':
+          const optionCount = field.settings?.options?.length || 1;
+          minWidth = Math.min(maxWidth, 100);
+          minHeight = field.type === 'multiselect' ? 
+            Math.min(maxHeight, Math.min(optionCount * 24 + 30, 150)) : 
+            Math.min(maxHeight, 30);
+          break;
+        case 'checkbox':
+        case 'multipleChoice':
+          const checkboxOptions = field.settings?.options?.length || 1;
+          minWidth = Math.min(maxWidth, 100);
+          minHeight = Math.min(maxHeight, Math.min(checkboxOptions * 28 + 10, 200));
+          break;
+        case 'date':
+        case 'time':
+          minWidth = Math.min(maxWidth, 120);
+          minHeight = Math.min(maxHeight, 30);
+          break;
+        case 'number':
+          minWidth = Math.min(maxWidth, 80);
+          minHeight = Math.min(maxHeight, 30);
+          break;
+        case 'signature':
+          minWidth = Math.min(maxWidth, 180);
+          minHeight = Math.min(maxHeight, 60);
+          break;
+        case 'image':
+        case 'attachment':
+          minWidth = Math.min(maxWidth, 150);
+          minHeight = Math.min(maxHeight, 80);
+          break;
+        default: // text, email, etc.
+          minWidth = Math.min(maxWidth, 120);
+          minHeight = Math.min(maxHeight, 30);
+          break;
+      }
+      
+      return {
+        width: Math.min(maxWidth, Math.max(minWidth, field.width || minWidth)),
+        height: Math.min(maxHeight, Math.max(minHeight, field.height || minHeight))
+      };
+    }
+    
+    // Fallback to original logic if no cell found
     const baseWidth = field.width || 200;
     const baseHeight = field.height || 40;
     
@@ -1466,7 +1988,6 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
       case 'select':
       case 'multiselect':
         const optionCount = field.settings?.options?.length || 1;
-        // Enhanced multiselect sizing - calculate based on actual options
         const multiSelectHeight = field.type === 'multiselect' ? 
           Math.min(optionCount * 28 + 50, Math.max(200, optionCount * 20)) : Math.max(baseHeight, 40);
         return {
@@ -1476,9 +1997,8 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
       case 'checkbox':
       case 'multipleChoice':
         const checkboxOptions = field.settings?.options?.length || 1;
-        // Enhanced checkbox/radio sizing - calculate based on number of options
         const checkboxHeight = Math.max(baseHeight, Math.min(
-          checkboxOptions * 32 + 20, // 32px per option + padding
+          checkboxOptions * 32 + 20,
           Math.max(200, checkboxOptions * 25)
         ));
         return {
@@ -1513,7 +2033,7 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
           height: Math.max(baseHeight, 35)
         };
     }
-  }, [field.type, field.width, field.height, field.settings]);
+  }, [field.type, field.width, field.height, field.settings, field.id, formPages, currentPageIndex]);
 
   
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -1617,13 +2137,11 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
       const desiredX = initialPosition.x + deltaX;
       const desiredY = initialPosition.y + deltaY;
       
-      // Create grid layout for positioning
-      const gridLayout = calculateGridLayout(pageWidth, pageHeight, currentFields);
-      
       // Get the nearest grid cell for the desired position
-      const gridCell = getGridCellFromPosition(desiredX, desiredY, gridLayout);
+      const currentPage = formPages[currentPageIndex];
+      const gridCell = getGridCellFromPosition(desiredX, desiredY, currentPage.grid);
       if (gridCell) {
-        const snapPosition = snapToGridCell(gridCell.row, gridCell.col, gridLayout);
+        const snapPosition = snapToGridCell(gridCell.row, gridCell.col, currentPage.grid);
       
         // Apply smooth transition and update position immediately for responsive dragging
         wrapperRef.current.style.transition = 'none'; // Disable transition during drag for immediate response
@@ -1643,10 +2161,12 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
         pageWidth = parseInt(computedStyle.width) || 595;
       }
       
-      // Enforce fixed width constraint (45% of page width)
-      const fixedWidth = pageWidth * (GRID_CONSTANTS.WIDGET_WIDTH_PERCENT / 100);
+      // Use cell width from the current field's grid cell
+      const currentPage = formPages[currentPageIndex];
+      const fieldCell = findCellByFieldId(currentPage.grid, field.id);
+      const cellWidth = fieldCell ? fieldCell.width : EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
       
-      let newWidth = fixedWidth; // Always use fixed width
+      let newWidth = cellWidth; // Use cell width
       let newHeight = initialSize.height;
       let newX = initialPosition.x;
       let newY = initialPosition.y;
@@ -1799,24 +2319,25 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
           pageWidth = parseInt(computedStyle.width) || 595;
         }
         
-        // Enforce fixed width constraint
-        const fixedWidth = pageWidth * (GRID_CONSTANTS.WIDGET_WIDTH_PERCENT / 100);
+        // Use cell width from the current field's grid cell
+        const currentPage = formPages[currentPageIndex];
+        const fieldCell = findCellByFieldId(currentPage.grid, field.id);
+        const cellWidth = fieldCell ? fieldCell.width : EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
         const newHeight = rect.height;
         
         // Snap position to grid
         const currentX = rect.left - parentRect.left - 12;
         const currentY = rect.top - parentRect.top - 12;
-        const gridLayout = calculateGridLayout(pageWidth, pageHeight, currentFields);
-        const gridCell = getGridCellFromPosition(currentX, currentY, gridLayout);
+        const gridCell = getGridCellFromPosition(currentX, currentY, currentPage.grid);
         if (gridCell) {
-          const snapPosition = snapToGridCell(gridCell.row, gridCell.col, gridLayout);
+          const snapPosition = snapToGridCell(gridCell.row, gridCell.col, currentPage.grid);
         
-          onUpdateSize(fieldId, fixedWidth, newHeight);
+          onUpdateSize(fieldId, cellWidth, newHeight);
           if (onUpdatePosition) {
             onUpdatePosition(fieldId, snapPosition.x, snapPosition.y);
           }
         } else {
-          onUpdateSize(fieldId, fixedWidth, newHeight);
+          onUpdateSize(fieldId, cellWidth, newHeight);
         }
       }
     }
@@ -1840,7 +2361,48 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
     }
   }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
   
+  // Auto-resize widget when cell dimensions change
+  useEffect(() => {
+    const currentPage = formPages[currentPageIndex];
+    const fieldCell = findCellByFieldId(currentPage.grid, field.id);
+    
+    if (fieldCell && onUpdateSize) {
+      const { width: newWidth, height: newHeight } = getEffectiveDimensions();
+      
+      // Only update if dimensions have actually changed
+      if (field.width !== newWidth || field.height !== newHeight) {
+        onUpdateSize(field.id, newWidth, newHeight);
+      }
+    }
+  }, [formPages, currentPageIndex, field.id, getEffectiveDimensions, onUpdateSize]);
+  
   const { width: effectiveWidth, height: effectiveHeight } = getEffectiveDimensions();
+  
+  // Calculate centered position within cell with padding
+  const getCenteredPosition = useCallback(() => {
+    const currentPage = formPages[currentPageIndex];
+    const fieldCell = findCellByFieldId(currentPage.grid, field.id);
+    const CELL_PADDING = 8;
+    
+    if (fieldCell) {
+      // Center the widget within the cell with padding
+      const centeredX = fieldCell.x + CELL_PADDING + (fieldCell.width - effectiveWidth - (CELL_PADDING * 2)) / 2;
+      const centeredY = fieldCell.y + CELL_PADDING + (fieldCell.height - effectiveHeight - (CELL_PADDING * 2)) / 2;
+      
+      return {
+        left: Math.max(fieldCell.x + CELL_PADDING, centeredX),
+        top: Math.max(fieldCell.y + CELL_PADDING, centeredY)
+      };
+    }
+    
+    // Fallback to original position
+    return {
+      left: field.x || 0,
+      top: field.y || 0
+    };
+  }, [field.id, field.x, field.y, formPages, currentPageIndex, effectiveWidth, effectiveHeight]);
+  
+  const centeredPosition = getCenteredPosition();
 
   return (
     <div 
@@ -1853,8 +2415,8 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
         height: effectiveHeight,
         minWidth: effectiveWidth,
         minHeight: effectiveHeight,
-        left: field.x || 0,
-        top: field.y || 0,
+        left: centeredPosition.left,
+        top: centeredPosition.top,
         zIndex: isSelected ? 10 : (field.zIndex || 1),
         boxSizing: 'border-box', // Ensure consistent box sizing
         padding: '0', // Remove any padding that might affect positioning
@@ -1889,25 +2451,25 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
         <>
           {/* Corner handles - larger and easier to grab */}
           <div 
-            className="absolute -top-3 -left-3 w-6 h-6 bg-ai-blue border-2 border-white cursor-nw-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -top-3 -left-3 w-6 h-6 bg-portfolio-orange border-2 border-white cursor-nw-resize z-30 rounded-full shadow-lg hover:bg-portfolio-orange-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'nw')}
             title="Resize northwest"
             style={{ pointerEvents: 'auto' }}
           />
           <div 
-            className="absolute -top-3 -right-3 w-6 h-6 bg-ai-blue border-2 border-white cursor-ne-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -top-3 -right-3 w-6 h-6 bg-portfolio-orange border-2 border-white cursor-ne-resize z-30 rounded-full shadow-lg hover:bg-portfolio-orange-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'ne')}
             title="Resize northeast"
             style={{ pointerEvents: 'auto' }}
           />
           <div 
-            className="absolute -bottom-3 -left-3 w-6 h-6 bg-ai-blue border-2 border-white cursor-sw-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -bottom-3 -left-3 w-6 h-6 bg-portfolio-orange border-2 border-white cursor-sw-resize z-30 rounded-full shadow-lg hover:bg-portfolio-orange-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'sw')}
             title="Resize southwest"
             style={{ pointerEvents: 'auto' }}
           />
           <div 
-            className="absolute -bottom-3 -right-3 w-6 h-6 bg-ai-blue border-2 border-white cursor-se-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -bottom-3 -right-3 w-6 h-6 bg-portfolio-orange border-2 border-white cursor-se-resize z-30 rounded-full shadow-lg hover:bg-portfolio-orange-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'se')}
             title="Resize southeast"
             style={{ pointerEvents: 'auto' }}
@@ -1915,25 +2477,25 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
           
           {/* Edge handles */}
           <div 
-            className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-ai-blue border-2 border-white cursor-n-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-portfolio-orange border-2 border-white cursor-n-resize z-30 rounded-full shadow-lg hover:bg-portfolio-orange-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'n')}
             title="Resize north"
             style={{ pointerEvents: 'auto' }}
           />
           <div 
-            className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-ai-blue border-2 border-white cursor-s-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-portfolio-orange border-2 border-white cursor-s-resize z-30 rounded-full shadow-lg hover:bg-portfolio-orange-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 's')}
             title="Resize south"
             style={{ pointerEvents: 'auto' }}
           />
           <div 
-            className="absolute -left-3 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-ai-blue border-2 border-white cursor-w-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -left-3 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-portfolio-orange border-2 border-white cursor-w-resize z-30 rounded-full shadow-lg hover:bg-portfolio-orange-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'w')}
             title="Resize west"
             style={{ pointerEvents: 'auto' }}
           />
           <div 
-            className="absolute -right-3 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-ai-blue border-2 border-white cursor-e-resize z-30 rounded-full shadow-lg hover:bg-ai-blue-light"
+            className="absolute -right-3 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-portfolio-orange border-2 border-white cursor-e-resize z-30 rounded-full shadow-lg hover:bg-portfolio-orange-light"
             onMouseDown={(e) => handleResizeMouseDown(e, 'e')}
             title="Resize east"
             style={{ pointerEvents: 'auto' }}
@@ -1999,12 +2561,15 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   setCurrentPageIndex, 
   selectedField, 
   setSelectedField, 
+  selectedCell,
+  setSelectedCell,
   isDragging, 
   setIsDragging, 
   activeTab, 
   setActiveTab,
   showPreview,
-  setShowPreview
+  setShowPreview,
+  onFieldContextMenu
 }) => {
   // Zoom functionality
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -2121,26 +2686,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   //   return () => clearTimeout(timeoutId);
   // }, [formPages[currentPageIndex]?.fields, currentPageIndex, autoFitPageToContent]);
 
-  // Handle keyboard delete
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Delete' && selectedField) {
-      e.preventDefault();
-      setFormPages(prev => prev.map((page, index) => 
-        index === currentPageIndex 
-          ? { ...page, fields: page.fields.filter(field => field.id !== selectedField.id) }
-          : page
-      ));
-      setSelectedField(null);
-    }
-  }, [selectedField, currentPageIndex]);
-
-  // Add keyboard event listener
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [handleKeyDown]);
+  // Note: Keyboard shortcuts and context menu handlers moved to after function definitions
   
   // Add state for AI modal
   const [showAIGenerator, setShowAIGenerator] = useState(false);
@@ -2201,107 +2747,84 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     startY: 0
   });
   
-  // Function to update field size with grid constraints
+  // Function to update field size with Excel grid constraints
   const updateFieldSize = (fieldId: string, width: number, height: number) => {
     saveToHistory();
-    const currentDimensions = getCurrentPageDimensions();
     
     setFormPages(prev => prev.map((page, index) => {
       if (index !== currentPageIndex) return page;
       
       const updatedFields = page.fields.map(field => {
         if (field.id === fieldId) {
-          // Enforce fixed width constraint (45% of page width)
-          const fixedWidth = (currentDimensions.width * GRID_CONSTANTS.WIDGET_WIDTH_PERCENT) / 100;
-          return { ...field, width: fixedWidth, height };
+          // Find the cell this field is in
+          const cell = findCellByFieldId(page.grid, fieldId);
+          if (cell) {
+            // Field size is constrained by its cell
+            return { 
+              ...field, 
+              width: Math.min(width, cell.width), 
+              height: Math.min(height, cell.height) 
+            };
+          }
+          return { ...field, width, height };
         }
         return field;
       });
       
-      // Recalculate grid layout with updated fields
-      const gridLayout = calculateGridLayout(currentDimensions.width, currentDimensions.height, updatedFields);
-      
-      // Update field positions based on new grid layout
-      const finalFields = updatedFields.map(field => {
-        if (field.gridRow !== undefined && field.gridCol !== undefined) {
-          const cellPosition = snapToGridCell(field.gridRow, field.gridCol, gridLayout);
-          return {
-            ...field,
-            x: cellPosition.x,
-            y: cellPosition.y,
-            width: cellPosition.width
-          };
-        }
-        return field;
-      });
-      
-      return { ...page, fields: finalFields };
+      return { ...page, fields: updatedFields };
     }));
   };
   
-  // Function to update field position with grid constraints
+  // Function to update field position with Excel grid constraints
   const updateFieldPosition = (fieldId: string, x: number, y: number) => {
     saveToHistory();
-    const currentDimensions = getCurrentPageDimensions();
     
     setFormPages(prev => prev.map((page, index) => {
       if (index !== currentPageIndex) return page;
       
-      const currentFields = page.fields;
-      // Exclude the field being moved from collision detection
-      const otherFields = currentFields.filter(field => field.id !== fieldId);
-      const gridLayout = calculateGridLayout(currentDimensions.width, currentDimensions.height, otherFields);
-      
       // Find the target grid cell from the new position
-      const targetCell = getGridCellFromPosition(x, y, gridLayout);
+      const targetCell = getGridCellFromPosition(x, y, page.grid);
       
-      const updatedFields = currentFields.map(field => {
-        if (field.id === fieldId) {
-          if (targetCell && !gridLayout.cells[targetCell.row][targetCell.col].occupied) {
-            // Snap to the target grid cell
-            const cellPosition = snapToGridCell(targetCell.row, targetCell.col, gridLayout);
+      if (targetCell && page.grid.cells[targetCell.row][targetCell.col].isEmpty) {
+        // Clear the old cell
+        const oldCell = findCellByFieldId(page.grid, fieldId);
+        let updatedGrid = { ...page.grid };
+        
+        if (oldCell) {
+          updatedGrid.cells[oldCell.row][oldCell.col] = {
+            ...oldCell,
+            fieldId: undefined,
+            isEmpty: true
+          };
+        }
+        
+        // Occupy the new cell
+        updatedGrid.cells[targetCell.row][targetCell.col] = {
+          ...updatedGrid.cells[targetCell.row][targetCell.col],
+          fieldId: fieldId,
+          isEmpty: false
+        };
+        
+        // Update field position to snap to cell
+        const cellPosition = snapToGridCell(targetCell.row, targetCell.col, page.grid);
+        const updatedFields = page.fields.map(field => {
+          if (field.id === fieldId) {
             return {
               ...field,
               x: cellPosition.x,
               y: cellPosition.y,
               gridRow: targetCell.row,
-              gridCol: targetCell.col
+              gridCol: targetCell.col,
+              cellId: updatedGrid.cells[targetCell.row][targetCell.col].id
             };
-          } else {
-            // Find the nearest available cell
-            const availableCell = findAvailableGridCell(gridLayout);
-            if (availableCell) {
-              const cellPosition = snapToGridCell(availableCell.row, availableCell.col, gridLayout);
-              return {
-                ...field,
-                x: cellPosition.x,
-                y: cellPosition.y,
-                gridRow: availableCell.row,
-                gridCol: availableCell.col
-              };
-            }
           }
-        }
-        return field;
-      });
+          return field;
+        });
+        
+        return { ...page, fields: updatedFields, grid: updatedGrid };
+      }
       
-      // Recalculate grid layout with updated positions
-      const finalGridLayout = calculateGridLayout(currentDimensions.width, currentDimensions.height, updatedFields);
-      
-      // Update all field positions to reflect new row heights
-      const finalFields = updatedFields.map(field => {
-        if (field.gridRow !== undefined && field.gridCol !== undefined) {
-          const cellPosition = snapToGridCell(field.gridRow, field.gridCol, finalGridLayout);
-          return {
-            ...field,
-            x: cellPosition.x,
-            y: cellPosition.y
-          };
-        }
-        return field;
-      });
-      
-      return { ...page, fields: finalFields };
+      return page;
     }));
   };
   
@@ -2313,7 +2836,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       formHistoryRef.current.past.shift();
     }
   };
-  
+
   const undo = () => {
     if (formHistoryRef.current.past.length === 0) return;
     const previous = formHistoryRef.current.past.pop();
@@ -2328,17 +2851,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     if (next) setFormPages(next);
   };
   
-  // Enhanced addFormField function with grid-based positioning
+  // Enhanced addFormField function with Excel grid-based positioning
   const addFormField = (type: string, x?: number, y?: number, targetGridRow?: number, targetGridCol?: number) => {
     saveToHistory();
-    const currentDimensions = getCurrentPageDimensions();
     
-    // Calculate grid layout for current page
-    const currentFields = formPages[currentPageIndex].fields;
-    const gridLayout = calculateGridLayout(currentDimensions.width, currentDimensions.height, currentFields);
-    
-    // Fixed widget width (45% of page width) for all widgets
-    const widgetWidth = (currentDimensions.width * GRID_CONSTANTS.WIDGET_WIDTH_PERCENT) / 100;
+    const currentPage = formPages[currentPageIndex];
     
     // Default field height based on type
     const defaultHeight = type === 'layoutTable' || type === 'dataTable' ? 200 : 
@@ -2347,44 +2864,35 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                           type === 'image' || type === 'attachment' ? 120 : 40;
     
     // Find available grid cell
-    const findAvailableCell = (preferredRow?: number, preferredCol?: number): {row: number, col: number, x: number, y: number} | null => {
+    const findAvailableCell = (preferredRow?: number, preferredCol?: number): {row: number, col: number, cell: GridCell} | null => {
       // If specific cell is requested, check if it's available
       if (preferredRow !== undefined && preferredCol !== undefined) {
-        if (preferredRow >= 0 && preferredRow < GRID_CONSTANTS.ROWS && 
-            preferredCol >= 0 && preferredCol < GRID_CONSTANTS.COLS &&
-            !gridLayout.cells[preferredRow][preferredCol].occupied) {
-          const cell = gridLayout.cells[preferredRow][preferredCol];
-          return { row: preferredRow, col: preferredCol, x: cell.x, y: cell.y };
+        if (preferredRow >= 0 && preferredRow < currentPage.grid.rows.length && 
+            preferredCol >= 0 && preferredCol < currentPage.grid.columns.length &&
+            currentPage.grid.cells[preferredRow][preferredCol].isEmpty) {
+          const cell = currentPage.grid.cells[preferredRow][preferredCol];
+          return { row: preferredRow, col: preferredCol, cell };
         }
       }
       
       // If drop coordinates are provided, find nearest available cell
       if (x !== undefined && y !== undefined) {
-        let nearestCell = null;
-        let minDistance = Infinity;
-        
-        for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
-          for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
-            if (!gridLayout.cells[row][col].occupied) {
-              const cell = gridLayout.cells[row][col];
-              const distance = Math.sqrt(Math.pow(cell.x - x, 2) + Math.pow(cell.y - y, 2));
-              if (distance < minDistance) {
-                minDistance = distance;
-                nearestCell = { row, col, x: cell.x, y: cell.y };
-              }
-            }
-          }
+        const targetCell = getGridCellFromPosition(x, y, currentPage.grid);
+        if (targetCell && currentPage.grid.cells[targetCell.row][targetCell.col].isEmpty) {
+          return { 
+            row: targetCell.row, 
+            col: targetCell.col, 
+            cell: currentPage.grid.cells[targetCell.row][targetCell.col] 
+          };
         }
-        
-        if (nearestCell) return nearestCell;
       }
       
       // Find first available cell (top to bottom, left to right)
-      for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
-        for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
-          if (!gridLayout.cells[row][col].occupied) {
-            const cell = gridLayout.cells[row][col];
-            return { row, col, x: cell.x, y: cell.y };
+      for (let row = 0; row < currentPage.grid.rows.length; row++) {
+        for (let col = 0; col < currentPage.grid.columns.length; col++) {
+          if (currentPage.grid.cells[row][col].isEmpty) {
+            const cell = currentPage.grid.cells[row][col];
+            return { row, col, cell };
           }
         }
       }
@@ -2402,13 +2910,16 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       return;
     }
     
-    const finalX = targetCell.x;
-    const finalY = targetCell.y;
+    const cellPosition = snapToGridCell(targetCell.row, targetCell.col, currentPage.grid);
+    const finalX = cellPosition.x;
+    const finalY = cellPosition.y;
     const gridRow = targetCell.row;
     const gridCol = targetCell.col;
     
+    const fieldId = `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     const newField: FormField = {
-      id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: fieldId,
       type,
       label: `${type.charAt(0).toUpperCase() + type.slice(1)} Field`,
       settings: {
@@ -2431,20 +2942,33 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
         filterableColumns: false,
         pagination: false
       },
-      width: widgetWidth,
-      height: defaultHeight,
+      width: targetCell.cell.width,
+      height: Math.min(defaultHeight, targetCell.cell.height),
       x: finalX,
       y: finalY,
       zIndex: 1,
       gridRow,
-      gridCol
+      gridCol,
+      cellId: targetCell.cell.id
     };
 
-    setFormPages(prev => prev.map((page, index) => 
-      index === currentPageIndex 
-        ? { ...page, fields: [...page.fields, newField] }
-        : page
-    ));
+    setFormPages(prev => prev.map((page, index) => {
+      if (index !== currentPageIndex) return page;
+      
+      // Update grid to mark cell as occupied
+      const updatedGrid = { ...page.grid };
+      updatedGrid.cells[gridRow][gridCol] = {
+        ...updatedGrid.cells[gridRow][gridCol],
+        fieldId: fieldId,
+        isEmpty: false
+      };
+      
+      return { 
+        ...page, 
+        fields: [...page.fields, newField],
+        grid: updatedGrid
+      };
+    }));
   };
   
   // Handle drop event with proper positioning
@@ -2507,11 +3031,28 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   
   const removeField = (fieldId: string) => {
     saveToHistory();
-    setFormPages(prev => prev.map((page, index) => 
-      index === currentPageIndex 
-        ? { ...page, fields: page.fields.filter(field => field.id !== fieldId) }
-        : page
-    ));
+    setFormPages(prev => prev.map((page, index) => {
+      if (index !== currentPageIndex) return page;
+      
+      // Find the field to get its grid position
+      const fieldToRemove = page.fields.find(field => field.id === fieldId);
+      
+      // Update grid to mark cell as empty
+      let updatedGrid = { ...page.grid };
+      if (fieldToRemove && fieldToRemove.gridRow !== undefined && fieldToRemove.gridCol !== undefined) {
+        updatedGrid.cells[fieldToRemove.gridRow][fieldToRemove.gridCol] = {
+          ...updatedGrid.cells[fieldToRemove.gridRow][fieldToRemove.gridCol],
+          fieldId: undefined,
+          isEmpty: true
+        };
+      }
+      
+      return { 
+        ...page, 
+        fields: page.fields.filter(field => field.id !== fieldId),
+        grid: updatedGrid
+      };
+    }));
     
     if (selectedField && selectedField.id === fieldId) {
       setSelectedField(null);
@@ -2557,6 +3098,209 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       setSelectedField(prev => prev ? { ...prev, label } : null);
     }
   };
+
+
+
+  const handleInsertRowAbove = useCallback(() => {
+    if (selectedField && selectedField.gridRow !== undefined) {
+      const insertRow = selectedField.gridRow;
+      saveToHistory();
+      
+      setFormPages(prev => prev.map((page, index) => {
+        if (index !== currentPageIndex) return page;
+        
+        // Shift all fields below the insert position down by one row
+        const updatedFields = page.fields.map(field => {
+          if (field.gridRow !== undefined && field.gridRow >= insertRow) {
+            return {
+              ...field,
+              gridRow: field.gridRow + 1,
+              y: (field.gridRow + 1) * GRID_CELL_HEIGHT
+            };
+          }
+          return field;
+        });
+
+        // Update grid
+        let updatedGrid = { ...page.grid };
+        // Insert new empty row
+        const newRowCells = Array(updatedGrid.columns.length).fill(null).map((_, colIndex) => ({
+          id: `cell-${insertRow}-${colIndex}`,
+          row: insertRow,
+          col: colIndex,
+          x: updatedGrid.columns[colIndex].x,
+          y: insertRow * GRID_CELL_HEIGHT,
+          width: updatedGrid.columns[colIndex].width,
+          height: GRID_CELL_HEIGHT,
+          isEmpty: true
+        }));
+        updatedGrid.cells.splice(insertRow, 0, newRowCells);
+        
+        // Add new row to rows array
+        updatedGrid.rows.splice(insertRow, 0, {
+          id: `row-${insertRow}`,
+          index: insertRow,
+          height: GRID_CELL_HEIGHT,
+          y: insertRow * GRID_CELL_HEIGHT
+        });
+        
+        // Update row indices and positions for rows after the inserted one
+        for (let i = insertRow + 1; i < updatedGrid.rows.length; i++) {
+          updatedGrid.rows[i].index = i;
+          updatedGrid.rows[i].y = i * GRID_CELL_HEIGHT;
+        }
+
+        // Update field references in grid
+        updatedFields.forEach(field => {
+          if (field.gridRow !== undefined && field.gridCol !== undefined) {
+            updatedGrid.cells[field.gridRow][field.gridCol] = {
+              ...updatedGrid.cells[field.gridRow][field.gridCol],
+              fieldId: field.id,
+              isEmpty: false
+            };
+          }
+        });
+
+        return { ...page, fields: updatedFields, grid: updatedGrid };
+      }));
+    }
+  }, [selectedField, currentPageIndex]);
+
+  const handleInsertRowBelow = useCallback(() => {
+    if (selectedField && selectedField.gridRow !== undefined) {
+      const insertRow = selectedField.gridRow + 1;
+      saveToHistory();
+      
+      setFormPages(prev => prev.map((page, index) => {
+        if (index !== currentPageIndex) return page;
+        
+        // Shift all fields below the insert position down by one row
+        const updatedFields = page.fields.map(field => {
+          if (field.gridRow !== undefined && field.gridRow >= insertRow) {
+            return {
+              ...field,
+              gridRow: field.gridRow + 1,
+              y: (field.gridRow + 1) * GRID_CELL_HEIGHT
+            };
+          }
+          return field;
+        });
+
+        // Update grid
+        let updatedGrid = { ...page.grid };
+        // Insert new empty row
+        const newRowCells = Array(updatedGrid.columns.length).fill(null).map((_, colIndex) => ({
+          id: `cell-${insertRow}-${colIndex}`,
+          row: insertRow,
+          col: colIndex,
+          x: updatedGrid.columns[colIndex].x,
+          y: insertRow * GRID_CELL_HEIGHT,
+          width: updatedGrid.columns[colIndex].width,
+          height: GRID_CELL_HEIGHT,
+          isEmpty: true
+        }));
+        updatedGrid.cells.splice(insertRow, 0, newRowCells);
+        
+        // Add new row to rows array
+        updatedGrid.rows.splice(insertRow, 0, {
+          id: `row-${insertRow}`,
+          index: insertRow,
+          height: GRID_CELL_HEIGHT,
+          y: insertRow * GRID_CELL_HEIGHT
+        });
+        
+        // Update row indices and positions for rows after the inserted one
+        for (let i = insertRow + 1; i < updatedGrid.rows.length; i++) {
+          updatedGrid.rows[i].index = i;
+          updatedGrid.rows[i].y = i * GRID_CELL_HEIGHT;
+        }
+
+        // Update field references in grid
+        updatedFields.forEach(field => {
+          if (field.gridRow !== undefined && field.gridCol !== undefined) {
+            updatedGrid.cells[field.gridRow][field.gridCol] = {
+              ...updatedGrid.cells[field.gridRow][field.gridCol],
+              fieldId: field.id,
+              isEmpty: false
+            };
+          }
+        });
+
+        return { ...page, fields: updatedFields, grid: updatedGrid };
+      }));
+    }
+  }, [selectedField, currentPageIndex]);
+
+  const handleDeleteRow = useCallback(() => {
+    if (selectedField && selectedField.gridRow !== undefined) {
+      const deleteRow = selectedField.gridRow;
+      saveToHistory();
+      
+      setFormPages(prev => prev.map((page, index) => {
+        if (index !== currentPageIndex) return page;
+        
+        // Remove fields in the deleted row and shift fields below up
+        const updatedFields = page.fields.filter(field => {
+          if (field.gridRow !== undefined) {
+            if (field.gridRow === deleteRow) {
+              return false; // Remove fields in deleted row
+            }
+            if (field.gridRow > deleteRow) {
+              field.gridRow = field.gridRow - 1;
+              field.y = field.gridRow * GRID_CELL_HEIGHT;
+            }
+          }
+          return true;
+        });
+
+        // Update grid
+        let updatedGrid = { ...page.grid };
+        // Remove the row
+        updatedGrid.cells.splice(deleteRow, 1);
+        updatedGrid.rows.splice(deleteRow, 1);
+        
+        // Update row indices and positions for remaining rows
+        for (let i = deleteRow; i < updatedGrid.rows.length; i++) {
+          updatedGrid.rows[i].index = i;
+          updatedGrid.rows[i].y = i * GRID_CELL_HEIGHT;
+        }
+
+        // Update field references in grid
+        updatedGrid.cells.forEach((row, rowIndex) => {
+          row.forEach((cell, colIndex) => {
+            const field = updatedFields.find(f => f.gridRow === rowIndex && f.gridCol === colIndex);
+            if (field) {
+              updatedGrid.cells[rowIndex][colIndex] = {
+                ...cell,
+                fieldId: field.id,
+                isEmpty: false
+              };
+            } else {
+              updatedGrid.cells[rowIndex][colIndex] = {
+                ...cell,
+                id: `cell-${rowIndex}-${colIndex}`,
+                row: rowIndex,
+                col: colIndex,
+                x: updatedGrid.columns[colIndex].x,
+                y: rowIndex * GRID_CELL_HEIGHT,
+                width: updatedGrid.columns[colIndex].width,
+                height: GRID_CELL_HEIGHT,
+                isEmpty: true
+              };
+            }
+          });
+        });
+
+        return { ...page, fields: updatedFields, grid: updatedGrid };
+      }));
+
+      setSelectedField(null);
+    }
+  }, [selectedField, currentPageIndex]);
+
+
+
+
   
   const moveField = (fieldId: string, direction: 'up' | 'down') => {
     saveToHistory();
@@ -2579,6 +3323,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   
   const addPage = () => {
     saveToHistory();
+    const defaultDimensions = { width: 595, height: 842 };
     const newPage: FormPage = {
       id: `page_${Date.now()}`,
       fields: [],
@@ -2587,7 +3332,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
         height: 842,
         orientation: 'portrait',
         size: 'A4'
-      }
+      },
+      grid: createInitialGrid(defaultDimensions.width, defaultDimensions.height)
     };
     setFormPages(prev => [...prev, newPage]);
   };
@@ -2742,7 +3488,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           pages.push({
             id: `page_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             fields: [...currentPageFields],
-            dimensions: { ...pageDimensions }
+            dimensions: { ...pageDimensions },
+            grid: createInitialGrid()
           });
         }
         
@@ -2772,7 +3519,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       pages.push({
         id: `page_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         fields: [...currentPageFields],
-        dimensions: { ...pageDimensions }
+        dimensions: { ...pageDimensions },
+        grid: createInitialGrid()
       });
     }
 
@@ -2793,10 +3541,6 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       size: 'A4' as const
     };
     
-    // Fixed widget width (45% of page width) for all widgets
-    const widgetWidth = (defaultDimensions.width * GRID_CONSTANTS.WIDGET_WIDTH_PERCENT) / 100;
-    console.log('Widget width calculated:', widgetWidth);
-    
     let currentRow = 0;
     let currentCol = 0;
     let currentPageIndex = 0;
@@ -2806,7 +3550,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     pages.push({
       id: `page_${Date.now()}_${currentPageIndex}`,
       fields: [],
-      dimensions: defaultDimensions
+      dimensions: defaultDimensions,
+      grid: createInitialGrid(defaultDimensions.width, defaultDimensions.height)
     });
     console.log('Initialized first page');
     
@@ -2816,52 +3561,54 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       const { fields } = pair;
       
       // Check if we need to move to next row (if current row is full)
-      if (currentCol >= GRID_CONSTANTS.COLS) {
+      const currentGrid = pages[currentPageIndex].grid;
+      if (currentCol >= currentGrid.columns.length) {
         currentRow++;
         currentCol = 0;
       }
       
       // Check if we need a new page
-      if (currentRow >= GRID_CONSTANTS.ROWS) {
+      if (currentRow >= currentGrid.rows.length) {
         // Create new page
         currentPageIndex++;
         pages.push({
           id: `page_${Date.now()}_${currentPageIndex}`,
           fields: [],
-          dimensions: defaultDimensions
+          dimensions: defaultDimensions,
+          grid: createInitialGrid()
         });
         currentRow = 0;
         currentCol = 0;
       }
       
-      // Calculate grid layout for current page
-      const gridLayout = calculateGridLayout(
-        defaultDimensions.width, 
-        defaultDimensions.height, 
-        pages[currentPageIndex].fields
-      );
-      
       // Place fields in the pair side by side
       fields.forEach((field: any, fieldIndex: number) => {
         // Ensure we don't exceed column limit
-        if (currentCol >= GRID_CONSTANTS.COLS) {
+        const currentPageGrid = pages[currentPageIndex].grid;
+        if (currentCol >= currentPageGrid.columns.length) {
           currentRow++;
           currentCol = 0;
           
           // Check if we need a new page again
-          if (currentRow >= GRID_CONSTANTS.ROWS) {
+          if (currentRow >= currentPageGrid.rows.length) {
             currentPageIndex++;
             pages.push({
               id: `page_${Date.now()}_${currentPageIndex}`,
               fields: [],
-              dimensions: defaultDimensions
+              dimensions: defaultDimensions,
+              grid: createInitialGrid()
             });
             currentRow = 0;
             currentCol = 0;
           }
         }
         
-        const cell = gridLayout.cells[currentRow][currentCol];
+        const cell = pages[currentPageIndex].grid.cells[currentRow]?.[currentCol];
+        
+        if (!cell) {
+          console.warn(`No cell found at row ${currentRow}, col ${currentCol}`);
+          return;
+        }
         
         // Default field height based on type
         const defaultHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 200 : 
@@ -2873,7 +3620,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: field.type || 'text',
           label: field.label || 'Generated Field',
-          width: widgetWidth,
+          width: cell.width,
           height: defaultHeight,
           x: cell.x,
           y: cell.y,
@@ -2931,7 +3678,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     console.log('Received AI generated form data:', formData);
     saveToHistory();
     
-    // Handle new paired field structure
+    // Handle new paired field structure (legacy support)
     if (formData.fieldPairs && formData.fieldPairs.length > 0) {
       const processedPages = processPairedFields(formData);
       setFormPages(processedPages);
@@ -2952,33 +3699,99 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           size: 'A4' as const
         };
         
-        // Calculate grid layout for this page
-        const gridLayout = calculateGridLayout(currentDimensions.width, currentDimensions.height, []);
+        // Use AI-generated grid if available, otherwise create initial grid
+        let pageGrid: ExcelGrid;
+        if (page.grid) {
+          // Use the AI-generated grid structure and convert to ExcelGrid format
+          const cellWidth = page.grid.cellWidth;
+          const cellHeight = page.grid.cellHeight;
+          
+          // Create rows array
+          const rows: GridRow[] = Array.from({ length: page.grid.rows }, (_, index) => ({
+            id: `row-${index + 1}`,
+            index: index + 1,
+            height: cellHeight,
+            y: index * cellHeight
+          }));
+          
+          // Create columns array
+          const columns: GridColumn[] = Array.from({ length: page.grid.columns }, (_, index) => ({
+            id: `col-${index + 1}`,
+            index: index + 1,
+            width: cellWidth,
+            x: index * cellWidth
+          }));
+          
+          // Create cells array
+          const cells: GridCell[][] = Array.from({ length: page.grid.rows }, (_, row) =>
+            Array.from({ length: page.grid.columns }, (_, col) => {
+              const cellId = `${row + 1}-${col + 1}`;
+              const aiCell = page.grid.cells.get(cellId);
+              return {
+                id: cellId,
+                row: row + 1,
+                col: col + 1,
+                x: col * cellWidth,
+                y: row * cellHeight,
+                width: cellWidth,
+                height: cellHeight,
+                isEmpty: !aiCell?.fieldId,
+                fieldId: aiCell?.fieldId || null,
+                content: aiCell?.content || '',
+                isHeader: aiCell?.isHeader || false,
+                style: aiCell?.style || {}
+              };
+            })
+          );
+          
+          pageGrid = {
+            rows,
+            columns,
+            cells,
+            totalWidth: page.grid.columns * cellWidth,
+            totalHeight: page.grid.rows * cellHeight,
+            mergedCells: page.grid.mergedCells || new Map()
+          };
+        } else {
+          // Fallback to creating initial grid
+          pageGrid = createInitialGrid();
+        }
         
         page.fields.forEach((field: any, index: number) => {
-          // Find available grid cell for this field
-          const findAvailableCell = (): {row: number, col: number, x: number, y: number} | null => {
-            for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
-              for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
-                if (!gridLayout.cells[row][col].occupied) {
-                  const cell = gridLayout.cells[row][col];
-                  // Mark this cell as occupied for subsequent fields
-                  gridLayout.cells[row][col].occupied = true;
-                  return { row, col, x: cell.x, y: cell.y };
-                }
-              }
+          let targetCell, cell;
+          
+          if (field.gridPosition && page.grid) {
+            // Use AI-generated grid position
+            const gridPos = field.gridPosition;
+            targetCell = {
+              row: gridPos.row - 1, // Convert to 0-based index
+              col: gridPos.col - 1, // Convert to 0-based index
+              x: field.x || (gridPos.col - 1) * page.grid.cellWidth,
+              y: field.y || (gridPos.row - 1) * page.grid.cellHeight
+            };
+            
+            // Get the cell from the grid
+            cell = pageGrid.cells[targetCell.row]?.[targetCell.col];
+            if (cell) {
+              cell.isEmpty = false;
+              cell.fieldId = field.id;
             }
-            return null;
-          };
-          
-          const targetCell = findAvailableCell();
-          if (!targetCell) {
-            console.warn(`No available grid cell for AI-generated field ${index + 1}. Skipping field.`);
-            return;
+          } else {
+            // Fallback: Find available grid cell for this field
+            const availableCell = findAvailableGridCell(pageGrid);
+            if (!availableCell) {
+              console.warn(`No available grid cell for AI-generated field ${index + 1}. Skipping field.`);
+              return;
+            }
+            targetCell = availableCell;
+            
+            // Mark cell as occupied
+            cell = pageGrid.cells[targetCell.row]?.[targetCell.col];
+            if (cell) {
+              cell.isEmpty = false;
+              cell.fieldId = field.id || `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            }
           }
-          
-          // Fixed widget width (45% of page width) for all widgets
-          const widgetWidth = (currentDimensions.width * GRID_CONSTANTS.WIDGET_WIDTH_PERCENT) / 100;
           
           // Default field height based on type
           const defaultHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 200 : 
@@ -2986,17 +3799,47 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                                 field.type === 'textarea' ? 80 :
                                 field.type === 'image' || field.type === 'attachment' ? 120 : 40;
           
+          // Handle merged cells (rowSpan and colSpan)
+          let fieldWidth = field.width || cell?.width || EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
+          let fieldHeight = field.height || defaultHeight;
+          
+          if (field.gridPosition && page.grid) {
+            const rowSpan = field.gridPosition.rowSpan || 1;
+            const colSpan = field.gridPosition.colSpan || 1;
+            
+            // Calculate width and height based on merged cells
+            if (colSpan > 1) {
+              fieldWidth = colSpan * page.grid.cellWidth;
+            }
+            if (rowSpan > 1) {
+              fieldHeight = rowSpan * page.grid.cellHeight;
+            }
+            
+            // Mark all merged cells as occupied
+            for (let r = targetCell.row; r < targetCell.row + rowSpan; r++) {
+              for (let c = targetCell.col; c < targetCell.col + colSpan; c++) {
+                const mergedCell = pageGrid.cells[r]?.[c];
+                if (mergedCell) {
+                  mergedCell.isEmpty = false;
+                  mergedCell.fieldId = field.id;
+                }
+              }
+            }
+          }
+
           const baseField = {
-            id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            id: field.id || cell?.fieldId || `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             type: field.type || 'text',
             label: field.label || 'Generated Field',
-            width: widgetWidth,
-            height: field.height || defaultHeight,
+            width: fieldWidth,
+            height: fieldHeight,
             x: targetCell.x,
             y: targetCell.y,
             zIndex: 1,
-            gridRow: targetCell.row,
-            gridCol: targetCell.col
+            gridRow: targetCell.row + 1, // Convert back to 1-based
+            gridCol: targetCell.col + 1, // Convert back to 1-based
+            rowSpan: field.gridPosition?.rowSpan || 1,
+            colSpan: field.gridPosition?.colSpan || 1
           };
 
           // Process settings based on field type
@@ -3142,33 +3985,23 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
         size: 'A4' as const
       };
       
-      // Calculate grid layout
-      const gridLayout = calculateGridLayout(defaultDimensions.width, defaultDimensions.height, []);
+      // Create initial grid for this page
+      const pageGrid = createInitialGrid();
       
       formData.fields.forEach((field: any, index: number) => {
         // Find available grid cell for this field
-        const findAvailableCell = (): {row: number, col: number, x: number, y: number} | null => {
-          for (let row = 0; row < GRID_CONSTANTS.ROWS; row++) {
-            for (let col = 0; col < GRID_CONSTANTS.COLS; col++) {
-              if (!gridLayout.cells[row][col].occupied) {
-                const cell = gridLayout.cells[row][col];
-                // Mark this cell as occupied for subsequent fields
-                gridLayout.cells[row][col].occupied = true;
-                return { row, col, x: cell.x, y: cell.y };
-              }
-            }
-          }
-          return null;
-        };
-        
-        const targetCell = findAvailableCell();
+        const targetCell = findAvailableGridCell(pageGrid);
         if (!targetCell) {
           console.warn(`No available grid cell for AI-generated field ${index + 1}. Skipping field.`);
           return;
         }
         
-        // Fixed widget width (45% of page width) for all widgets
-        const widgetWidth = (defaultDimensions.width * GRID_CONSTANTS.WIDGET_WIDTH_PERCENT) / 100;
+        // Mark cell as occupied
+        const cell = pageGrid.cells[targetCell.row]?.[targetCell.col];
+        if (cell) {
+          cell.isEmpty = false;
+          cell.fieldId = `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        }
         
         // Default field height based on type
         const defaultHeight = field.type === 'layoutTable' || field.type === 'dataTable' ? 200 : 
@@ -3177,10 +4010,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                               field.type === 'image' || field.type === 'attachment' ? 120 : 40;
         
         const baseField = {
-          id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: cell?.fieldId || `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: field.type || 'text',
           label: field.label || 'Generated Field',
-          width: widgetWidth,
+          width: cell?.width || EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH,
           height: field.height || defaultHeight,
           x: targetCell.x,
           y: targetCell.y,
@@ -3226,13 +4059,13 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     switch (field.type) {
       case 'text':
         return (
-          <div className={`p-2 ${field.settings.titleLayout === 'vertical' ? 'flex flex-col gap-1' : 'flex items-center gap-2'}`}>
+          <div className={`p-2 h-full ${field.settings.titleLayout === 'vertical' ? 'flex flex-col gap-1' : 'flex items-center gap-2'}`}>
             {!field.settings.hideTitle && (
-              <div className="font-medium text-sm text-gray-800 min-w-[80px]">
+              <div className="font-medium text-sm text-gray-800 min-w-[80px] flex-shrink-0">
                 {field.label}{requiredMark}
               </div>
             )}
-            <div className={`bg-gray-50 border border-gray-300 rounded p-1 text-sm ${field.settings.titleLayout === 'vertical' ? 'w-full' : 'flex-grow'}`}>
+            <div className={`bg-gray-50 border border-gray-300 rounded p-2 text-sm ${field.settings.titleLayout === 'vertical' ? 'w-full flex-grow' : 'flex-grow'}`}>
               <span className="text-gray-500">{field.settings.placeholder || 'Enter text...'}</span>
             </div>
           </div>
@@ -3240,13 +4073,13 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
 
       case 'number':
         return (
-          <div className={`p-2 ${field.settings.titleLayout === 'vertical' ? 'flex flex-col gap-1' : 'flex items-center gap-2'}`}>
+          <div className={`p-2 h-full ${field.settings.titleLayout === 'vertical' ? 'flex flex-col gap-1' : 'flex items-center gap-2'}`}>
             {!field.settings.hideTitle && (
-              <div className="font-medium text-sm text-gray-800 min-w-[80px]">
+              <div className="font-medium text-sm text-gray-800 min-w-[80px] flex-shrink-0">
                 {field.label}{requiredMark}
               </div>
             )}
-            <div className={`bg-gray-50 border border-gray-300 rounded p-1 text-sm ${field.settings.titleLayout === 'vertical' ? 'w-full' : 'w-20'}`}>
+            <div className={`bg-gray-50 border border-gray-300 rounded p-2 text-sm ${field.settings.titleLayout === 'vertical' ? 'w-full flex-grow' : 'flex-grow'}`}>
               <span className="text-gray-500">{field.settings.placeholder || '0'}</span>
             </div>
           </div>
@@ -3254,14 +4087,14 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
 
       case 'textarea':
         return (
-          <div className={`p-2 ${field.settings.titleLayout === 'vertical' ? 'flex flex-col gap-1' : 'flex items-center gap-2'}`}>
+          <div className={`p-2 h-full ${field.settings.titleLayout === 'vertical' ? 'flex flex-col gap-1' : 'flex flex-col gap-2'}`}>
             {!field.settings.hideTitle && (
-              <div className="font-medium text-sm text-gray-800 min-w-[80px]">
+              <div className="font-medium text-sm text-gray-800 flex-shrink-0">
                 {field.label}{requiredMark}
               </div>
             )}
-            <div className={`bg-gray-50 border border-gray-300 rounded p-2 text-sm ${field.settings.titleLayout === 'vertical' ? 'w-full' : 'flex-grow'}`}>
-              <div className="text-gray-500 leading-relaxed" style={{ minHeight: `${(field.settings.rows || 3) * 1.2}em` }}>
+            <div className="bg-gray-50 border border-gray-300 rounded p-2 text-sm flex-grow">
+              <div className="text-gray-500 leading-relaxed h-full">
                 {field.settings.placeholder || 'Enter multiple lines of text...'}
               </div>
             </div>
@@ -3270,16 +4103,18 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
 
       case 'date':
         return (
-          <div className={`p-2 ${field.settings.titleLayout === 'vertical' ? 'flex flex-col gap-1' : 'flex items-center gap-2'}`}>
+          <div className="h-full flex flex-col p-2">
             {!field.settings.hideTitle && (
-              <div className="font-medium text-sm text-gray-800 min-w-[80px]">
+              <div className="font-medium text-sm text-gray-800 flex-shrink-0 mb-1">
                 {field.label}{requiredMark}
               </div>
             )}
-            <div className={`bg-gray-50 border border-gray-300 rounded p-1 text-sm ${field.settings.titleLayout === 'vertical' ? 'w-full' : 'w-32'}`}>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500">Select date</span>
-                <RiCalendarLine className="text-gray-400 text-xs" />
+            <div className="flex-grow flex items-center">
+              <div className="bg-gray-50 border border-gray-300 rounded p-2 text-sm w-full">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500">Select date</span>
+                  <RiCalendarLine className="text-gray-400 text-xs" />
+                </div>
               </div>
             </div>
           </div>
@@ -3287,104 +4122,110 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
 
       case 'select':
         return (
-          <div className={`p-2 ${field.settings.titleLayout === 'vertical' ? 'flex flex-col gap-1' : 'flex items-center gap-2'}`}>
+          <div className="h-full flex flex-col p-2">
             {!field.settings.hideTitle && (
-              <div className="font-medium text-sm text-gray-800 min-w-[80px]">
+              <div className="font-medium text-sm text-gray-800 flex-shrink-0 mb-1">
                 {field.label}{requiredMark}
               </div>
             )}
-            <div className={`bg-gray-50 border border-gray-300 rounded p-1 text-sm ${field.settings.titleLayout === 'vertical' ? 'w-full' : 'w-32'}`}>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500">
-                  {field.settings.options && field.settings.options.length > 0 ? 
-                    field.settings.options[0] : 'Select option'}
-                </span>
-                <RiListOrdered className="text-gray-400 text-xs" />
-              </div>
-              {field.settings.options && field.settings.options.length > 1 && (
-                <div className="text-xs text-gray-400 mt-1">
-                  +{field.settings.options.length - 1} more options
+            <div className="flex-grow flex items-center">
+              <div className="bg-gray-50 border border-gray-300 rounded p-2 text-sm w-full">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500">
+                    {field.settings.options && field.settings.options.length > 0 ? 
+                      field.settings.options[0] : 'Select option'}
+                  </span>
+                  <RiListOrdered className="text-gray-400 text-xs" />
                 </div>
-              )}
+                {field.settings.options && field.settings.options.length > 1 && (
+                  <div className="text-xs text-gray-400 mt-1">
+                    +{field.settings.options.length - 1} more options
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         );
 
       case 'checkbox':
         return (
-          <div className="p-2">
+          <div className="h-full flex flex-col p-2">
             {!field.settings.hideTitle && (
-              <div className="font-medium text-sm text-gray-800 mb-1">
+              <div className="font-medium text-sm text-gray-800 flex-shrink-0 mb-1">
                 {field.label}{requiredMark}
               </div>
             )}
-            <div className="space-y-1">
-              {field.settings.options && field.settings.options.length > 0 ? (
-                field.settings.options.slice(0, Math.min(field.settings.options.length, 4)).map((option: string, i: number) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <div className="w-3 h-3 border border-gray-400 rounded bg-white flex-shrink-0"></div>
-                    <div className="text-sm text-gray-800">{option}</div>
+            <div className="flex-grow overflow-y-auto">
+              <div className="space-y-1">
+                {field.settings.options && field.settings.options.length > 0 ? (
+                  field.settings.options.slice(0, Math.min(field.settings.options.length, 4)).map((option: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-3 h-3 border border-gray-400 rounded bg-white flex-shrink-0"></div>
+                      <div className="text-sm text-gray-800">{option}</div>
+                    </div>
+                  ))
+                ) : (
+                  field.settings.options.slice(0, 2).map((option: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-3 h-3 border border-gray-400 rounded bg-white flex-shrink-0"></div>
+                      <div className="text-sm text-gray-800">{option}</div>
+                    </div>
+                  ))
+                )}
+                {field.settings.options && field.settings.options.length > 4 && (
+                  <div className="text-xs text-gray-500 italic">
+                    +{field.settings.options.length - 4} more options
                   </div>
-                ))
-              ) : (
-                field.settings.options.slice(0, 2).map((option: string, i: number) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <div className="w-3 h-3 border border-gray-400 rounded bg-white flex-shrink-0"></div>
-                    <div className="text-sm text-gray-800">{option}</div>
-                  </div>
-                ))
-              )}
-              {field.settings.options && field.settings.options.length > 4 && (
-                <div className="text-xs text-gray-500 italic">
-                  +{field.settings.options.length - 4} more options
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         );
 
       case 'multipleChoice':
         return (
-          <div className="p-2">
+          <div className="h-full flex flex-col p-2">
             {!field.settings.hideTitle && (
-              <div className="font-medium text-sm text-gray-800 mb-1">
+              <div className="font-medium text-sm text-gray-800 flex-shrink-0 mb-1">
                 {field.label}{requiredMark}
               </div>
             )}
-            <div className="space-y-1">
-              {field.settings.options && field.settings.options.length > 0 ? (
-                field.settings.options.slice(0, Math.min(field.settings.options.length, 4)).map((option: string, i: number) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full border border-gray-400 bg-white flex-shrink-0"></div>
-                    <div className="text-sm text-gray-800">{option}</div>
+            <div className="flex-grow overflow-y-auto">
+              <div className="space-y-1">
+                {field.settings.options && field.settings.options.length > 0 ? (
+                  field.settings.options.slice(0, Math.min(field.settings.options.length, 4)).map((option: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full border border-gray-400 bg-white flex-shrink-0"></div>
+                      <div className="text-sm text-gray-800">{option}</div>
+                    </div>
+                  ))
+                ) : (
+                  field.settings.options.slice(0, 2).map((option: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full border border-gray-400 bg-white flex-shrink-0"></div>
+                      <div className="text-sm text-gray-800">{option}</div>
+                    </div>
+                  ))
+                )}
+                {field.settings.options && field.settings.options.length > 4 && (
+                  <div className="text-xs text-gray-500 italic">
+                    +{field.settings.options.length - 4} more options
                   </div>
-                ))
-              ) : (
-                field.settings.options.slice(0, 2).map((option: string, i: number) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full border border-gray-400 bg-white flex-shrink-0"></div>
-                    <div className="text-sm text-gray-800">{option}</div>
-                  </div>
-                ))
-              )}
-              {field.settings.options && field.settings.options.length > 4 && (
-                <div className="text-xs text-gray-500 italic">
-                  +{field.settings.options.length - 4} more options
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         );
 
       case 'image':
         return (
-          <div className="p-2">
+          <div className="h-full flex flex-col p-2">
             {!field.settings.hideTitle && (
-              <div className="font-medium text-sm text-gray-800 mb-1">
+              <div className="font-medium text-sm text-gray-800 flex-shrink-0 mb-1">
                 {field.label}{requiredMark}
               </div>
             )}
-            <div className="border border-dashed border-gray-400 rounded p-3 bg-gray-50 flex flex-col items-center justify-center text-gray-500 text-xs">
+            <div className="flex-grow border border-dashed border-gray-400 rounded p-3 bg-gray-50 flex flex-col items-center justify-center text-gray-500 text-xs">
               <RiImageLine className="text-lg mb-1" />
               <div>Upload image</div>
             </div>
@@ -3654,7 +4495,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             <div className="flex space-x-1 mb-4 bg-dark-700/30 rounded-md p-1">
               <button
                 className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'fields' ? 'bg-ai-blue text-white' : 'text-gray-400 hover:text-gray-300'
+                  activeTab === 'fields' ? 'bg-portfolio-orange text-white' : 'text-gray-400 hover:text-gray-300'
                 }`}
                 onClick={() => setActiveTab('fields')}
               >
@@ -3662,7 +4503,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </button>
               <button
                 className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'kit' ? 'bg-ai-blue text-white' : 'text-gray-400 hover:text-gray-300'
+                  activeTab === 'kit' ? 'bg-portfolio-orange text-white' : 'text-gray-400 hover:text-gray-300'
                 }`}
                 onClick={() => setActiveTab('kit')}
               >
@@ -3670,7 +4511,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </button>
               <button
                 className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'table' ? 'bg-ai-blue text-white' : 'text-gray-400 hover:text-gray-300'
+                  activeTab === 'table' ? 'bg-portfolio-orange text-white' : 'text-gray-400 hover:text-gray-300'
                 }`}
                 onClick={() => setActiveTab('table')}
               >
@@ -3946,6 +4787,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 const pageWidth = page.dimensions.width;
                 const cumulativeHeight = formPages.slice(0, pageIndex).reduce((sum, p) => sum + p.dimensions.height + 24, 0); // 24px for spacing
                 
+                // Ensure page has a valid grid
+                if (!page.grid) {
+                  page.grid = createInitialGrid();
+                }
+                
                 return (
                   <div key={page.id} className="relative">
                     {/* Page number indicator */}
@@ -3955,7 +4801,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     
                     <div 
                       className={`relative bg-white rounded-lg shadow-lg transition-all duration-300 ${
-                        isDragging ? 'ring-2 ring-ai-blue ring-opacity-50 shadow-ai-blue/20' : ''
+                        isDragging ? 'ring-2 ring-portfolio-orange ring-opacity-50 shadow-portfolio-orange/20' : ''
                       }`}
                       style={{
                         width: `${pageWidth}px`,
@@ -3987,23 +4833,61 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                         const x = e.clientX - rect.left - 24; // Account for padding
                         const y = e.clientY - rect.top - 24;
                         
-                        // Define field dimensions
-                        const defaultWidth = draggedType === 'layoutTable' || draggedType === 'dataTable' ? 400 : 300;
-                        const defaultHeight = draggedType === 'layoutTable' || draggedType === 'dataTable' ? 200 : 
-                                            draggedType === 'signature' ? 80 : 
-                                            draggedType === 'textarea' ? 80 :
-                                            draggedType === 'image' || draggedType === 'attachment' ? 120 : 40;
+                        // Find the nearest grid cell for the drop position
+                        const pageGrid = page.grid || createInitialGrid();
+                        const gridPosition = getGridCellFromPosition(x, y, pageGrid);
+                        if (!gridPosition) return; // Exit if no valid grid position found
+                        const { row, col } = gridPosition;
                         
-                        // Create new field with proper positioning
+                        // Check if the cell is available
+                        const cell = pageGrid.cells[row]?.[col];
+                        let targetRow = row;
+                        let targetCol = col;
+                        
+                        if (!cell || !cell.isEmpty) {
+                          // Find the nearest empty cell
+                          let nearestCell = null;
+                          let minDistance = Infinity;
+                          
+                          for (let r = 0; r < pageGrid.cells.length; r++) {
+                            for (let c = 0; c < pageGrid.cells[r].length; c++) {
+                              const gridCell = pageGrid.cells[r][c];
+                              if (gridCell.isEmpty) {
+                                const distance = Math.sqrt(Math.pow(gridCell.x + gridCell.width/2 - x, 2) + Math.pow(gridCell.y + gridCell.height/2 - y, 2));
+                                if (distance < minDistance) {
+                                  minDistance = distance;
+                                  nearestCell = { row: r, col: c };
+                                }
+                              }
+                            }
+                          }
+                          
+                          if (nearestCell) {
+                            targetRow = nearestCell.row;
+                            targetCol = nearestCell.col;
+                          } else {
+                            return; // No available cells
+                          }
+                        }
+                        
+                        // Use the same logic as onCellDrop
+                        const targetCell = pageGrid.cells[targetRow]?.[targetCol];
+                        if (!targetCell) return;
+                        
+                        // Create new field with cell-based positioning
+                        const fieldId = `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                         const newField: FormField = {
-                          id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                          id: fieldId,
                           type: draggedType,
                           label: draggedData?.label || `${draggedType.charAt(0).toUpperCase() + draggedType.slice(1)} Field`,
-                          x: Math.max(0, Math.min(x, pageWidth - defaultWidth - 24)),
-                          y: Math.max(0, Math.min(y, pageHeight - defaultHeight - 24)),
-                          width: defaultWidth,
-                          height: defaultHeight,
+                          x: targetCell.x,
+                          y: targetCell.y,
+                          width: targetCell.width,
+                          height: targetCell.height,
                           zIndex: 1,
+                          gridRow: targetRow,
+                          gridCol: targetCol,
+                          cellId: targetCell.id,
                           settings: {
                             required: false,
                             placeholder: '',
@@ -4013,93 +4897,436 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                           }
                         };
                         
-                        // Add field to the specific page
+                        // Update grid to mark cell as occupied
+                        const updatedGrid = { ...pageGrid };
+                        updatedGrid.cells[targetRow][targetCol] = {
+                          ...updatedGrid.cells[targetRow][targetCol],
+                          fieldId: fieldId,
+                          isEmpty: false
+                        };
+                        
+                        // Add field to the specific page and update grid
                         setFormPages(prev => {
                           const newPages = [...prev];
                           newPages[pageIndex] = {
                             ...newPages[pageIndex],
-                            fields: [...newPages[pageIndex].fields, newField]
+                            fields: [...newPages[pageIndex].fields, newField],
+                            grid: updatedGrid
                           };
                           return newPages;
                         });
                         
                         setSelectedField(newField);
+                        setSelectedCell(null);
+                        
                         setCurrentPageIndex(pageIndex);
-                        setIsDragging(false);
                         e.preventDefault();
                       }}
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
                     >
-                      {/* Canvas content */}
-                      <div 
-                        className="relative w-full h-full"
-                        data-canvas="true"
-                        data-page-container="true"
-                        data-page-index={pageIndex}
-                        style={{ 
-                          minHeight: `${pageHeight - 48}px`,
-                          width: `${pageWidth}px`,
-                          height: `${pageHeight}px`
+                      {/* Excel Grid Canvas */}
+                      <ExcelGrid
+                        width={pageWidth}
+                        height={pageHeight}
+                        selectedCell={selectedCell}
+                        isDragging={isDragging}
+                        onCellSelect={(row, col) => {
+                          setSelectedCell({ row, col });
+                          setCurrentPageIndex(pageIndex);
                         }}
-                        onClick={(e) => {
-                          if (e.target === e.currentTarget) {
-                            setSelectedField(null);
-                            setCurrentPageIndex(pageIndex);
+                        onCellResize={(updatedRows, updatedColumns) => {
+                          // Update the grid with new row and column dimensions
+                          setFormPages(prev => {
+                            const newPages = [...prev];
+                            const currentPage = newPages[pageIndex];
+                            if (currentPage && currentPage.grid) {
+                              // Update grid rows and columns
+                              const updatedGrid = {
+                                ...currentPage.grid,
+                                rows: updatedRows,
+                                columns: updatedColumns
+                              };
+                              
+                              // Update cells with new dimensions
+                              for (let row = 0; row < updatedRows.length; row++) {
+                                for (let col = 0; col < updatedColumns.length; col++) {
+                                  if (updatedGrid.cells[row] && updatedGrid.cells[row][col]) {
+                                    updatedGrid.cells[row][col] = {
+                                      ...updatedGrid.cells[row][col],
+                                      x: updatedColumns[col].x,
+                                      y: updatedRows[row].y,
+                                      width: updatedColumns[col].width,
+                                      height: updatedRows[row].height
+                                    };
+                                  }
+                                }
+                              }
+                              
+                              // Update all form fields to match new grid dimensions
+                              const updatedPage = updateAllFieldDimensions(currentPage, updatedGrid);
+                              newPages[pageIndex] = updatedPage;
+                            }
+                            return newPages;
+                          });
+                        }}
+                        onRowInsert={(insertedRowIndex) => {
+                          // Shift all widgets down that are at or below the inserted row
+                          setFormPages(prev => {
+                            const newPages = [...prev];
+                            const currentPage = newPages[pageIndex];
+                            
+                            const updatedFields = currentPage.fields.map(field => {
+                              if (field.gridRow !== undefined && field.gridRow >= insertedRowIndex) {
+                                const newGridRow = field.gridRow + 1;
+                                const newGridCol = field.gridCol || 0;
+                                
+                                // Recalculate x,y coordinates based on new grid position
+                                const cellPosition = snapToGridCell(newGridRow, newGridCol, currentPage.grid);
+                                
+                                return {
+                                  ...field,
+                                  gridRow: newGridRow,
+                                  x: cellPosition.x,
+                                  y: cellPosition.y
+                                };
+                              }
+                              return field;
+                            });
+                            
+                            newPages[pageIndex] = {
+                              ...currentPage,
+                              fields: updatedFields
+                            };
+                            return newPages;
+                          });
+                        }}
+                        onRowDelete={(deletedRowIndex) => {
+                          // Remove widgets in the deleted row and shift others up
+                          setFormPages(prev => {
+                            const newPages = [...prev];
+                            const currentPage = newPages[pageIndex];
+                            
+                            const updatedFields = currentPage.fields
+                              .filter(field => field.gridRow !== undefined && field.gridRow !== deletedRowIndex)
+                              .map(field => {
+                                if (field.gridRow !== undefined && field.gridRow > deletedRowIndex) {
+                                  const newGridRow = field.gridRow - 1;
+                                  const newGridCol = field.gridCol || 0;
+                                  
+                                  // Recalculate x,y coordinates based on new grid position
+                                  const cellPosition = snapToGridCell(newGridRow, newGridCol, currentPage.grid);
+                                  
+                                  return {
+                                    ...field,
+                                    gridRow: newGridRow,
+                                    x: cellPosition.x,
+                                    y: cellPosition.y
+                                  };
+                                }
+                                return field;
+                              });
+                            
+                            newPages[pageIndex] = {
+                              ...currentPage,
+                              fields: updatedFields
+                            };
+                            return newPages;
+                          });
+                        }}
+                        onColumnInsert={(insertedColumnIndex) => {
+                          // Shift all widgets right that are at or to the right of the inserted column
+                          setFormPages(prev => {
+                            const newPages = [...prev];
+                            const currentPage = newPages[pageIndex];
+                            
+                            const updatedFields = currentPage.fields.map(field => {
+                              if (field.gridCol !== undefined && field.gridCol >= insertedColumnIndex) {
+                                const newGridRow = field.gridRow || 0;
+                                const newGridCol = field.gridCol + 1;
+                                
+                                // Recalculate x,y coordinates based on new grid position
+                                const cellPosition = snapToGridCell(newGridRow, newGridCol, currentPage.grid);
+                                
+                                return {
+                                  ...field,
+                                  gridCol: newGridCol,
+                                  x: cellPosition.x,
+                                  y: cellPosition.y
+                                };
+                              }
+                              return field;
+                            });
+                            
+                            newPages[pageIndex] = {
+                              ...currentPage,
+                              fields: updatedFields
+                            };
+                            return newPages;
+                          });
+                        }}
+                        onColumnDelete={(deletedColumnIndex) => {
+                          // Remove widgets in the deleted column and shift others left
+                          setFormPages(prev => {
+                            const newPages = [...prev];
+                            const currentPage = newPages[pageIndex];
+                            
+                            const updatedFields = currentPage.fields
+                              .filter(field => field.gridCol !== undefined && field.gridCol !== deletedColumnIndex)
+                              .map(field => {
+                                if (field.gridCol !== undefined && field.gridCol > deletedColumnIndex) {
+                                  const newGridRow = field.gridRow || 0;
+                                  const newGridCol = field.gridCol - 1;
+                                  
+                                  // Recalculate x,y coordinates based on new grid position
+                                  const cellPosition = snapToGridCell(newGridRow, newGridCol, currentPage.grid);
+                                  
+                                  return {
+                                    ...field,
+                                    gridCol: newGridCol,
+                                    x: cellPosition.x,
+                                    y: cellPosition.y
+                                  };
+                                }
+                                return field;
+                              });
+                            
+                            newPages[pageIndex] = {
+                              ...currentPage,
+                              fields: updatedFields
+                            };
+                            return newPages;
+                          });
+                        }}
+                        onMerge={(mergeInfo) => {
+                          // Update form fields when cells are merged
+                          setFormPages(prev => {
+                            const newPages = [...prev];
+                            const currentPage = newPages[pageIndex];
+                            
+                            // Add safety checks
+                            if (!currentPage || !currentPage.grid) {
+                              return prev;
+                            }
+                            
+                            // Update all form fields to reflect the new merged cell dimensions
+                            const updatedPage = updateAllFieldDimensions(currentPage, currentPage.grid);
+                            newPages[pageIndex] = updatedPage;
+                            
+                            return newPages;
+                          });
+                        }}
+                        onUnmerge={(range) => {
+                          // Update form fields when cells are unmerged
+                          setFormPages(prev => {
+                            const newPages = [...prev];
+                            const currentPage = newPages[pageIndex];
+                            
+                            // Add safety checks
+                            if (!currentPage || !currentPage.grid) {
+                              return prev;
+                            }
+                            
+                            // Update all form fields to reflect the new unmerged cell dimensions
+                            const updatedPage = updateAllFieldDimensions(currentPage, currentPage.grid);
+                            newPages[pageIndex] = updatedPage;
+                            
+                            return newPages;
+                          });
+                        }}
+                        onMergedCellsChange={(mergedCells) => {
+                          // Update the grid with merged cell information
+                          setFormPages(prev => {
+                            const newPages = [...prev];
+                            const currentPage = newPages[pageIndex];
+                            
+                            if (currentPage && currentPage.grid) {
+                              const updatedGrid = {
+                                ...currentPage.grid,
+                                mergedCells: mergedCells
+                              };
+                              
+                              // Update all form fields to reflect the merged cell changes
+                              const updatedPage = updateAllFieldDimensions(currentPage, updatedGrid);
+                              newPages[pageIndex] = updatedPage;
+                            }
+                            
+                            return newPages;
+                          });
+                        }}
+                        onCellDrop={(row, col, draggedData, mergeInfo) => {
+                          setIsDragging(false);
+                          
+                          const draggedType = draggedData?.type;
+                          if (!draggedType) return;
+                          
+                          // Calculate cell position and size for auto-fit
+                          const pageGrid = page.grid || createInitialGrid();
+                          const cell = pageGrid.cells[row]?.[col];
+                          if (!cell) return;
+                          
+                          // Calculate dimensions based on merged cell info if available
+                          let fieldWidth = cell.width;
+                          let fieldHeight = cell.height;
+                          
+                          if (mergeInfo) {
+                            // Calculate total width and height of merged area
+                            fieldWidth = 0;
+                            fieldHeight = 0;
+                            
+                            // Sum up widths of all columns in the merge
+                            for (let c = mergeInfo.startCol; c <= mergeInfo.endCol; c++) {
+                              const colCell = pageGrid.cells[row]?.[c];
+                              if (colCell) {
+                                fieldWidth += colCell.width;
+                              }
+                            }
+                            
+                            // Sum up heights of all rows in the merge
+                            for (let r = mergeInfo.startRow; r <= mergeInfo.endRow; r++) {
+                              const rowCell = pageGrid.cells[r]?.[col];
+                              if (rowCell) {
+                                fieldHeight += rowCell.height;
+                              }
+                            }
                           }
+                          
+                          // Create new field with cell-based positioning
+                          const fieldId = `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                          const newField: FormField = {
+                            id: fieldId,
+                            type: draggedType,
+                            label: draggedData?.label || `${draggedType.charAt(0).toUpperCase() + draggedType.slice(1)} Field`,
+                            x: cell.x,
+                            y: cell.y,
+                            width: fieldWidth,
+                            height: fieldHeight,
+                            zIndex: 1,
+                            gridRow: row,
+                            gridCol: col,
+                            cellId: cell.id,
+                            settings: {
+                              required: false,
+                              placeholder: '',
+                              hideTitle: false,
+                              titleLayout: 'horizontal',
+                              options: draggedType === 'multipleChoice' || draggedType === 'checkbox' || draggedType === 'select' ? ['Option 1', 'Option 2'] : []
+                            }
+                          };
+                          
+                          // Update grid to mark cell as occupied
+                          const updatedGrid = { ...pageGrid };
+                          if (mergeInfo) {
+                            // Mark all cells in the merged area as occupied
+                            for (let r = mergeInfo.startRow; r <= mergeInfo.endRow; r++) {
+                              for (let c = mergeInfo.startCol; c <= mergeInfo.endCol; c++) {
+                                if (updatedGrid.cells[r] && updatedGrid.cells[r][c]) {
+                                  updatedGrid.cells[r][c] = {
+                                    ...updatedGrid.cells[r][c],
+                                    fieldId: fieldId,
+                                    isEmpty: false
+                                  };
+                                }
+                              }
+                            }
+                          } else {
+                            // Mark only the single cell as occupied
+                            updatedGrid.cells[row][col] = {
+                              ...updatedGrid.cells[row][col],
+                              fieldId: fieldId,
+                              isEmpty: false
+                            };
+                          }
+                          
+                          // Add field to the specific page and update grid
+                          setFormPages(prev => {
+                            const newPages = [...prev];
+                            newPages[pageIndex] = {
+                              ...newPages[pageIndex],
+                              fields: [...newPages[pageIndex].fields, newField],
+                              grid: updatedGrid
+                            };
+                            return newPages;
+                          });
+                          
+                          setSelectedField(newField);
+                          setSelectedCell(null); // Clear selection after drop
                         }}
                       >
-                        {/* Grid Overlay - Show only available cells */}
-                        {isDragging && (() => {
-                          const gridLayout = calculateGridLayout(pageWidth, pageHeight, page.fields);
+                        {/* Render form fields as children of the grid */}
+                        {page.fields.map((field: FormField) => {
+                          // For fields with grid positioning, always calculate from current grid state
+                          let position;
+                          
+                          // Ensure page has a grid before proceeding
+                          if (!page.grid) {
+                            // Fallback to stored dimensions if no grid available
+                            position = {
+                              x: field.x || 0,
+                              y: field.y || 0,
+                              width: field.width || 100,
+                              height: field.height || 40
+                            };
+                          } else if (field.gridRow !== undefined && field.gridCol !== undefined) {
+                            // Always calculate position from current grid state for dynamic updates
+                            position = snapToGridCell(field.gridRow, field.gridCol, page.grid);
+                          } else {
+                            // For legacy fields without grid positioning, use stored dimensions
+                            const fieldCell = findCellByFieldId(page.grid, field.id);
+                            if (fieldCell) {
+                              position = snapToGridCell(fieldCell.row, fieldCell.col, page.grid);
+                            } else {
+                              // Fallback to stored dimensions if no grid cell found
+                              position = {
+                                x: field.x || 0,
+                                y: field.y || 0,
+                                width: field.width || 100,
+                                height: field.height || 40
+                              };
+                            }
+                          }
                           
                           return (
-                            <div className="absolute inset-0 pointer-events-none z-40">
-                              {gridLayout.cells.map((row, rowIndex) => 
-                                row.map((cell, colIndex) => {
-                                  // Only render available (non-occupied) cells
-                                  if (cell.occupied) return null;
-                                  
-                                  return (
-                                    <div
-                                      key={`grid-${pageIndex}-${rowIndex}-${colIndex}`}
-                                      className="absolute border border-green-400 bg-green-50/30 transition-colors duration-200"
-                                      style={{
-                                        left: cell.x,
-                                        top: cell.y,
-                                        width: cell.width,
-                                        height: cell.height,
-                                        borderStyle: 'dashed',
-                                        borderWidth: '2px'
-                                      }}
-                                    >
-                                      <div className="absolute top-1 left-1 text-xs text-green-700 bg-white/90 px-1 rounded font-medium">
-                                        {rowIndex + 1},{colIndex + 1}
-                                      </div>
-                                      <div className="absolute inset-0 flex items-center justify-center">
-                                        <div className="text-green-600 text-xs font-medium bg-white/80 px-2 py-1 rounded">
-                                          Available
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })
+                            <div
+                              key={field.id}
+                              className={`absolute cursor-pointer transition-all duration-200 ${
+                                selectedField?.id === field.id ? 'ring-2 ring-portfolio-orange ring-opacity-50' : ''
+                              }`}
+                              style={{
+                                left: position.x,
+                                top: position.y,
+                                width: position.width,
+                                height: position.height,
+                                zIndex: field.zIndex || 1
+                              }}
+                              onClick={() => {
+                                setSelectedField(field);
+                                setCurrentPageIndex(pageIndex);
+                              }}
+                              onContextMenu={(e) => onFieldContextMenu(e, field.id)}
+                            >
+                              <div className="w-full h-full bg-white border border-gray-200 rounded shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                                 <div className="w-full h-full flex flex-col">
+                                   {renderWidgetPreview(field)}
+                                 </div>
+                               </div>
+                              
+                              {/* Field resize handles */}
+                              {selectedField?.id === field.id && (
+                                <>
+                                  <div className="absolute -top-1 -left-1 w-3 h-3 bg-portfolio-orange rounded-full cursor-nw-resize" />
+                                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-portfolio-orange rounded-full cursor-ne-resize" />
+                                  <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-portfolio-orange rounded-full cursor-sw-resize" />
+                                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-portfolio-orange rounded-full cursor-se-resize" />
+                                </>
                               )}
                             </div>
                           );
-                        })()}
+                        })}
                         
-                        {/* Drop zone indicator */}
-                        {isDragging && (
-                          <div className="absolute inset-0 bg-ai-blue/5 border-2 border-dashed border-ai-blue rounded-lg flex items-center justify-center z-50">
-                            <div className="text-ai-blue font-medium text-lg">
-                              Drop widget here
-                            </div>
-                          </div>
-                        )}
-                        
-                        {page.fields.length === 0 ? (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-300 rounded-lg">
+                        {/* Empty state overlay */}
+                        {page.fields.length === 0 && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pointer-events-none">
                             <RiDragMove2Line className="text-6xl mb-4" />
                             <p className="text-lg font-medium">Drop form fields here</p>
                             <p className="text-sm mt-2">Drag widgets from the left panel to create your form</p>
@@ -4107,7 +5334,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                               Page {pageIndex + 1}: {page.dimensions.size} {page.dimensions.orientation}
                             </p>
                             {pageIndex === 0 && (
-                              <div className="mt-4 flex gap-2">
+                              <div className="mt-4 flex gap-2 pointer-events-auto">
                                 <Button 
                                   variant="ai" 
                                   size="sm" 
@@ -4119,45 +5346,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                               </div>
                             )}
                           </div>
-                        ) : (
-                          page.fields.map((field: FormField) => (
-                            <ResizableWrapper 
-                              key={field.id}
-                              fieldId={field.id}
-                              onUpdateSize={updateFieldSize}
-                              onUpdatePosition={(fieldId, x, y) => {
-                                // Update field position within the specific page
-                                setFormPages(prev => {
-                                  const newPages = [...prev];
-                                  const pageToUpdate = newPages[pageIndex];
-                                  const fieldIndex = pageToUpdate.fields.findIndex(f => f.id === fieldId);
-                                  if (fieldIndex !== -1) {
-                                    pageToUpdate.fields[fieldIndex] = {
-                                      ...pageToUpdate.fields[fieldIndex],
-                                      x,
-                                      y
-                                    };
-                                  }
-                                  return newPages;
-                                });
-                              }}
-                              field={field}
-                              isSelected={selectedField?.id === field.id}
-                              onSelect={() => {
-                                setSelectedField(field);
-                                setCurrentPageIndex(pageIndex);
-                              }}
-                              currentFields={page.fields}
-                              pageWidth={page.dimensions.width}
-                              pageHeight={page.dimensions.height}
-                            >
-                              <div className="w-full h-full">
-                                {renderWidgetPreview(field)}
-                              </div>
-                            </ResizableWrapper>
-                          ))
                         )}
-                      </div>
+                      </ExcelGrid>
                     </div>
                   </div>
                 );
@@ -4187,7 +5377,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                   label="Title"
                   value={selectedField.label}
                   onChange={(e) => updateFieldLabel(selectedField.id, e.target.value)}
-                  className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                  className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                 />
               </div>
               
@@ -4196,7 +5386,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                   label="Placeholder"
                   value={selectedField.settings.placeholder || ''}
                   onChange={(e) => updateFieldSettings(selectedField.id, { placeholder: e.target.value })}
-                  className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                  className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                 />
               </div>
               
@@ -4206,7 +5396,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                   type="checkbox" 
                   checked={selectedField.settings.required}
                   onChange={(e) => updateFieldSettings(selectedField.id, { required: e.target.checked })}
-                  className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                  className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                 />
               </div>
               
@@ -4216,7 +5406,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                   type="checkbox" 
                   checked={selectedField.settings.hideTitle}
                   onChange={(e) => updateFieldSettings(selectedField.id, { hideTitle: e.target.checked })}
-                  className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                  className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                 />
               </div>
               
@@ -4242,7 +5432,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     type="number"
                     value={selectedField.x || 0}
                     onChange={(e) => updateFieldPosition(selectedField.id, parseInt(e.target.value) || 0, selectedField.y || 0)}
-                    className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                    className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                   />
                 </div>
                 <div>
@@ -4251,7 +5441,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     type="number"
                     value={selectedField.y || 0}
                     onChange={(e) => updateFieldPosition(selectedField.id, selectedField.x || 0, parseInt(e.target.value) || 0)}
-                    className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                    className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                   />
                 </div>
               </div>
@@ -4263,7 +5453,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     type="number"
                     value={selectedField.width || 200}
                     onChange={(e) => updateFieldSize(selectedField.id, parseInt(e.target.value) || 200, selectedField.height || 40)}
-                    className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                    className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                   />
                 </div>
                 <div>
@@ -4272,7 +5462,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     type="number"
                     value={selectedField.height || 40}
                     onChange={(e) => updateFieldSize(selectedField.id, selectedField.width || 200, parseInt(e.target.value) || 40)}
-                    className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                    className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                   />
                 </div>
               </div>
@@ -4326,7 +5516,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="number"
                       value={selectedField.settings.maxLength || ''}
                       onChange={(e) => updateFieldSettings(selectedField.id, { maxLength: e.target.value })}
-                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                      className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                     />
                   </div>
                   <div className="mb-3">
@@ -4335,7 +5525,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       value={selectedField.settings.pattern || ''}
                       onChange={(e) => updateFieldSettings(selectedField.id, { pattern: e.target.value })}
                       placeholder="e.g., ^[A-Za-z]+$"
-                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                      className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                     />
                   </div>
                 </>
@@ -4351,7 +5541,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                         type="number"
                         value={selectedField.settings.min || ''}
                         onChange={(e) => updateFieldSettings(selectedField.id, { min: e.target.value })}
-                        className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                        className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                       />
                     </div>
                     <div>
@@ -4360,7 +5550,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                         type="number"
                         value={selectedField.settings.max || ''}
                         onChange={(e) => updateFieldSettings(selectedField.id, { max: e.target.value })}
-                        className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                        className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                       />
                     </div>
                   </div>
@@ -4370,7 +5560,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="number"
                       value={selectedField.settings.step || '1'}
                       onChange={(e) => updateFieldSettings(selectedField.id, { step: e.target.value })}
-                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                      className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                     />
                   </div>
                   <div className="mb-3">
@@ -4412,7 +5602,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                         type="date"
                         value={selectedField.settings.minDate || ''}
                         onChange={(e) => updateFieldSettings(selectedField.id, { minDate: e.target.value })}
-                        className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                        className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                       />
                     </div>
                     <div>
@@ -4421,7 +5611,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                         type="date"
                         value={selectedField.settings.maxDate || ''}
                         onChange={(e) => updateFieldSettings(selectedField.id, { maxDate: e.target.value })}
-                        className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                        className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                       />
                     </div>
                   </div>
@@ -4431,7 +5621,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.includeTime}
                       onChange={(e) => updateFieldSettings(selectedField.id, { includeTime: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                 </>
@@ -4446,7 +5636,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.allowSearch}
                       onChange={(e) => updateFieldSettings(selectedField.id, { allowSearch: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                   <div className="flex items-center justify-between mb-3">
@@ -4455,7 +5645,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.allowMultiple}
                       onChange={(e) => updateFieldSettings(selectedField.id, { allowMultiple: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                   <div className="mb-3">
@@ -4463,7 +5653,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       label="Default Value"
                       value={selectedField.settings.defaultValue || ''}
                       onChange={(e) => updateFieldSettings(selectedField.id, { defaultValue: e.target.value })}
-                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                      className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                     />
                   </div>
                 </>
@@ -4478,7 +5668,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.allowMultiple}
                       onChange={(e) => updateFieldSettings(selectedField.id, { allowMultiple: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                   <div className="mb-3">
@@ -4522,7 +5712,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       value={selectedField.settings.acceptedTypes || ''}
                       onChange={(e) => updateFieldSettings(selectedField.id, { acceptedTypes: e.target.value })}
                       placeholder="e.g., .jpg,.png,.pdf"
-                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                      className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                     />
                   </div>
                   <div className="flex items-center justify-between mb-3">
@@ -4531,7 +5721,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.allowMultipleFiles}
                       onChange={(e) => updateFieldSettings(selectedField.id, { allowMultipleFiles: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                   <div className="mb-3">
@@ -4540,7 +5730,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="number"
                       value={selectedField.settings.maxFiles || '1'}
                       onChange={(e) => updateFieldSettings(selectedField.id, { maxFiles: parseInt(e.target.value) || 1 })}
-                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                      className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                     />
                   </div>
                 </>
@@ -4570,7 +5760,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="color"
                       value={selectedField.settings.backgroundColor || '#ffffff'}
                       onChange={(e) => updateFieldSettings(selectedField.id, { backgroundColor: e.target.value })}
-                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                      className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                     />
                   </div>
                   <div className="mb-3">
@@ -4579,7 +5769,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="color"
                       value={selectedField.settings.penColor || '#000000'}
                       onChange={(e) => updateFieldSettings(selectedField.id, { penColor: e.target.value })}
-                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                      className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                     />
                   </div>
                 </>
@@ -4620,7 +5810,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                             data: newData
                           });
                         }}
-                        className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                        className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                       />
                     </div>
                     <div>
@@ -4670,7 +5860,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                             data: newData
                           });
                         }}
-                        className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                        className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                       />
                     </div>
                   </div>
@@ -4689,7 +5879,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                                 newHeaders[index] = e.target.value;
                                 updateFieldSettings(selectedField.id, { headers: newHeaders });
                               }}
-                              className="input-ai bg-dark-800/50 border-ai-blue/30 text-white text-sm w-24"
+                              className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white text-sm w-24"
                             />
                           </div>
                         ))}
@@ -4751,7 +5941,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                             rows: newData.length
                           });
                         }}
-                        className="text-xs flex items-center text-ai-blue hover:text-ai-blue-light"
+                        className="text-xs flex items-center text-portfolio-orange hover:text-portfolio-orange-light"
                       >
                         <RiAddLine className="mr-1" /> Add Row
                       </button>
@@ -4781,7 +5971,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.showHeader !== false}
                       onChange={(e) => updateFieldSettings(selectedField.id, { showHeader: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                   <div className="flex items-center justify-between mb-3">
@@ -4790,7 +5980,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.showBorders !== false}
                       onChange={(e) => updateFieldSettings(selectedField.id, { showBorders: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                   <div className="flex items-center justify-between mb-3">
@@ -4799,7 +5989,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.stripedRows}
                       onChange={(e) => updateFieldSettings(selectedField.id, { stripedRows: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                   <div className="flex items-center justify-between mb-3">
@@ -4808,7 +5998,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.resizableColumns}
                       onChange={(e) => updateFieldSettings(selectedField.id, { resizableColumns: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                   {selectedField.type === 'dataTable' && (
@@ -4819,7 +6009,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                           type="checkbox" 
                           checked={selectedField.settings.sortableColumns}
                           onChange={(e) => updateFieldSettings(selectedField.id, { sortableColumns: e.target.checked })}
-                          className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                          className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                         />
                       </div>
                       <div className="flex items-center justify-between mb-3">
@@ -4828,7 +6018,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                           type="checkbox" 
                           checked={selectedField.settings.filterableColumns}
                           onChange={(e) => updateFieldSettings(selectedField.id, { filterableColumns: e.target.checked })}
-                          className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                          className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                         />
                       </div>
                       <div className="flex items-center justify-between mb-3">
@@ -4837,7 +6027,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                           type="checkbox" 
                           checked={selectedField.settings.pagination}
                           onChange={(e) => updateFieldSettings(selectedField.id, { pagination: e.target.checked })}
-                          className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                          className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                         />
                       </div>
                     </>
@@ -4866,7 +6056,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       value={selectedField.settings.frequency || ''}
                       onChange={(e) => updateFieldSettings(selectedField.id, { frequency: e.target.value })}
                       placeholder="e.g., 5 minutes, 1 hour"
-                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                      className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                     />
                   </div>
                 </>
@@ -4894,7 +6084,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="color"
                       value={selectedField.settings.defaultColor || '#ff0000'}
                       onChange={(e) => updateFieldSettings(selectedField.id, { defaultColor: e.target.value })}
-                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                      className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                     />
                   </div>
                 </>
@@ -4908,7 +6098,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       label="Subform Template ID"
                       value={selectedField.settings.subformTemplateId || ''}
                       onChange={(e) => updateFieldSettings(selectedField.id, { subformTemplateId: e.target.value })}
-                      className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
+                      className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                     />
                   </div>
                   <div className="flex items-center justify-between mb-3">
@@ -4917,7 +6107,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.allowMultipleEntries}
                       onChange={(e) => updateFieldSettings(selectedField.id, { allowMultipleEntries: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                 </>
@@ -4944,7 +6134,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.allowMultiple}
                       onChange={(e) => updateFieldSettings(selectedField.id, { allowMultiple: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                 </>
@@ -4971,7 +6161,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.allowComments !== false}
                       onChange={(e) => updateFieldSettings(selectedField.id, { allowComments: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                   <div className="flex items-center justify-between mb-3">
@@ -4980,7 +6170,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       type="checkbox" 
                       checked={selectedField.settings.requireRejectionReason}
                       onChange={(e) => updateFieldSettings(selectedField.id, { requireRejectionReason: e.target.checked })}
-                      className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
+                      className="rounded-sm bg-dark-700 border-dark-600 text-portfolio-orange focus:ring-portfolio-orange"
                     />
                   </div>
                 </>
@@ -5002,7 +6192,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                             newOptions[index] = e.target.value;
                             updateFieldSettings(selectedField.id, { options: newOptions });
                           }}
-                          className="input-ai bg-dark-800/50 border-ai-blue/30 text-white flex-1"
+                          className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white flex-1"
                         />
                         <button
                           onClick={() => {
@@ -5022,7 +6212,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       const newOptions = [...selectedField.settings.options, `Option ${selectedField.settings.options.length + 1}`];
                       updateFieldSettings(selectedField.id, { options: newOptions });
                     }}
-                    className="text-sm flex items-center text-ai-blue hover:text-ai-blue-light mt-2"
+                    className="text-sm flex items-center text-portfolio-orange hover:text-portfolio-orange-light mt-2"
                   >
                     <RiAddLine className="mr-1" /> Add Option
                   </button>
@@ -5078,7 +6268,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       {/* AI Form Generator Modal */}
       <AnimatePresence>
         {showAIGenerator && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-dark-900/80 backdrop-blur-md border border-white/10 flex items-center justify-center p-4 z-50">
             <motion.div
               className="w-full max-w-2xl max-h-[90vh] overflow-auto"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -5097,13 +6287,13 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       
       {/* Enhanced Preview Modal */}
       {showPreview && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-dark-900/95 backdrop-blur-md z-50 flex items-center justify-center">
           <div className="w-full h-full bg-white flex flex-col">
             {/* Enhanced Preview Header */}
             <div className="bg-gradient-to-r from-gray-800 to-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between shadow-lg">
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-portfolio-orange rounded-lg flex items-center justify-center">
                     <RiEyeLine className="text-white text-lg" />
                   </div>
                   <div>
@@ -5126,7 +6316,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 {/* Action Buttons */}
                 <button
                   onClick={() => window.print()}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-portfolio-orange hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
                   title="Print Form"
                 >
                   <RiPrinterLine />
@@ -5175,7 +6365,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                                 {page.dimensions.size} {page.dimensions.orientation}
                               </p>
                               {pageIndex === 0 && (
-                                <div className="mt-4 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
+                                <div className="mt-4 px-4 py-2 bg-dark-800 border border-portfolio-orange/30 rounded-lg text-portfolio-orange text-sm">
                                   💡 Tip: Use the "Demo Form" button to see an example
                                 </div>
                               )}
@@ -5234,7 +6424,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                   <select 
                     value={currentPageIndex}
                     onChange={(e) => setCurrentPageIndex(parseInt(e.target.value))}
-                    className="px-3 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="px-3 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-portfolio-orange focus:border-transparent"
                   >
                     {formPages.map((_, index) => (
                       <option key={index} value={index}>
@@ -5271,6 +6461,64 @@ const FormsPage: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; fieldId: string } | null>(null);
+
+  // Context menu functions - defined early to ensure availability
+  const onFieldContextMenu = (e: React.MouseEvent, fieldId: string) => {
+    e.preventDefault();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      fieldId
+    });
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu(null);
+  };
+
+  const handleContextMenuAction = (action: string, fieldId: string) => {
+    switch (action) {
+      case 'copy':
+        // Copy widget functionality - placeholder for now
+        console.log('Copy widget:', fieldId);
+        break;
+      case 'cut':
+        // Cut widget functionality - placeholder for now
+        console.log('Cut widget:', fieldId);
+        break;
+      case 'paste':
+        // Paste widget functionality - placeholder for now
+        console.log('Paste widget:', fieldId);
+        break;
+      case 'delete':
+        // Delete widget functionality
+        setFormPages(prev => {
+          return prev.map(page => ({
+            ...page,
+            fields: page.fields.filter(field => field.id !== fieldId)
+          }));
+        });
+        break;
+      case 'insertRowAbove':
+        // Insert row above functionality - placeholder for now
+        console.log('Insert row above:', fieldId);
+        break;
+      case 'insertRowBelow':
+        // Insert row below functionality - placeholder for now
+        console.log('Insert row below:', fieldId);
+        break;
+      case 'deleteRow':
+        // Delete row functionality - placeholder for now
+        console.log('Delete row:', fieldId);
+        break;
+      default:
+        console.log('Unknown action:', action);
+    }
+    closeContextMenu();
+  };
   
   // Add form history reference
   const formHistoryRef = useRef<{past: FormPage[][], future: FormPage[][]}>(
@@ -5292,8 +6540,13 @@ const FormsPage: React.FC = () => {
       height: 842, 
       orientation: 'portrait' as const, 
       size: 'A4' as const 
-    } 
+    },
+    grid: createInitialGrid()
   }]);
+
+  // Widget operations state
+  const [widgetClipboard, setWidgetClipboard] = useState<{ field: FormField; operation: 'copy' | 'cut' } | null>(null);
+  const [selectedWidgets, setSelectedWidgets] = useState<Set<string>>(new Set());
 
   // Migrate existing fields to grid system on component mount
   useEffect(() => {
@@ -5312,21 +6565,18 @@ const FormsPage: React.FC = () => {
           const pageWidth = currentDimensions.width;
           const pageHeight = currentDimensions.height;
           
-          // Calculate grid layout for existing fields that already have grid coordinates
-          const fieldsWithGrid = page.fields.filter(field => 
-            field.gridRow !== undefined && field.gridCol !== undefined
-          );
-          const gridLayout = calculateGridLayout(pageWidth, pageHeight, fieldsWithGrid);
+          // Use existing grid or create new one
+          const pageGrid = page.grid || createInitialGrid();
           
           // Migrate fields without grid coordinates
           const migratedFields = page.fields.map(field => {
             if (field.gridRow === undefined || field.gridCol === undefined) {
               // Find an available cell for this field
-              const availableCell = findAvailableGridCell(gridLayout);
+              const availableCell = findAvailableGridCell(pageGrid);
               if (availableCell) {
-                const cellPosition = snapToGridCell(availableCell.row, availableCell.col, gridLayout);
+                const cellPosition = snapToGridCell(availableCell.row, availableCell.col, pageGrid);
                 // Mark this cell as occupied for subsequent fields
-                gridLayout.cells[availableCell.row][availableCell.col].occupied = true;
+                pageGrid.cells[availableCell.row][availableCell.col].isEmpty = false;
                 
                 return {
                   ...field,
@@ -5419,11 +6669,14 @@ const FormsPage: React.FC = () => {
   
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [selectedField, setSelectedField] = useState<FormField | null>(null);
+  const [selectedCell, setSelectedCell] = useState<{ row: number; col: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [activeTab, setActiveTab] = useState('fields');
   const [showPreview, setShowPreview] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [formFlowOpen, setFormFlowOpen] = useState(false);
+  
+
   
   // State for template display
   const [showSiteDiaryTemplate, setShowSiteDiaryTemplate] = useState(false);
@@ -5439,6 +6692,10 @@ const FormsPage: React.FC = () => {
     formsThisMonth: 5,
     templatesAvailable: 6
   });
+
+
+
+
   
   // Add SiteDiaryForm custom component
   const SiteDiaryForm = () => {
@@ -5723,7 +6980,7 @@ const FormsPage: React.FC = () => {
   const handleTemplateSelection = (templateId: number) => {
     const selectedForm = formsList.find(form => form.id === templateId.toString());
     if (selectedForm) {
-      setFormPages(selectedForm.form_structure?.pages || [{ 
+      const pages = selectedForm.form_structure?.pages || [{ 
         id: 'page_1', 
         fields: [], 
         dimensions: { 
@@ -5731,8 +6988,17 @@ const FormsPage: React.FC = () => {
           height: 842, 
           orientation: 'portrait' as const, 
           size: 'A4' as const 
-        } 
-      }]);
+        },
+        grid: createInitialGrid()
+      }];
+      
+      // Ensure all pages have the grid property
+      const pagesWithGrid = pages.map((page: any) => ({
+        ...page,
+        grid: page.grid || createInitialGrid()
+      })) as FormPage[];
+      
+      setFormPages(pagesWithGrid);
     }
   };
   
@@ -5782,7 +7048,8 @@ const FormsPage: React.FC = () => {
         height: 842, 
         orientation: 'portrait' as const, 
         size: 'A4' as const 
-      } 
+      },
+      grid: createInitialGrid()
     }]);
     setCurrentPageIndex(0);
     setSelectedField(null);
@@ -5989,110 +7256,70 @@ const FormsPage: React.FC = () => {
   
   return (
     <div className="max-w-7xl mx-auto">
-      {/* Enhanced header with gradient background */}
-      <div className="relative overflow-hidden rounded-xl mb-8 bg-gradient-to-r from-purple-900 via-fuchsia-800 to-purple-800">
-        <div className="absolute inset-0 bg-ai-dots opacity-20"></div>
-        <div className="absolute right-0 top-0 w-1/3 h-full">
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
-            <motion.path 
-              d="M0,0 L50,0 Q80,50 50,100 L0,100 Z" 
-              fill="url(#formGradient)" 
-              className="opacity-30"
-              initial={{ x: 100 }}
-              animate={{ x: 0 }}
-              transition={{ duration: 1.5 }}
-            />
-            <defs>
-              <linearGradient id="formGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#a855f7" />
-                <stop offset="100%" stopColor="#7e22ce" />
-              </linearGradient>
-            </defs>
-          </svg>
+      {/* Standard Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-display font-bold text-white flex items-center">
+            <RiFileEditLine className="mr-3 text-portfolio-orange" />
+            {t('forms.title', 'Forms')}
+          </h1>
+          <p className="text-gray-400 mt-1 max-w-2xl">
+            Create custom forms, use templates, and manage your project documentation
+          </p>
         </div>
         
-        <div className="p-8 relative z-10">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-            <div>
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                <h1 className="text-3xl md:text-4xl font-display font-bold text-white flex items-center">
-                  <RiFileEditLine className="mr-3 text-purple-300" />
-                  {t('forms.title', 'Forms')}
-                </h1>
-                <p className="text-purple-200 mt-2 max-w-2xl">
-                  Create custom forms, use templates, and manage your project documentation
-                </p>
-              </motion.div>
-            </div>
-            
-            <motion.div
-              className="mt-4 md:mt-0 flex space-x-3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              <Button
-                variant="ai-secondary"
-                leftIcon={<RiFileTextLine />}
-                onClick={() => setShowTemplates(true)}
-              >
-                Templates
-              </Button>
-              <Button
-                variant="ai"
-                leftIcon={<RiAddLine />}
-                onClick={() => setFormFlowOpen(true)}
-                animated
-                pulseEffect
-                glowing
-              >
-                Create Form
-              </Button>
-            </motion.div>
-          </div>
-
-          {/* Statistics Section */}
-          <motion.div 
-            className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
+        <div className="mt-4 md:mt-0 flex space-x-3">
+          <Button
+            variant="ai-secondary"
+            leftIcon={<RiFileTextLine />}
+            onClick={() => setShowTemplates(true)}
           >
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-purple-500/20 rounded-full mr-4">
-                <RiFileTextLine className="text-2xl text-purple-300" />
-              </div>
-              <div>
-                <div className="text-sm text-purple-200">Total Forms</div>
-                <div className="text-2xl font-bold text-white">{stats.totalForms}</div>
-              </div>
-            </div>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-purple-500/20 rounded-full mr-4">
-                <RiCalendarLine className="text-2xl text-purple-300" />
-              </div>
-              <div>
-                <div className="text-sm text-purple-200">This Month</div>
-                <div className="text-2xl font-bold text-white">{stats.formsThisMonth}</div>
-              </div>
-            </div>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-purple-500/20 rounded-full mr-4">
-                <RiFileTextLine className="text-2xl text-purple-300" />
-              </div>
-              <div>
-                <div className="text-sm text-purple-200">Templates</div>
-                <div className="text-2xl font-bold text-white">{stats.templatesAvailable}</div>
-              </div>
-            </div>
-          </motion.div>
+            Templates
+          </Button>
+          <Button
+            variant="ai"
+            leftIcon={<RiAddLine />}
+            onClick={() => setFormFlowOpen(true)}
+            animated
+            pulseEffect
+            glowing
+          >
+            Create Form
+          </Button>
         </div>
+      </div>
+
+      {/* Statistics Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card variant="ai" className="p-5 flex items-center">
+          <div className="p-3 bg-portfolio-orange/10 rounded-full mr-4">
+            <RiFileTextLine className="text-2xl text-portfolio-orange" />
+          </div>
+          <div>
+            <div className="text-sm text-gray-400">Total Forms</div>
+            <div className="text-2xl font-bold text-white">{stats.totalForms}</div>
+          </div>
+        </Card>
+        
+        <Card variant="ai" className="p-5 flex items-center">
+          <div className="p-3 bg-portfolio-orange/10 rounded-full mr-4">
+            <RiCalendarLine className="text-2xl text-portfolio-orange" />
+          </div>
+          <div>
+            <div className="text-sm text-gray-400">This Month</div>
+            <div className="text-2xl font-bold text-white">{stats.formsThisMonth}</div>
+          </div>
+        </Card>
+        
+        <Card variant="ai" className="p-5 flex items-center">
+          <div className="p-3 bg-portfolio-orange/10 rounded-full mr-4">
+            <RiFileTextLine className="text-2xl text-portfolio-orange" />
+          </div>
+          <div>
+            <div className="text-sm text-gray-400">Templates</div>
+            <div className="text-2xl font-bold text-white">{stats.templatesAvailable}</div>
+          </div>
+        </Card>
       </div>
 
       {/* Rest of the component rendering logic */}
@@ -6111,7 +7338,7 @@ const FormsPage: React.FC = () => {
                   <h3 className="text-lg font-semibold mb-1">{form.name}</h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">{form.description}</p>
                 </div>
-                <div className="text-ai-blue dark:text-ai-blue-light">
+                <div className="text-portfolio-orange dark:text-portfolio-orange-light">
                   <RiFileTextLine className="text-2xl" />
                 </div>
               </div>
@@ -6174,7 +7401,8 @@ const FormsPage: React.FC = () => {
                       height: 842,
                       orientation: 'portrait',
                       size: 'A4'
-                    }
+                    },
+                    grid: createInitialGrid()
                   };
                   setFormPages(prev => [...prev, newPage]);
                 }}
@@ -6187,12 +7415,15 @@ const FormsPage: React.FC = () => {
                     setCurrentPageIndex={setCurrentPageIndex}
                     selectedField={selectedField}
                     setSelectedField={setSelectedField}
+                    selectedCell={selectedCell}
+                    setSelectedCell={setSelectedCell}
                     isDragging={isDragging}
                     setIsDragging={setIsDragging}
                     activeTab={activeTab}
                     setActiveTab={setActiveTab}
                     showPreview={showPreview}
                     setShowPreview={setShowPreview}
+                    onFieldContextMenu={onFieldContextMenu}
                   />
                 }
               />
@@ -6201,6 +7432,72 @@ const FormsPage: React.FC = () => {
         )}
       </AnimatePresence>
       
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-2 z-50 min-w-48"
+          style={{
+            left: contextMenu.x,
+            top: contextMenu.y,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            onClick={() => handleContextMenuAction('copy', contextMenu.fieldId)}
+          >
+            <RiFileCopyLine className="text-gray-500" />
+            Copy Widget
+          </button>
+          <button
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            onClick={() => handleContextMenuAction('cut', contextMenu.fieldId)}
+          >
+            <RiScissorsCutLine className="text-gray-500" />
+            Cut Widget
+          </button>
+          {widgetClipboard && (
+            <button
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+              onClick={() => handleContextMenuAction('paste', contextMenu.fieldId)}
+            >
+              <RiClipboardLine className="text-gray-500" />
+              Paste Widget
+            </button>
+          )}
+          <hr className="my-1" />
+          <button
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            onClick={() => handleContextMenuAction('insertRowAbove', contextMenu.fieldId)}
+          >
+            <RiInsertRowTop className="text-gray-500" />
+            Insert Row Above
+          </button>
+          <button
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            onClick={() => handleContextMenuAction('insertRowBelow', contextMenu.fieldId)}
+          >
+            <RiInsertRowBottom className="text-gray-500" />
+            Insert Row Below
+          </button>
+          <button
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            onClick={() => handleContextMenuAction('deleteRow', contextMenu.fieldId)}
+          >
+            <RiDeleteRow className="text-red-500" />
+            Delete Row
+          </button>
+          <hr className="my-1" />
+          <button
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2 text-red-600"
+            onClick={() => handleContextMenuAction('delete', contextMenu.fieldId)}
+          >
+            <RiDeleteBinLine className="text-red-500" />
+            Delete Widget
+          </button>
+        </div>
+      )}
+
       {/* Templates modal */}
       {/* Your templates modal JSX */}
       

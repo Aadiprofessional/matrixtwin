@@ -60,21 +60,21 @@ const AnalyticsPage: React.FC = () => {
   
   // Chart colors based on theme
   const chartColors = {
-    primary: darkMode ? 'rgba(0, 153, 255, 1)' : 'rgba(0, 153, 255, 1)',
-    primaryTransparent: darkMode ? 'rgba(0, 153, 255, 0.2)' : 'rgba(0, 153, 255, 0.2)',
-    secondary: darkMode ? 'rgba(86, 112, 151, 1)' : 'rgba(86, 112, 151, 1)',
-    accent: darkMode ? 'rgba(25, 179, 177, 1)' : 'rgba(25, 179, 177, 1)',
-    success: darkMode ? 'rgba(5, 194, 123, 1)' : 'rgba(5, 194, 123, 1)',
-    warning: darkMode ? 'rgba(255, 165, 0, 1)' : 'rgba(255, 165, 0, 1)',
-    error: darkMode ? 'rgba(255, 69, 93, 1)' : 'rgba(255, 69, 93, 1)',
+    primary: darkMode ? '#FF5722' : '#FF5722',
+    primaryTransparent: darkMode ? 'rgba(255, 87, 34, 0.2)' : 'rgba(255, 87, 34, 0.2)',
+    secondary: darkMode ? '#757575' : '#757575',
+    accent: darkMode ? '#ff9800' : '#ff9800',
+    success: darkMode ? '#4caf50' : '#4caf50',
+    warning: darkMode ? '#ff9800' : '#ff9800',
+    error: darkMode ? '#f44336' : '#f44336',
     ai: {
-      blue: 'rgba(30, 144, 255, 1)',
-      purple: 'rgba(157, 0, 255, 1)',
-      teal: 'rgba(0, 226, 226, 1)',
-      pink: 'rgba(255, 0, 229, 1)',
+      blue: '#FF5722',
+      purple: '#ff9800',
+      teal: '#ffcc80',
+      pink: '#e65100',
     },
-    gridColor: darkMode ? 'rgba(50, 56, 69, 0.2)' : 'rgba(209, 213, 219, 0.5)',
-    textColor: darkMode ? 'rgba(229, 231, 235, 1)' : 'rgba(26, 31, 44, 1)',
+    gridColor: darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    textColor: darkMode ? '#e0e0e0' : '#212121',
   };
   
   // Project Progress Chart
@@ -93,7 +93,7 @@ const AnalyticsPage: React.FC = () => {
         label: 'Actual',
         data: [5, 20, 35, 50, 70, 80],
         borderColor: chartColors.ai.blue,
-        backgroundColor: `rgba(30, 144, 255, 0.15)`,
+        backgroundColor: chartColors.primaryTransparent,
         fill: true,
         borderWidth: 2,
         tension: 0.3,
@@ -148,7 +148,7 @@ const AnalyticsPage: React.FC = () => {
         backgroundColor: [
           chartColors.success,
           chartColors.ai.blue,
-          chartColors.ai.purple,
+          chartColors.ai.teal,
           chartColors.error,
         ],
         borderWidth: 0,
@@ -231,7 +231,7 @@ const AnalyticsPage: React.FC = () => {
         label: 'Safety Incidents',
         data: [3, 2, 4, 1, 0, 1, 0, 2, 1],
         borderColor: chartColors.error,
-        backgroundColor: 'rgba(255, 69, 93, 0.2)',
+        backgroundColor: 'rgba(244, 67, 54, 0.2)',
         fill: true,
         borderWidth: 2,
         tension: 0.3,
@@ -240,7 +240,7 @@ const AnalyticsPage: React.FC = () => {
         label: 'Near Misses',
         data: [5, 4, 7, 3, 4, 2, 3, 5, 2],
         borderColor: chartColors.warning,
-        backgroundColor: 'rgba(255, 165, 0, 0.2)',
+        backgroundColor: 'rgba(255, 152, 0, 0.2)',
         fill: true,
         borderWidth: 2,
         tension: 0.3,
@@ -249,110 +249,66 @@ const AnalyticsPage: React.FC = () => {
   };
   
   return (
-    <div>
-      {/* Add new gradient header */}
-      <div className="relative overflow-hidden rounded-xl mb-8 bg-gradient-to-r from-indigo-900 via-violet-800 to-indigo-800">
-        <div className="absolute inset-0 bg-ai-dots opacity-20"></div>
-        <div className="absolute right-0 bottom-0 w-1/3 h-1/2">
-          <svg viewBox="0 0 200 200" className="absolute inset-0 h-full w-full">
-            <motion.path 
-              d="M30,0 L200,0 L200,200 L50,160 Q20,120 30,0"
-              fill="url(#analyticsGradient)" 
-              className="opacity-30"
-              initial={{ x: 200 }}
-              animate={{ x: 0 }}
-              transition={{ duration: 1.5 }}
-            />
-            <defs>
-              <linearGradient id="analyticsGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#4f46e5" />
-                <stop offset="100%" stopColor="#6d28d9" />
-              </linearGradient>
-            </defs>
-          </svg>
+    <div className="pb-8 pt-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-display font-bold text-white flex items-center">
+            {t('analytics.title', 'Analytics')}
+          </h1>
+          <p className="text-gray-400 mt-2 max-w-2xl">
+            Data insights and visualization for your projects
+          </p>
         </div>
         
-        <div className="p-8 relative z-10">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-            <div>
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                <h1 className="text-3xl md:text-4xl font-display font-bold text-white flex items-center">
-                  <RiPieChartLine className="mr-3 text-indigo-300" />
-                  {t('analytics.title', 'Analytics')}
-                </h1>
-                <p className="text-indigo-200 mt-2 max-w-2xl">
-                  Data insights and visualization for your projects
-                </p>
-              </motion.div>
-            </div>
-            
-            <motion.div
-              className="mt-4 md:mt-0 flex space-x-3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              <Button 
-                variant="futuristic"
-                leftIcon={<RiRefreshLine />}
-                animated
-                glowing
-              >
-                Refresh
-              </Button>
-              <Button 
-                variant="futuristic"
-                leftIcon={<RiDownload2Line />}
-                animated
-                glowing
-              >
-                Export
-              </Button>
-            </motion.div>
-          </div>
-
-          {/* Statistics Section */}
-          <motion.div 
-            className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
+        <div className="mt-4 md:mt-0 flex space-x-3">
+          <Button 
+            variant="outline"
+            leftIcon={<RiRefreshLine />}
+            className="border-white/10 hover:bg-white/5 text-white"
           >
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-indigo-500/20 rounded-full mr-4">
-                <RiPieChartLine className="text-2xl text-indigo-300" />
-              </div>
-              <div>
-                <div className="text-sm text-indigo-200">Total Insights</div>
-                <div className="text-2xl font-bold text-white">24</div>
-              </div>
-            </div>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-indigo-500/20 rounded-full mr-4">
-                <RiLineChartLine className="text-2xl text-indigo-300" />
-              </div>
-              <div>
-                <div className="text-sm text-indigo-200">Performance</div>
-                <div className="text-2xl font-bold text-white">92%</div>
-              </div>
-            </div>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-indigo-500/20 rounded-full mr-4">
-                <RiBarChartLine className="text-2xl text-indigo-300" />
-              </div>
-              <div>
-                <div className="text-sm text-indigo-200">Data Points</div>
-                <div className="text-2xl font-bold text-white">15.2K</div>
-              </div>
-            </div>
-          </motion.div>
+            Refresh
+          </Button>
+          <Button 
+            variant="primary"
+            leftIcon={<RiDownload2Line />}
+            className="bg-portfolio-orange hover:bg-portfolio-orange-hover text-black"
+          >
+            Export
+          </Button>
         </div>
+      </div>
+
+      {/* Statistics Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <Card variant="ai-dark" className="p-6 flex items-center">
+          <div className="p-3 bg-portfolio-orange/20 rounded-full mr-4">
+            <RiPieChartLine className="text-2xl text-portfolio-orange" />
+          </div>
+          <div>
+            <div className="text-sm text-gray-400">Total Insights</div>
+            <div className="text-2xl font-bold text-white">24</div>
+          </div>
+        </Card>
+        
+        <Card variant="ai-dark" className="p-6 flex items-center">
+          <div className="p-3 bg-portfolio-orange/20 rounded-full mr-4">
+            <RiLineChartLine className="text-2xl text-portfolio-orange" />
+          </div>
+          <div>
+            <div className="text-sm text-gray-400">Performance</div>
+            <div className="text-2xl font-bold text-white">92%</div>
+          </div>
+        </Card>
+        
+        <Card variant="ai-dark" className="p-6 flex items-center">
+          <div className="p-3 bg-portfolio-orange/20 rounded-full mr-4">
+            <RiBarChartLine className="text-2xl text-portfolio-orange" />
+          </div>
+          <div>
+            <div className="text-sm text-gray-400">Data Points</div>
+            <div className="text-2xl font-bold text-white">15.2K</div>
+          </div>
+        </Card>
       </div>
 
       {/* Analytics Controls */}

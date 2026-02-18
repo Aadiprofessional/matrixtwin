@@ -23,10 +23,10 @@ export const Card: React.FC<CardProps> = ({
     default: 'bg-white dark:bg-dark-900 shadow-md dark:shadow-dark-950/50',
     glass: 'bg-white/90 dark:bg-dark-900/90 backdrop-blur-md shadow-lg dark:shadow-dark-950/50',
     futuristic: 'glass-card futuristic-border bg-opacity-90 dark:bg-opacity-90',
-    'ai': 'bg-white/95 dark:bg-dark-900/95 backdrop-blur-md border border-ai-blue/20 shadow-lg dark:shadow-dark-950/50',
-    'ai-gradient': 'bg-white/95 dark:bg-dark-900/95 backdrop-blur-md border-t border-l border-r border-b-2 border-t-ai-blue/30 border-l-ai-purple/30 border-r-ai-teal/30 border-b-ai-blue/60 shadow-lg dark:shadow-dark-950/50',
-    'ai-dark': 'bg-dark-800/95 backdrop-blur-md border border-ai-blue/20 shadow-lg text-white',
-    'ai-glow': 'bg-white/95 dark:bg-dark-800/95 backdrop-blur-md border border-ai-blue/40 shadow-ai-glow dark:shadow-ai-glow',
+    'ai': 'bg-white/95 dark:bg-dark-900/95 backdrop-blur-md border border-portfolio-orange/20 shadow-lg dark:shadow-dark-950/50',
+    'ai-gradient': 'bg-white/95 dark:bg-dark-900/95 backdrop-blur-md border border-portfolio-orange/30 shadow-lg dark:shadow-dark-950/50',
+    'ai-dark': 'bg-dark-800/95 backdrop-blur-md border border-portfolio-orange/20 shadow-lg text-white',
+    'ai-glow': 'bg-white/95 dark:bg-dark-800/95 backdrop-blur-md border border-portfolio-orange/40 shadow-ai-glow dark:shadow-ai-glow',
   };
   
   const hoverClass = hover 

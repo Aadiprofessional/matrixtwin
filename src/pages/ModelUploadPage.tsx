@@ -319,7 +319,7 @@ const ModelUploadPage: React.FC = () => {
           <div style={baseStyle}>
             <div 
               className={`border-2 border-dashed rounded-lg p-8 text-center mb-6 transition-colors
-                ${isFileDragging ? 'border-ai-blue bg-dark-700/50' : 'border-dark-700 hover:border-dark-600'}
+                ${isFileDragging ? 'border-portfolio-orange bg-dark-700/50' : 'border-dark-700 hover:border-dark-600'}
                 ${selectedFile ? 'bg-dark-700/30' : ''}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -337,7 +337,7 @@ const ModelUploadPage: React.FC = () => {
               
               {selectedFile ? (
                 <div className="flex flex-col items-center" style={baseStyle}>
-                  <RiFileList3Line className="text-5xl text-ai-blue mb-3" />
+                  <RiFileList3Line className="text-5xl text-portfolio-orange mb-3" />
                   <p className="text-white font-medium mb-1" style={baseStyle}>{selectedFile.name}</p>
                   <p className="text-gray-400 text-sm" style={baseStyle}>
                     {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
@@ -365,7 +365,7 @@ const ModelUploadPage: React.FC = () => {
                 id="buildingType"
                 value={buildingType}
                 onChange={(e) => setBuildingType(e.target.value)}
-                className="w-full bg-dark-700 border border-dark-600 rounded-lg p-3 text-white focus:border-ai-blue focus:outline-none"
+                className="w-full bg-dark-700 border border-dark-600 rounded-lg p-3 text-white focus:border-portfolio-orange focus:outline-none"
                 style={baseStyle}
               >
                 {BUILDING_TYPES.map((type) => (
@@ -398,7 +398,7 @@ const ModelUploadPage: React.FC = () => {
                 disabled={!selectedFile}
                 className={`px-5 py-2.5 rounded-lg flex items-center transition-colors
                   ${selectedFile 
-                    ? 'bg-ai-blue hover:bg-ai-blue-dark text-white' 
+                    ? 'bg-portfolio-orange hover:bg-orange-600 text-white' 
                     : 'bg-dark-700 text-gray-500 cursor-not-allowed'}`}
                 style={baseStyle}
               >
@@ -425,7 +425,7 @@ const ModelUploadPage: React.FC = () => {
               {/* Progress bar */}
               <div className="w-full bg-dark-700 rounded-full h-2 mb-4" style={baseStyle}>
                 <div 
-                  className="bg-ai-blue h-2 rounded-full transition-all duration-300 ease-in-out" 
+                  className="bg-portfolio-orange h-2 rounded-full transition-all duration-300 ease-in-out" 
                   style={{ width: `${getCurrentProgress()}%`, ...baseStyle }}
                 ></div>
               </div>
@@ -497,7 +497,7 @@ const ModelUploadPage: React.FC = () => {
                   <div className="flex mt-3" style={baseStyle}>
                     <button
                       onClick={goToDigitalTwinsPage}
-                      className="inline-block px-4 py-2 bg-ai-blue hover:bg-ai-blue-dark rounded text-white transition-colors"
+                      className="inline-block px-4 py-2 bg-portfolio-orange hover:bg-orange-600 rounded text-white transition-colors"
                       style={baseStyle}
                     >
                       Go to Digital Twins

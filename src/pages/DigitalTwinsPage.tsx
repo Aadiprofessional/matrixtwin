@@ -344,28 +344,28 @@ const DigitalTwinsPage: React.FC = () => {
       description: 'Import and view 3D building models with interactive controls',
       icon: <RiEyeLine className="text-3xl" />,
       link: '/digital-twins/viewer',
-      gradient: 'from-blue-500 to-cyan-400',
+      gradient: 'from-orange-600 to-orange-500',
     },
     {
       title: 'IoT Dashboard',
       description: 'Monitor real-time IoT sensor data from your building',
       icon: <RiSensorLine className="text-3xl" />,
       link: '/digital-twins/iot-dashboard',
-      gradient: 'from-green-500 to-emerald-400',
+      gradient: 'from-gray-700 to-gray-600',
     },
     {
       title: 'Building Analytics',
       description: 'Analyze building performance and energy usage patterns',
       icon: <RiDashboardLine className="text-3xl" />,
       link: '/digital-twins/analytics',
-      gradient: 'from-purple-500 to-indigo-400',
+      gradient: 'from-gray-800 to-gray-700',
     },
     {
       title: 'Smart Control',
       description: 'Control building systems and smart locks remotely through digital twin interface',
       icon: <RiFlashlightLine className="text-3xl" />,
       link: '/digital-twins/control',
-      gradient: 'from-orange-500 to-amber-400',
+      gradient: 'from-orange-500 to-amber-500',
     },
   ];
 
@@ -592,7 +592,7 @@ const DigitalTwinsPage: React.FC = () => {
                 onClick={(e) => !canView && (status === 'completed' || status === 'success') && handleViewClick(model, e)}
                 className={`px-3 py-1 rounded text-xs font-medium flex items-center 
                   ${(canView || (status === 'completed' || status === 'success'))
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                    ? 'bg-portfolio-orange hover:bg-orange-600 text-white' 
                     : 'bg-gray-700 text-gray-400 cursor-not-allowed'}`}
               >
                 <RiEyeLine className="mr-1" /> View
@@ -620,13 +620,13 @@ const DigitalTwinsPage: React.FC = () => {
   return (
     <div className="grid grid-cols-1 gap-8" style={baseStyle}>
       {/* Header with inline styles to ensure visibility */}
-      <div className="bg-gradient-to-r from-blue-800 via-blue-700 to-indigo-800 p-8 rounded-xl" style={baseStyle}>
+      <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-black p-8 rounded-xl border border-gray-800" style={baseStyle}>
         <h1 className="text-3xl md:text-4xl font-bold text-white flex items-center mb-2" style={baseStyle}>
-          <RiBuilding4Line className="mr-3 text-blue-300" />
+          <RiBuilding4Line className="mr-3 text-portfolio-orange" />
           Digital Twins
-          {user && <span className="ml-2 text-sm text-blue-300">({user.name} - {user.role})</span>}
+          {user && <span className="ml-2 text-sm text-gray-400">({user.name} - {user.role})</span>}
         </h1>
-        <p className="text-blue-200 max-w-2xl" style={baseStyle}>
+        <p className="text-gray-400 max-w-2xl" style={baseStyle}>
           Create, visualize and interact with digital representations of your physical buildings and assets.
           Monitor real-time data, simulate scenarios, and optimize building performance.
         </p>
@@ -643,7 +643,7 @@ const DigitalTwinsPage: React.FC = () => {
           <div className="flex-shrink-0 ml-auto">
             <Link
               to="/digital-twins/upload"
-              className="flex items-center bg-ai-blue hover:bg-ai-blue-dark px-5 py-3 rounded-lg text-white transition-colors"
+              className="flex items-center bg-portfolio-orange hover:bg-orange-600 px-5 py-3 rounded-lg text-white transition-colors"
             >
               <RiUpload2Line className="mr-2" />
               Upload Model
@@ -678,7 +678,7 @@ const DigitalTwinsPage: React.FC = () => {
             className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
           >
             <Link to={card.link} className="block h-full">
-              <div className="bg-dark-800/60 border border-dark-700 rounded-xl p-6 h-full hover:shadow-lg hover:shadow-ai-blue/20 transition-all duration-300 transform hover:-translate-y-1">
+              <div className="bg-dark-800/60 border border-dark-700 rounded-xl p-6 h-full hover:shadow-lg hover:shadow-portfolio-orange/20 transition-all duration-300 transform hover:-translate-y-1">
                 <div className={`bg-gradient-to-br ${card.gradient} rounded-full p-4 w-16 h-16 flex items-center justify-center mb-4`}>
                   {card.icon}
                 </div>
@@ -726,7 +726,7 @@ const DigitalTwinsPage: React.FC = () => {
             <p className="text-gray-400 mb-4" style={baseStyle}>No models uploaded yet</p>
             <Link
               to="/digital-twins/upload"
-              className="bg-ai-blue hover:bg-ai-blue-dark text-white px-4 py-2 rounded-lg inline-flex items-center"
+              className="bg-portfolio-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg inline-flex items-center"
               style={baseStyle}
             >
               <RiUpload2Line className="mr-2" /> Upload Your First Model

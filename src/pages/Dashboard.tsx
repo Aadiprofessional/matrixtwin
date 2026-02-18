@@ -218,18 +218,18 @@ const Dashboard: React.FC = () => {
   
   // Chart colors based on theme
   const chartColors = {
-    primary: darkMode ? 'rgba(0, 153, 255, 1)' : 'rgba(0, 153, 255, 1)',
-    primaryTransparent: darkMode ? 'rgba(0, 153, 255, 0.2)' : 'rgba(0, 153, 255, 0.2)',
-    secondary: darkMode ? 'rgba(86, 112, 151, 1)' : 'rgba(86, 112, 151, 1)',
-    accent: darkMode ? 'rgba(25, 179, 177, 1)' : 'rgba(25, 179, 177, 1)',
-    success: darkMode ? 'rgba(5, 194, 123, 1)' : 'rgba(5, 194, 123, 1)',
-    warning: darkMode ? 'rgba(255, 165, 0, 1)' : 'rgba(255, 165, 0, 1)',
-    error: darkMode ? 'rgba(255, 69, 93, 1)' : 'rgba(255, 69, 93, 1)',
+    primary: darkMode ? '#FF5722' : '#FF5722',
+    primaryTransparent: darkMode ? 'rgba(255, 87, 34, 0.2)' : 'rgba(255, 87, 34, 0.2)',
+    secondary: darkMode ? '#757575' : '#757575',
+    accent: darkMode ? '#ff9800' : '#ff9800',
+    success: darkMode ? '#05c27b' : '#05c27b',
+    warning: darkMode ? '#ffa500' : '#ffa500',
+    error: darkMode ? '#ff455d' : '#ff455d',
     ai: {
-      blue: 'rgba(30, 144, 255, 1)',
-      purple: 'rgba(157, 0, 255, 1)',
-      teal: 'rgba(0, 226, 226, 1)',
-      pink: 'rgba(255, 0, 229, 1)',
+      blue: '#FF5722',
+      purple: '#ff9800',
+      teal: '#ffcc80',
+      pink: '#e65100',
     },
     gridColor: darkMode ? 'rgba(50, 56, 69, 0.2)' : 'rgba(209, 213, 219, 0.5)',
     textColor: darkMode ? 'rgba(229, 231, 235, 1)' : 'rgba(26, 31, 44, 1)',
@@ -250,8 +250,8 @@ const Dashboard: React.FC = () => {
       {
         label: 'Actual',
         data: [5, 20, 35, 50, 70, 80],
-        borderColor: chartColors.ai.blue,
-        backgroundColor: `rgba(30, 144, 255, 0.15)`,
+        borderColor: chartColors.primary,
+        backgroundColor: `rgba(255, 87, 34, 0.15)`,
         fill: true,
         borderWidth: 2,
         tension: 0.3,
@@ -546,7 +546,7 @@ const Dashboard: React.FC = () => {
         description: t('dashboard.moduleDescriptions.forms', 'Create and manage forms for project documentation'),
         icon: <RiFileList3Line />,
         link: '/forms',
-        color: 'from-blue-500 to-blue-700',
+        color: 'from-portfolio-orange to-orange-600',
         permission: 'dashboard_access'
       },
       {
@@ -554,7 +554,7 @@ const Dashboard: React.FC = () => {
         icon: <RiBrainLine />,
         description: 'Ask AI about your projects and get intelligent insights',
         link: '/ask-ai',
-        color: 'from-ai-blue to-ai-purple',
+        color: 'from-portfolio-orange to-orange-500',
         permission: 'dashboard_access'
       },
       {
@@ -562,7 +562,7 @@ const Dashboard: React.FC = () => {
         icon: <RiShieldCheckLine />,
         description: 'Conduct safety inspections and track compliance metrics',
         link: '/safety',
-        color: 'from-red-500 to-orange-400',
+        color: 'from-orange-600 to-red-500',
         permission: 'twin_admin'
       },
       {
@@ -570,7 +570,7 @@ const Dashboard: React.FC = () => {
         icon: <RiGroupLine />,
         description: 'Track worker attendance and manage labour resources',
         link: '/labour',
-        color: 'from-blue-500 to-indigo-600',
+        color: 'from-zinc-700 to-zinc-600',
         permission: 'dashboard_access'
       },
       {
@@ -578,7 +578,7 @@ const Dashboard: React.FC = () => {
         icon: <RiBrushLine />,
         description: 'Manage site cleanliness and waste management',
         link: '/cleansing',
-        color: 'from-green-500 to-emerald-400',
+        color: 'from-zinc-600 to-zinc-500',
         permission: 'dashboard_access'
       },
       {
@@ -586,7 +586,7 @@ const Dashboard: React.FC = () => {
         icon: <RiPieChartLine />,
         description: 'Advanced analytics and predictive insights',
         link: '/analytics',
-        color: 'from-purple-500 to-pink-500',
+        color: 'from-orange-500 to-amber-500',
         permission: 'predictive'
       },
       {
@@ -611,79 +611,20 @@ const Dashboard: React.FC = () => {
   };
   
   return (
-    <div className="relative overflow-hidden pb-8">
-      {/* Background decoration */}
-      <div className="absolute inset-0 bg-ai-dots opacity-30 pointer-events-none"></div>
-      
-      {/* Welcome section with AI assistant */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="mb-8"
-      >
-        <Card variant="ai-gradient" className="p-6 overflow-visible">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-display font-bold">
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-ai-blue via-ai-purple to-ai-teal animate-gradient-flow">
-                  {t('dashboard.welcomeBack')}, {user?.name}
-                </span>
-              </h1>
-              <p className="text-secondary-600 dark:text-secondary-300 mt-1">
-                {t('dashboard.todayDate')}: {new Date().toLocaleDateString()}
-              </p>
-            </div>
-            
-            <motion.div 
-              className="mt-4 md:mt-0 flex items-center bg-dark-800/80 backdrop-blur-md rounded-xl p-3 border border-ai-blue/20 shadow-ai-glow"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3, duration: 0.5 }}
-            >
-              <div className="h-10 w-10 rounded-full bg-gradient-to-r from-ai-blue to-ai-purple flex items-center justify-center mr-3 shadow-ai-glow">
-                <IconContext.Provider value={{ className: "text-white text-xl" }}>
-                  <RiBrainLine />
-                </IconContext.Provider>
-              </div>
-              <div>
-                <div className="text-sm text-transparent bg-clip-text bg-gradient-to-r from-ai-blue to-ai-teal font-medium">
-                  AI Assistant
-                </div>
-                <div className="text-xs text-white/80">
-                  How can I help you today?
-                </div>
-              </div>
-              <Link to="/ask-ai">
-                <Button variant="ai" size="sm" className="ml-4">
-                  Ask AI
-                </Button>
-              </Link>
-            </motion.div>
-          </div>
-        </Card>
-      </motion.div>
-      
-      {/* AI Insights */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.2 }}
-        className="mb-8"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-display font-semibold flex items-center">
-            <IconContext.Provider value={{ className: "mr-2 text-ai-blue" }}>
-              <RiRobot2Line />
-            </IconContext.Provider>
-            <span>AI Insights</span>
-          </h2>
+    <div className="relative overflow-hidden pb-8 pt-6">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-display font-bold text-white">
+            Dashboard
+          </h1>
+          <p className="text-secondary-400 mt-1">
+            Overview of your project performance
+          </p>
         </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* AI Insights content would be populated here */}
+        <div className="text-sm text-secondary-500">
+          {new Date().toLocaleDateString()}
         </div>
-      </motion.div>
+      </div>
       
       {/* Summary Stats */}
       <div className="mb-8">

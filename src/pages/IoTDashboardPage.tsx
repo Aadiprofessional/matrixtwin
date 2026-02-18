@@ -378,21 +378,21 @@ const generateTimeSeriesData = (hours = 24, baseValue = 22, variance = 2) => {
 const getSensorTypeColor = (type: SensorType) => {
   switch (type) {
     case 'temperature':
-      return 'bg-red-500/20 text-red-500';
+      return 'bg-orange-500/20 text-orange-500';
     case 'humidity':
-      return 'bg-blue-500/20 text-blue-500';
+      return 'bg-zinc-500/20 text-zinc-400';
     case 'occupancy':
-      return 'bg-green-500/20 text-green-500';
+      return 'bg-portfolio-orange/20 text-portfolio-orange';
     case 'energy':
       return 'bg-yellow-500/20 text-yellow-500';
     case 'water':
-      return 'bg-cyan-500/20 text-cyan-500';
+      return 'bg-zinc-500/20 text-zinc-300';
     case 'security':
-      return 'bg-purple-500/20 text-purple-500';
+      return 'bg-orange-600/20 text-orange-600';
     case 'air':
-      return 'bg-indigo-500/20 text-indigo-500';
+      return 'bg-zinc-500/20 text-zinc-400';
     default:
-      return 'bg-gray-500/20 text-gray-500';
+      return 'bg-zinc-500/20 text-zinc-500';
   }
 };
 
@@ -837,8 +837,8 @@ const IoTDashboardPage: React.FC = () => {
       {
         label: 'Temperature (°C)',
         data: temperatureData.data,
-        borderColor: 'rgb(255, 99, 132)',
-        backgroundColor: 'rgba(255, 99, 132, 0.5)',
+        borderColor: '#FF5722',
+        backgroundColor: 'rgba(255, 87, 34, 0.5)',
         tension: 0.4,
       },
     ],
@@ -881,16 +881,16 @@ const IoTDashboardPage: React.FC = () => {
         label: 'Energy Consumption',
         data: [42, 23, 25, 10],
         backgroundColor: [
-          'rgba(255, 99, 132, 0.6)',
-          'rgba(54, 162, 235, 0.6)',
-          'rgba(255, 206, 86, 0.6)',
-          'rgba(75, 192, 192, 0.6)',
+          'rgba(255, 87, 34, 0.6)',
+          'rgba(255, 152, 0, 0.6)',
+          'rgba(255, 193, 7, 0.6)',
+          'rgba(113, 113, 122, 0.6)',
         ],
         borderColor: [
-          'rgba(255, 99, 132, 1)',
-          'rgba(54, 162, 235, 1)',
-          'rgba(255, 206, 86, 1)',
-          'rgba(75, 192, 192, 1)',
+          'rgba(255, 87, 34, 1)',
+          'rgba(255, 152, 0, 1)',
+          'rgba(255, 193, 7, 1)',
+          'rgba(113, 113, 122, 1)',
         ],
         borderWidth: 1,
       },
@@ -903,7 +903,7 @@ const IoTDashboardPage: React.FC = () => {
       {
         label: 'Occupancy',
         data: [4, 12, 20, 18, 15, 6],
-        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+        backgroundColor: 'rgba(255, 87, 34, 0.6)',
       },
     ],
   };
@@ -955,13 +955,13 @@ const IoTDashboardPage: React.FC = () => {
   const getSensorChartColor = (type: SensorType) => {
     switch (type) {
       case 'temperature':
-        return 'rgb(255, 99, 132)';
+        return '#FF5722';
       case 'humidity':
-        return 'rgb(54, 162, 235)';
+        return '#71717a';
       case 'energy':
-        return 'rgb(255, 206, 86)';
+        return '#FFC107';
       default:
-        return 'rgb(255, 99, 132)';
+        return '#FF5722';
     }
   };
 
@@ -995,7 +995,7 @@ const IoTDashboardPage: React.FC = () => {
           // For now, just highlight a random component for demonstration
           viewerRef.current.highlightComponentsByObjectData([{
             id: Math.floor(Math.random() * 1000) + 1,
-            color: new Glodon.Web.Graphics.Color(255, 0, 0, 0.8)
+            color: new Glodon.Web.Graphics.Color(255, 87, 34, 0.8)
           }]);
           
           viewerRef.current.render();
@@ -1061,10 +1061,10 @@ const IoTDashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+    <div className="min-h-screen bg-black">
       {/* Modern Header */}
       <motion.div 
-        className="sticky top-0 z-50 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800/50"
+        className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10"
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.5 }}
@@ -1075,7 +1075,7 @@ const IoTDashboardPage: React.FC = () => {
             <div className="flex items-center gap-4">
               <Link 
                 to="/dashboard" 
-                className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors duration-200 group"
+                className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors duration-200 group"
               >
                 <motion.div
                   whileHover={{ x: -4 }}
@@ -1086,21 +1086,21 @@ const IoTDashboardPage: React.FC = () => {
                 <span className="text-sm font-medium">Back to Dashboard</span>
           </Link>
               
-              <div className="w-px h-6 bg-slate-700"></div>
+              <div className="w-px h-6 bg-zinc-800"></div>
               
               <div className="flex items-center gap-3">
                 <motion.div
                   animate={{ rotate: [0, 360] }}
                   transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                  className="p-2 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl shadow-lg"
+                  className="p-2 bg-gradient-to-br from-portfolio-orange to-orange-600 rounded-xl shadow-lg"
                 >
                   <RiBuilding4Line className="text-xl text-white" />
                 </motion.div>
                 <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
             Digital Twin Dashboard
           </h1>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-zinc-400">
                     Real-time building intelligence & control
                   </p>
                 </div>
@@ -1112,7 +1112,7 @@ const IoTDashboardPage: React.FC = () => {
               <motion.button
             onClick={handleRefresh}
             disabled={refreshing}
-                className={`p-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all duration-200 ${
+                className={`p-2 rounded-lg bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all duration-200 ${
                   refreshing ? 'animate-spin' : ''
                 }`}
                 whileHover={{ scale: 1.05 }}
@@ -1121,11 +1121,11 @@ const IoTDashboardPage: React.FC = () => {
                 <RiRefreshLine className="text-lg" />
               </motion.button>
               
-              <button className="p-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all duration-200">
+              <button className="p-2 rounded-lg bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all duration-200">
                 <RiSettings4Line className="text-lg" />
               </button>
               
-              <button className="p-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all duration-200">
+              <button className="p-2 rounded-lg bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all duration-200">
                 <RiMoreLine className="text-lg" />
           </button>
         </div>
@@ -1196,7 +1196,7 @@ const IoTDashboardPage: React.FC = () => {
               title="System Health"
               value="94.2%"
               trend={{ value: 1.2, label: 'from last month', isPositive: true }}
-              color="blue"
+              color="orange"
               icon={RiCheckboxCircleLine}
               size="md"
             />
@@ -1227,22 +1227,22 @@ const IoTDashboardPage: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.4 }}
             >
-              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+              <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-bold text-white flex items-center">
-                    <RiBuilding4Line className="mr-3 text-indigo-400" />
+                    <RiBuilding4Line className="mr-3 text-portfolio-orange" />
                     Digital Twin - Building Overview
                   </h3>
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={toggleSkyBox}
-                      className="px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 text-slate-300 rounded-lg text-sm transition-all"
+                      className="px-4 py-2 bg-zinc-800/50 hover:bg-zinc-700/50 border border-white/10 text-zinc-300 rounded-lg text-sm transition-all"
                     >
                       {skyBoxEnabled ? 'Sky Off' : 'Sky On'}
                     </button>
                     <button 
                       onClick={handleFullscreenView}
-                      className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-sm transition-all flex items-center"
+                      className="px-4 py-2 bg-gradient-to-r from-portfolio-orange to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg text-sm transition-all flex items-center"
                       title="Fullscreen View"
                     >
                       <RiFullscreenLine className="mr-2" />
@@ -1253,12 +1253,12 @@ const IoTDashboardPage: React.FC = () => {
                 
                 <div 
                   ref={modelContainerRef} 
-                  className="h-96 w-full relative rounded-xl overflow-hidden bg-slate-900 mb-4"
+                  className="h-96 w-full relative rounded-xl overflow-hidden bg-black mb-4"
                 >
                   {loadingModel && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 z-10">
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
                       <div className="flex flex-col items-center">
-                        <RiLoader4Line className="text-3xl text-indigo-500 animate-spin mb-2" />
+                        <RiLoader4Line className="text-3xl text-portfolio-orange animate-spin mb-2" />
                         <span className="text-white text-sm">Loading 3D model...</span>
                       </div>
                     </div>
@@ -1268,7 +1268,7 @@ const IoTDashboardPage: React.FC = () => {
                     <div className="h-full flex items-center justify-center">
                       <div className="text-center">
                         <div className="text-red-400 font-medium mb-2">Error loading model</div>
-                        <div className="text-slate-400 text-sm">{modelError}</div>
+                        <div className="text-zinc-400 text-sm">{modelError}</div>
                       </div>
                     </div>
                   )}
@@ -1278,7 +1278,7 @@ const IoTDashboardPage: React.FC = () => {
                 <div className="flex justify-center gap-2">
                   <button 
                     onClick={() => navigateToModelViewer('iot', selectedSensor)}
-                    className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-600/30 text-indigo-400 rounded-lg transition-all flex items-center"
+                    className="px-4 py-2 bg-portfolio-orange/10 hover:bg-portfolio-orange/20 border border-portfolio-orange/30 text-portfolio-orange rounded-lg transition-all flex items-center"
                     title="IoT View"
                   >
                     <RiSensorLine className="mr-2" />
@@ -1286,7 +1286,7 @@ const IoTDashboardPage: React.FC = () => {
                   </button>
                   <button 
                     onClick={() => navigateToModelViewer('analytics', selectedSensor)}
-                    className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 text-blue-400 rounded-lg transition-all flex items-center"
+                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-zinc-400 rounded-lg transition-all flex items-center"
                     title="Analytics View"
                   >
                     <RiBarChartBoxLine className="mr-2" />
@@ -1294,7 +1294,7 @@ const IoTDashboardPage: React.FC = () => {
                   </button>
                   <button 
                     onClick={() => navigateToModelViewer('controls', selectedSensor)}
-                    className="px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-600/30 text-purple-400 rounded-lg transition-all flex items-center"
+                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-zinc-400 rounded-lg transition-all flex items-center"
                     title="Controls View"
                   >
                     <RiRemoteControlLine className="mr-2" />
@@ -1320,25 +1320,25 @@ const IoTDashboardPage: React.FC = () => {
                   transition={{ duration: 0.5 }}
                 >
                   {/* Live Sensors Card */}
-                  <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 mb-6">
+                  <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-6">
                     <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center gap-3">
-                        <div className="p-3 bg-gradient-to-br from-indigo-600/20 to-purple-600/20 rounded-xl">
-                          <RiSensorLine className="text-2xl text-indigo-400" />
+                        <div className="p-3 bg-gradient-to-br from-portfolio-orange/20 to-orange-600/20 rounded-xl">
+                          <RiSensorLine className="text-2xl text-portfolio-orange" />
                         </div>
                         <div>
                           <h3 className="text-xl font-bold text-white">Live Sensor Data</h3>
-                          <p className="text-slate-400 text-sm">Real-time monitoring across all floors</p>
+                          <p className="text-zinc-400 text-sm">Real-time monitoring across all floors</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <button className="px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 text-slate-300 rounded-lg text-sm transition-all">
+                        <button className="px-4 py-2 bg-zinc-800/50 hover:bg-zinc-700/50 border border-white/10 text-zinc-300 rounded-lg text-sm transition-all">
                           <RiFilterLine className="mr-2 inline" />
                           Filter
                         </button>
                         <button
                           onClick={handleRefresh}
-                          className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-sm transition-all"
+                          className="px-4 py-2 bg-gradient-to-r from-portfolio-orange to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg text-sm transition-all"
                         >
                           <RiRefreshLine className={`mr-2 inline ${refreshing ? 'animate-spin' : ''}`} />
                           Refresh
@@ -1353,8 +1353,8 @@ const IoTDashboardPage: React.FC = () => {
                           key={sensor.id}
                           className={`sensor-card p-4 rounded-xl border transition-all duration-200 cursor-pointer ${
                             selectedSensor?.id === sensor.id 
-                              ? 'bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border-indigo-500/50' 
-                              : 'bg-slate-800/30 border-slate-700/50 hover:border-slate-600/50 hover:bg-slate-800/50'
+                              ? 'bg-portfolio-orange/10 border-portfolio-orange/50' 
+                              : 'bg-zinc-800/30 border-white/5 hover:border-white/10 hover:bg-zinc-800/50'
                           }`}
                           onClick={() => setSelectedSensor(sensor)}
                           initial={{ opacity: 0, y: 20 }}
@@ -1373,7 +1373,7 @@ const IoTDashboardPage: React.FC = () => {
                               />
                               <div>
                                 <h4 className="text-white font-semibold">{sensor.name}</h4>
-                                <p className="text-slate-400 text-sm flex items-center">
+                                <p className="text-zinc-400 text-sm flex items-center">
                                   <RiMapPinLine className="mr-1 text-xs" />
                                   {sensor.location}
                                 </p>
@@ -1386,9 +1386,9 @@ const IoTDashboardPage: React.FC = () => {
                             <div>
                               <div className="text-2xl font-bold text-white">
                                 {sensor.value} 
-                                <span className="text-sm font-normal text-slate-400 ml-1">{sensor.unit}</span>
+                                <span className="text-sm font-normal text-zinc-400 ml-1">{sensor.unit}</span>
                               </div>
-                              <div className="text-xs text-slate-500 mt-1">Floor {sensor.floor}</div>
+                              <div className="text-xs text-zinc-500 mt-1">Floor {sensor.floor}</div>
                             </div>
                             {sensor.battery && (
                               <div className={`flex items-center text-xs ${
@@ -1406,7 +1406,7 @@ const IoTDashboardPage: React.FC = () => {
                     
                     {displayedSensors.length > 6 && (
                       <div className="text-center mt-6">
-                        <button className="px-6 py-2 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 text-slate-300 rounded-lg text-sm transition-all">
+                        <button className="px-6 py-2 bg-zinc-800/50 hover:bg-zinc-700/50 border border-white/10 text-zinc-300 rounded-lg text-sm transition-all">
                           View All {displayedSensors.length} Sensors
                         </button>
                       </div>
@@ -1424,9 +1424,9 @@ const IoTDashboardPage: React.FC = () => {
                 >
                   {/* Analytics Cards */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                    <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
                       <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                        <RiBarChartBoxLine className="mr-2 text-blue-400" />
+                        <RiBarChartBoxLine className="mr-2 text-portfolio-orange" />
                         Energy Distribution
                       </h3>
                       <div className="h-64">
@@ -1446,9 +1446,9 @@ const IoTDashboardPage: React.FC = () => {
                       </div>
                     </div>
                     
-                    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                    <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
                       <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                        <RiUserLocationLine className="mr-2 text-green-400" />
+                        <RiUserLocationLine className="mr-2 text-portfolio-orange" />
                         Occupancy Trends
                       </h3>
                       <div className="h-64">
@@ -1461,9 +1461,9 @@ const IoTDashboardPage: React.FC = () => {
                   </div>
                   
                   {/* Performance Metrics */}
-                  <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                  <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
                     <h3 className="text-lg font-bold text-white mb-6 flex items-center">
-                      <RiCpuLine className="mr-2 text-purple-400" />
+                      <RiCpuLine className="mr-2 text-portfolio-orange" />
                       Performance Metrics
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1502,20 +1502,20 @@ const IoTDashboardPage: React.FC = () => {
                 >
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* HVAC Control Card */}
-                    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                    <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
                       <div className="flex justify-between items-center mb-6">
                         <div className="flex items-center gap-3">
-                          <div className="p-3 bg-gradient-to-br from-blue-600/20 to-cyan-600/20 rounded-xl">
-                            <RiTempColdLine className="text-2xl text-blue-400" />
+                          <div className="p-3 bg-zinc-800 rounded-xl">
+                            <RiTempColdLine className="text-2xl text-white" />
                           </div>
                           <div>
                             <h3 className="text-lg font-bold text-white">HVAC Control</h3>
-                            <p className="text-slate-400 text-sm">Climate management system</p>
+                            <p className="text-zinc-400 text-sm">Climate management system</p>
                           </div>
                         </div>
                         <button 
                           className={`relative inline-flex items-center h-8 rounded-full w-14 transition-colors ${
-                            hvacEnabled ? 'bg-indigo-600' : 'bg-slate-600'
+                            hvacEnabled ? 'bg-portfolio-orange' : 'bg-zinc-600'
                           }`}
                           onClick={() => setHvacEnabled(!hvacEnabled)}
                         >
@@ -1532,14 +1532,14 @@ const IoTDashboardPage: React.FC = () => {
                           <div className="text-4xl font-bold text-white mb-2">{targetTemp}°C</div>
                           <div className="flex items-center justify-center gap-4">
                             <button 
-                              className="p-3 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 text-white rounded-xl transition-all"
+                              className="p-3 bg-zinc-800/50 hover:bg-zinc-700/50 border border-white/10 text-white rounded-xl transition-all"
                               onClick={() => setTargetTemp(prev => Math.max(16, prev - 0.5))}
                               disabled={!hvacEnabled}
                             >
                               <RiVolumeDownLine className="text-xl" />
                             </button>
                             <button 
-                              className="p-3 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 text-white rounded-xl transition-all"
+                              className="p-3 bg-zinc-800/50 hover:bg-zinc-700/50 border border-white/10 text-white rounded-xl transition-all"
                               onClick={() => setTargetTemp(prev => Math.min(28, prev + 0.5))}
                               disabled={!hvacEnabled}
                             >
@@ -1549,13 +1549,13 @@ const IoTDashboardPage: React.FC = () => {
                         </div>
                         
                         <div className="grid grid-cols-3 gap-2">
-                          <button className="py-3 px-4 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-xl text-sm font-medium">
+                          <button className="py-3 px-4 bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 rounded-xl text-sm font-medium transition-all">
                             Cool
                           </button>
-                          <button className="py-3 px-4 bg-slate-700/50 text-slate-300 border border-slate-600/50 rounded-xl text-sm font-medium">
+                          <button className="py-3 px-4 bg-zinc-800/50 text-zinc-300 border border-white/10 rounded-xl text-sm font-medium">
                             Auto
                           </button>
-                          <button className="py-3 px-4 bg-slate-700/50 text-slate-300 border border-slate-600/50 rounded-xl text-sm font-medium">
+                          <button className="py-3 px-4 bg-zinc-800/50 text-zinc-300 border border-white/10 rounded-xl text-sm font-medium">
                             Heat
                           </button>
                         </div>
@@ -1563,20 +1563,20 @@ const IoTDashboardPage: React.FC = () => {
                     </div>
                     
                     {/* Lighting Control Card */}
-                    <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                    <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
                       <div className="flex justify-between items-center mb-6">
                         <div className="flex items-center gap-3">
-                          <div className="p-3 bg-gradient-to-br from-yellow-600/20 to-orange-600/20 rounded-xl">
-                            <RiLightbulbFlashLine className="text-2xl text-yellow-400" />
+                          <div className="p-3 bg-zinc-800 rounded-xl">
+                            <RiLightbulbFlashLine className="text-2xl text-portfolio-orange" />
                           </div>
                           <div>
                             <h3 className="text-lg font-bold text-white">Lighting Control</h3>
-                            <p className="text-slate-400 text-sm">Smart lighting system</p>
+                            <p className="text-zinc-400 text-sm">Smart lighting system</p>
                           </div>
                         </div>
                         <button 
                           className={`relative inline-flex items-center h-8 rounded-full w-14 transition-colors ${
-                            lightingEnabled ? 'bg-indigo-600' : 'bg-slate-600'
+                            lightingEnabled ? 'bg-portfolio-orange' : 'bg-zinc-600'
                           }`}
                           onClick={() => setLightingEnabled(!lightingEnabled)}
                         >
@@ -1591,7 +1591,7 @@ const IoTDashboardPage: React.FC = () => {
                       <div className="space-y-6">
                         <div>
                           <div className="flex justify-between items-center mb-3">
-                            <span className="text-slate-300 font-medium">Brightness</span>
+                            <span className="text-zinc-300 font-medium">Brightness</span>
                             <span className="text-white font-bold">{lightingLevel}%</span>
                           </div>
                           <input
@@ -1600,22 +1600,22 @@ const IoTDashboardPage: React.FC = () => {
                             max="100"
                             value={lightingLevel}
                             onChange={(e) => setLightingLevel(parseInt(e.target.value))}
-                            className="w-full h-3 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-yellow-500"
+                            className="w-full h-3 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-portfolio-orange"
                             disabled={!lightingEnabled}
                           />
                         </div>
                         
                         <div className="grid grid-cols-2 gap-2">
-                          <button className="py-3 px-4 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-xl text-sm font-medium">
+                          <button className="py-3 px-4 bg-portfolio-orange/20 text-portfolio-orange border border-portfolio-orange/30 rounded-xl text-sm font-medium">
                             Main Office
                           </button>
-                          <button className="py-3 px-4 bg-slate-700/50 text-slate-300 border border-slate-600/50 rounded-xl text-sm font-medium">
+                          <button className="py-3 px-4 bg-zinc-800/50 text-zinc-300 border border-white/10 rounded-xl text-sm font-medium">
                             Conference
                           </button>
-                          <button className="py-3 px-4 bg-slate-700/50 text-slate-300 border border-slate-600/50 rounded-xl text-sm font-medium">
+                          <button className="py-3 px-4 bg-zinc-800/50 text-zinc-300 border border-white/10 rounded-xl text-sm font-medium">
                             Lobby
                           </button>
-                          <button className="py-3 px-4 bg-slate-700/50 text-slate-300 border border-slate-600/50 rounded-xl text-sm font-medium">
+                          <button className="py-3 px-4 bg-zinc-800/50 text-zinc-300 border border-white/10 rounded-xl text-sm font-medium">
                             All Zones
                           </button>
                         </div>
@@ -1633,15 +1633,15 @@ const IoTDashboardPage: React.FC = () => {
                   transition={{ duration: 0.5 }}
                 >
                   {/* CCTV Grid */}
-                  <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                  <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
                     <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center gap-3">
-                        <div className="p-3 bg-gradient-to-br from-red-600/20 to-pink-600/20 rounded-xl">
-                          <RiCameraLine className="text-2xl text-red-400" />
+                        <div className="p-3 bg-zinc-800 rounded-xl">
+                          <RiCameraLine className="text-2xl text-portfolio-orange" />
                         </div>
                         <div>
                           <h3 className="text-xl font-bold text-white">CCTV Surveillance</h3>
-                          <p className="text-slate-400 text-sm">Live camera feeds and monitoring</p>
+                          <p className="text-zinc-400 text-sm">Live camera feeds and monitoring</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -1649,7 +1649,7 @@ const IoTDashboardPage: React.FC = () => {
                           <RiRecordCircleLine className="mr-2 inline" />
                           Record All
                         </button>
-                        <button className="px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 border border-slate-600/50 text-slate-300 rounded-lg text-sm transition-all">
+                        <button className="px-4 py-2 bg-zinc-800/50 hover:bg-zinc-700/50 border border-white/10 text-zinc-300 rounded-lg text-sm transition-all">
                           <RiFullscreenLine className="mr-2 inline" />
                           Fullscreen
                         </button>
@@ -1663,8 +1663,8 @@ const IoTDashboardPage: React.FC = () => {
                           key={camera.id}
                           className={`camera-card rounded-xl border transition-all duration-200 cursor-pointer ${
                             selectedCamera?.id === camera.id 
-                              ? 'bg-gradient-to-br from-red-600/20 to-pink-600/20 border-red-500/50' 
-                              : 'bg-slate-800/30 border-slate-700/50 hover:border-slate-600/50 hover:bg-slate-800/50'
+                              ? 'bg-portfolio-orange/10 border-portfolio-orange/50' 
+                              : 'bg-zinc-800/30 border-white/5 hover:border-white/10 hover:bg-zinc-800/50'
                           }`}
                           onClick={() => setSelectedCamera(camera)}
                           initial={{ opacity: 0, y: 20 }}
@@ -1674,10 +1674,10 @@ const IoTDashboardPage: React.FC = () => {
                           whileTap={{ scale: 0.98 }}
                         >
                           {/* Camera Feed */}
-                          <div className="aspect-video bg-slate-900 rounded-t-xl relative overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
+                          <div className="aspect-video bg-black rounded-t-xl relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-black flex items-center justify-center">
                               <div className="text-center">
-                                <RiVideoLine className="text-4xl text-slate-600 mb-2 mx-auto" />
+                                <RiVideoLine className="text-4xl text-zinc-600 mb-2 mx-auto" />
                                 <div className="text-white text-sm font-medium">{camera.name}</div>
                               </div>
                             </div>
@@ -1702,7 +1702,7 @@ const IoTDashboardPage: React.FC = () => {
                             </div>
                             
                             <div className="absolute top-3 right-3">
-                              <div className="bg-slate-800/90 text-slate-300 text-xs px-2 py-1 rounded-full">
+                              <div className="bg-zinc-800/90 text-zinc-300 text-xs px-2 py-1 rounded-full">
                                 LIVE
                               </div>
                             </div>
@@ -1713,12 +1713,12 @@ const IoTDashboardPage: React.FC = () => {
                             <div className="flex justify-between items-start mb-2">
                               <div>
                                 <h4 className="text-white font-semibold">{camera.name}</h4>
-                                <p className="text-slate-400 text-sm">{camera.location} • Floor {camera.floor}</p>
+                                <p className="text-zinc-400 text-sm">{camera.location} • Floor {camera.floor}</p>
                               </div>
                               <div className="flex gap-1">
                                 {camera.nightVision && (
                                   <div title="Night Vision">
-                                    <RiEyeLine className="text-indigo-400 text-sm" />
+                                    <RiEyeLine className="text-portfolio-orange text-sm" />
                                   </div>
                                 )}
                                 {camera.motionDetection && (
@@ -1734,7 +1734,7 @@ const IoTDashboardPage: React.FC = () => {
                                 )}
                               </div>
                             </div>
-                            <div className="text-xs text-slate-500">
+                            <div className="text-xs text-zinc-500">
                               {camera.resolution} • {camera.viewAngle} • {camera.lastActivity}
                             </div>
                           </div>
@@ -1754,13 +1754,13 @@ const IoTDashboardPage: React.FC = () => {
               transition={{ duration: 0.5, delay: 0.5 }}
             >
               {/* Smart Lock Dashboard */}
-              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl overflow-hidden">
+              <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
                 <SmartLockDashboard />
               </div>
 
               {/* Selected Item Details */}
               {(selectedSensor || selectedCamera) && (
-                <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-white mb-4 flex items-center">
                     {selectedSensor ? (
                       <>
@@ -1777,29 +1777,29 @@ const IoTDashboardPage: React.FC = () => {
                   
                   {selectedSensor && (
                     <div className="space-y-4">
-                      <div className="text-center p-4 bg-slate-800/50 rounded-xl">
+                      <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
                         <div className="text-3xl font-bold text-white mb-1">
                           {selectedSensor.value} {selectedSensor.unit}
                         </div>
-                        <div className="text-slate-400 text-sm">{selectedSensor.name}</div>
+                        <div className="text-zinc-400 text-sm">{selectedSensor.name}</div>
                         <StatusIndicator status={selectedSensor.status} size="sm" className="mt-2 justify-center" />
                       </div>
                       
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
-                          <div className="text-slate-400">Location</div>
+                          <div className="text-zinc-400">Location</div>
                           <div className="text-white font-medium">{selectedSensor.location}</div>
                         </div>
                         <div>
-                          <div className="text-slate-400">Floor</div>
+                          <div className="text-zinc-400">Floor</div>
                           <div className="text-white font-medium">{selectedSensor.floor}</div>
                         </div>
                         <div>
-                          <div className="text-slate-400">Type</div>
+                          <div className="text-zinc-400">Type</div>
                           <div className="text-white font-medium capitalize">{selectedSensor.type}</div>
                         </div>
                         <div>
-                          <div className="text-slate-400">Battery</div>
+                          <div className="text-zinc-400">Battery</div>
                           <div className={`font-medium ${
                             selectedSensor.battery && selectedSensor.battery > 80 ? 'text-emerald-400' :
                             selectedSensor.battery && selectedSensor.battery > 50 ? 'text-amber-400' : 'text-red-400'
@@ -1810,14 +1810,14 @@ const IoTDashboardPage: React.FC = () => {
                       </div>
                       
                       <div>
-                        <div className="text-slate-400 text-sm mb-2">Recent Activity</div>
+                        <div className="text-zinc-400 text-sm mb-2">Recent Activity</div>
                         <div className="space-y-2 max-h-32 overflow-y-auto">
                           {selectedSensor.recentActivity.map((activity, idx) => (
                             <div key={idx} className="flex items-start gap-2 text-sm">
-                              <RiInformationLine className="text-indigo-400 mt-0.5 flex-shrink-0" />
+                              <RiInformationLine className="text-portfolio-orange mt-0.5 flex-shrink-0" />
                               <div>
                                 <div className="text-white">{activity.message}</div>
-                                <div className="text-slate-500 text-xs">{activity.time}</div>
+                                <div className="text-zinc-500 text-xs">{activity.time}</div>
                               </div>
                             </div>
                           ))}
@@ -1828,9 +1828,9 @@ const IoTDashboardPage: React.FC = () => {
                   
                   {selectedCamera && (
                     <div className="space-y-4">
-                      <div className="text-center p-4 bg-slate-800/50 rounded-xl">
+                      <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
                         <div className="text-2xl font-bold text-white mb-1">{selectedCamera.name}</div>
-                        <div className="text-slate-400 text-sm">{selectedCamera.location}</div>
+                        <div className="text-zinc-400 text-sm">{selectedCamera.location}</div>
                         <StatusIndicator 
                           status={(selectedCamera.status === 'recording' || selectedCamera.status === 'online') ? 'online' : 
                                   selectedCamera.status === 'maintenance' ? 'warning' : 'offline'} 
@@ -1841,29 +1841,29 @@ const IoTDashboardPage: React.FC = () => {
                       
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
-                          <div className="text-slate-400">Resolution</div>
+                          <div className="text-zinc-400">Resolution</div>
                           <div className="text-white font-medium">{selectedCamera.resolution}</div>
                         </div>
                         <div>
-                          <div className="text-slate-400">View Angle</div>
+                          <div className="text-zinc-400">View Angle</div>
                           <div className="text-white font-medium">{selectedCamera.viewAngle}</div>
                         </div>
                         <div>
-                          <div className="text-slate-400">Floor</div>
+                          <div className="text-zinc-400">Floor</div>
                           <div className="text-white font-medium">{selectedCamera.floor}</div>
                         </div>
                         <div>
-                          <div className="text-slate-400">Last Activity</div>
+                          <div className="text-zinc-400">Last Activity</div>
                           <div className="text-white font-medium">{selectedCamera.lastActivity}</div>
                         </div>
                       </div>
                       
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
-                          <span className="text-slate-300 text-sm">Recording</span>
+                          <span className="text-zinc-300 text-sm">Recording</span>
                           <button 
                             className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${
-                              selectedCamera.isRecording ? 'bg-red-600' : 'bg-slate-600'
+                              selectedCamera.isRecording ? 'bg-red-600' : 'bg-zinc-600'
                             }`}
                             onClick={() => {
                               setCctvCameras(prev => prev.map(cam => 
@@ -1883,10 +1883,10 @@ const IoTDashboardPage: React.FC = () => {
                         </div>
                         
                         <div className="flex justify-between items-center">
-                          <span className="text-slate-300 text-sm">Night Vision</span>
+                          <span className="text-zinc-300 text-sm">Night Vision</span>
                           <button 
                             className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${
-                              selectedCamera.nightVision ? 'bg-indigo-600' : 'bg-slate-600'
+                              selectedCamera.nightVision ? 'bg-portfolio-orange' : 'bg-zinc-600'
                             }`}
                             onClick={() => {
                               setCctvCameras(prev => prev.map(cam => 
@@ -1906,10 +1906,10 @@ const IoTDashboardPage: React.FC = () => {
                         </div>
                         
                         <div className="flex justify-between items-center">
-                          <span className="text-slate-300 text-sm">Motion Detection</span>
+                          <span className="text-zinc-300 text-sm">Motion Detection</span>
                           <button 
                             className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${
-                              selectedCamera.motionDetection ? 'bg-indigo-600' : 'bg-slate-600'
+                              selectedCamera.motionDetection ? 'bg-portfolio-orange' : 'bg-zinc-600'
                             }`}
                             onClick={() => {
                               setCctvCameras(prev => prev.map(cam => 
@@ -1931,19 +1931,19 @@ const IoTDashboardPage: React.FC = () => {
                       
                       {selectedCamera.alerts.length > 0 && (
                         <div>
-                          <div className="text-slate-400 text-sm mb-2">Recent Alerts</div>
+                          <div className="text-zinc-400 text-sm mb-2">Recent Alerts</div>
                           <div className="space-y-2 max-h-32 overflow-y-auto">
                             {selectedCamera.alerts.map((alert, idx) => (
                               <div key={idx} className="flex items-start gap-2 text-sm">
                                 <RiAlertLine className={`mt-0.5 flex-shrink-0 ${
                                   alert.type === 'motion' ? 'text-yellow-400' :
-                                  alert.type === 'person' ? 'text-blue-400' :
+                                  alert.type === 'person' ? 'text-portfolio-orange' :
                                   alert.type === 'vehicle' ? 'text-green-400' :
                                   'text-red-400'
                                 }`} />
                                 <div>
                                   <div className="text-white">{alert.message}</div>
-                                  <div className="text-slate-500 text-xs">{alert.time}</div>
+                                  <div className="text-zinc-500 text-xs">{alert.time}</div>
                                 </div>
                               </div>
                             ))}
@@ -1957,9 +1957,9 @@ const IoTDashboardPage: React.FC = () => {
 
               {/* Chart/Analytics Panel for Selected Sensor */}
               {selectedSensor && activeTab === 'iot' && (
-                <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6">
+                <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-white mb-4 flex items-center">
-                    <RiBarChartBoxLine className="mr-2 text-blue-400" />
+                    <RiBarChartBoxLine className="mr-2 text-portfolio-orange" />
                     Live Data
                   </h3>
                   <div className="h-48">
@@ -1971,14 +1971,14 @@ const IoTDashboardPage: React.FC = () => {
                         }))}
                         margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
                       >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
-                        <XAxis dataKey="time" stroke="#94a3b8" fontSize={12} />
-                        <YAxis stroke="#94a3b8" fontSize={12} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                        <XAxis dataKey="time" stroke="#a1a1aa" fontSize={12} />
+                        <YAxis stroke="#a1a1aa" fontSize={12} />
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: '#1e293b', 
-                            borderColor: '#334155',
-                            color: '#f8fafc',
+                            backgroundColor: '#18181b', 
+                            borderColor: '#27272a',
+                            color: '#f4f4f5',
                             borderRadius: '8px'
                           }} 
                         />
@@ -2003,4 +2003,4 @@ const IoTDashboardPage: React.FC = () => {
   );
 };
 
-export default IoTDashboardPage; 
+export default IoTDashboardPage;

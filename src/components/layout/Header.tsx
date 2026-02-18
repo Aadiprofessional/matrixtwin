@@ -258,11 +258,11 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
   // Filter notifications based on the type
   const getNotificationClassName = (type: string) => {
     switch (type) {
-      case 'info': return 'bg-ai-blue/10 border-l-4 border-ai-blue text-ai-blue';
+      case 'info': return 'bg-portfolio-orange/10 border-l-4 border-portfolio-orange text-portfolio-orange';
       case 'warning': return 'bg-warning/10 border-l-4 border-warning text-warning';
       case 'success': return 'bg-success/10 border-l-4 border-success text-success';
       case 'error': return 'bg-error/10 border-l-4 border-error text-error';
-      default: return 'bg-ai-blue/10 border-l-4 border-ai-blue text-ai-blue';
+      default: return 'bg-portfolio-orange/10 border-l-4 border-portfolio-orange text-portfolio-orange';
     }
   };
 
@@ -274,13 +274,13 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
   ];
   
   return (
-    <header className={`fixed top-0 right-0 left-0 ${!isMobile ? (sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64') : ''} h-16 bg-gradient-to-r from-dark-950 to-dark-900 backdrop-blur-sm bg-opacity-80 shadow-lg shadow-dark-950/20 z-50 flex items-center justify-between transition-all duration-300 ease-in-out`}>
+    <header className={`fixed top-0 right-0 left-0 ${!isMobile ? (sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64') : ''} h-20 bg-portfolio-dark/95 backdrop-blur-md border-b border-white/5 z-50 flex items-center justify-between transition-all duration-300 ease-in-out`}>
       <div className="flex-1 flex items-center px-4 md:px-6">
         {/* Mobile menu toggle */}
         {isMobile && (
           <motion.button 
             onClick={onMenuToggle}
-            className="mr-3 p-2 rounded-full bg-dark-800/50 hover:bg-dark-700 text-gray-400 hover:text-white transition-colors"
+            className="mr-3 p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
@@ -294,7 +294,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
         {!isSearchVisible && (
           <motion.button
             onClick={toggleSearch}
-            className="md:hidden p-2 rounded-full bg-dark-800/50 hover:bg-dark-700 text-gray-400 hover:text-white transition-colors"
+            className="md:hidden p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.65 }}
           >
@@ -342,13 +342,13 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                     setTimeout(() => setIsSearchExpanded(false), 200);
                   }
                 }}
-                className="input-ai pl-10 pr-10 py-2 h-full w-full bg-dark-800/50 border border-dark-700 focus:border-ai-blue/50 rounded-full text-white shadow-inner shadow-dark-950/30 focus:shadow-ai-blue/20 transition-all duration-300"
+                className="pl-10 pr-10 py-2 h-full w-full bg-white/5 border border-white/10 focus:border-portfolio-orange/50 rounded-full text-white shadow-inner focus:shadow-portfolio-orange/20 transition-all duration-300 placeholder-gray-500"
               />
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-gray-500 dark:text-gray-400">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-gray-500">
                 <motion.div 
                   animate={{ 
                     scale: isSearchFocused ? 1.1 : 1, 
-                    color: isSearchFocused ? "#3f87ff" : "#6b7280" 
+                    color: isSearchFocused ? "#FF5722" : "#6b7280" 
                   }}
                 >
                   <IconContext.Provider value={{ className: "text-xl" }}>
@@ -373,7 +373,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
               {isSearchVisible && window.innerWidth >= 768 && searchQuery && (
                 <motion.button 
                   type="submit" 
-                  className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-gray-500 hover:text-ai-blue transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-gray-500 hover:text-portfolio-orange transition-colors"
                   animate={{ 
                     opacity: searchQuery ? 1 : 0,
                     scale: searchQuery ? 1 : 0.8,
@@ -394,7 +394,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
         {/* Quick Actions Button - Hide on small screens */}
         <motion.button
           onClick={onQuickActionsToggle}
-          className="hidden sm:flex p-2 rounded-full bg-ai-blue/20 hover:bg-ai-blue/30 text-ai-blue hover:text-white transition-colors duration-200"
+          className="hidden sm:flex p-2 rounded-full bg-portfolio-orange/10 hover:bg-portfolio-orange/20 text-portfolio-orange hover:text-white transition-colors duration-200"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
@@ -409,7 +409,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
         {user?.role === 'admin' && (
           <motion.button
             onClick={() => navigate('/create-role')}
-            className="hidden sm:flex items-center px-3 py-2 rounded-lg bg-gradient-to-r from-purple-600/20 to-purple-700/20 hover:from-purple-600/30 hover:to-purple-700/30 text-purple-400 hover:text-white transition-colors duration-200 border border-purple-500/30"
+            className="hidden sm:flex items-center px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition-colors duration-200 border border-white/10"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             title="Create New Role"
@@ -430,7 +430,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
               setShowLanguageMenu(false);
               setShowProfileMenu(false);
             }}
-            className="p-2 rounded-full hover:bg-dark-800/70 text-gray-300 hover:text-white transition-colors duration-200"
+            className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors duration-200"
           >
             <div className="text-xl">
               <IconContext.Provider value={{ className: "text-xl" }}>
@@ -444,37 +444,37 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
               <>
                 <div className="fixed inset-0 z-20" onClick={closeAllMenus} />
                 <motion.div
-                  className="absolute right-0 mt-2 w-64 bg-dark-900/95 rounded-xl shadow-ai-glow border border-ai-blue/20 z-30 overflow-hidden backdrop-blur-sm"
+                  className="absolute right-0 mt-2 w-64 bg-[#121212] rounded-none shadow-2xl border border-white/10 z-30 overflow-hidden"
                   variants={dropdownAnimation}
                   initial="hidden"
                   animate="visible"
                   exit="exit"
                 >
-                  <div className="p-3 border-b border-dark-700">
-                    <h3 className="font-medium text-white">Contact & Support</h3>
+                  <div className="p-3 border-b border-white/10">
+                    <h3 className="font-mono text-sm uppercase tracking-widest text-gray-400">Contact & Support</h3>
                   </div>
                   
                   <div className="p-2">
                     {helpOptions.map((option, index) => (
-                      <div key={index} className="p-2">
+                      <div key={index} className="p-1">
                         {option.url ? (
                           <a 
                             href={option.url}
-                            className="flex items-center px-3 py-2 rounded-lg text-white hover:bg-dark-800/80 transition-colors"
+                            className="flex items-center px-3 py-2 text-white hover:bg-white/5 transition-colors"
                           >
-                            <IconContext.Provider value={{ className: "mr-3 text-ai-blue text-lg" }}>
+                            <IconContext.Provider value={{ className: "mr-3 text-portfolio-orange text-lg" }}>
                               {option.icon}
                             </IconContext.Provider>
-                            {option.title}
+                            <span className="text-sm">{option.title}</span>
                           </a>
                         ) : (
-                          <div className="flex items-center px-3 py-2 rounded-lg text-white">
-                            <IconContext.Provider value={{ className: "mr-3 text-ai-blue text-lg" }}>
+                          <div className="flex items-center px-3 py-2 text-white">
+                            <IconContext.Provider value={{ className: "mr-3 text-portfolio-orange text-lg" }}>
                               {option.icon}
                             </IconContext.Provider>
                             <div>
-                              <div className="text-sm text-gray-400">{option.title}</div>
-                              <div className="text-white">{option.content}</div>
+                              <div className="text-xs text-gray-500 uppercase tracking-wider mb-0.5">{option.title}</div>
+                              <div className="text-white text-sm">{option.content}</div>
                             </div>
                           </div>
                         )}
@@ -496,7 +496,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
               setShowHelpMenu(false);
               setShowProfileMenu(false);
             }}
-            className="p-2 rounded-full hover:bg-dark-800/70 relative text-gray-300 hover:text-white transition-colors duration-200"
+            className="p-2 rounded-full hover:bg-white/10 relative text-gray-400 hover:text-white transition-colors duration-200"
             animate={hasNewNotification ? { 
               scale: [1, 1.15, 1], 
               transition: { duration: 1, repeat: 3, repeatType: "reverse" } 
@@ -509,7 +509,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
             </div>
             {unreadCount > 0 && (
               <motion.span 
-                className="absolute top-0 right-0 h-5 w-5 bg-error text-white text-xs rounded-full flex items-center justify-center"
+                className="absolute top-0 right-0 h-5 w-5 bg-portfolio-orange text-white text-xs rounded-full flex items-center justify-center"
                 initial={{ scale: 0.5, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
@@ -524,26 +524,26 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
               <>
                 <div className="fixed inset-0 z-20" onClick={closeAllMenus} />
                 <motion.div
-                  className="absolute right-0 mt-2 w-80 bg-dark-900/95 rounded-xl shadow-ai-glow border border-ai-blue/20 z-30 overflow-hidden backdrop-blur-sm"
+                  className="absolute right-0 mt-2 w-80 bg-[#121212] rounded-none shadow-2xl border border-white/10 z-30 overflow-hidden"
                   variants={dropdownAnimation}
                   initial="hidden"
                   animate="visible"
                   exit="exit"
                 >
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-dark-700">
-                    <h3 className="font-medium text-white">Notifications</h3>
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                    <h3 className="font-mono text-sm uppercase tracking-widest text-gray-400">Notifications</h3>
                     <div className="flex">
                       <button
                         onClick={markAllAsRead}
-                        className="text-xs text-ai-blue hover:text-ai-blue/80 mr-3"
+                        className="text-xs text-portfolio-orange hover:text-portfolio-orange-hover mr-3 font-mono uppercase tracking-wider"
                       >
-                        Mark all as read
+                        Mark read
                       </button>
                       <button
                         onClick={clearAllNotifications}
-                        className="text-xs text-error hover:text-error/80"
+                        className="text-xs text-gray-500 hover:text-white font-mono uppercase tracking-wider"
                       >
-                        Clear all
+                        Clear
                       </button>
                     </div>
                   </div>
@@ -553,7 +553,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                       notifications.map(notification => (
                         <motion.div
                           key={notification.id}
-                          className={`px-4 py-3 border-b border-dark-800 hover:bg-dark-800/50 cursor-pointer ${
+                          className={`px-4 py-3 border-b border-white/5 hover:bg-white/5 cursor-pointer ${
                             getNotificationClassName(notification.type)
                           }`}
                           onClick={() => handleNotificationClick(notification)}
@@ -565,18 +565,18 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                           <div className="flex justify-between">
                             <div className="flex-1">
                               <div className="flex justify-between items-start">
-                                <span className="font-medium text-sm">{notification.title}</span>
+                                <span className="font-medium text-sm text-white">{notification.title}</span>
                                 <button 
                                   onClick={(e) => deleteNotification(notification.id, e)}
-                                  className="text-gray-500 hover:text-gray-300 ml-2 opacity-50 hover:opacity-100"
+                                  className="text-gray-500 hover:text-white ml-2 opacity-50 hover:opacity-100"
                                 >
                                   <IconContext.Provider value={{ className: "text-base" }}>
                                     <div><IconWrapper icon="RiCloseLine" /></div>
                                   </IconContext.Provider>
                                 </button>
                               </div>
-                              <p className="text-sm mt-1 opacity-90">{notification.message}</p>
-                              <span className="text-xs mt-1 opacity-70">
+                              <p className="text-sm mt-1 text-gray-400">{notification.message}</p>
+                              <span className="text-xs mt-1 text-gray-600 font-mono">
                                 {notificationService.formatRelativeTime(notification.created_at)}
                               </span>
                             </div>
@@ -584,7 +584,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                         </motion.div>
                       ))
                     ) : (
-                      <div className="px-4 py-8 text-center text-gray-500">
+                      <div className="px-4 py-8 text-center text-gray-500 font-mono text-sm">
                         <p>No notifications</p>
                       </div>
                     )}
@@ -598,7 +598,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
         {/* Theme Toggle */}
         <motion.button
           onClick={toggleDarkMode}
-          className="p-2 rounded-full hover:bg-dark-800/70 text-gray-300 hover:text-white transition-colors duration-200"
+          className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors duration-200"
           whileTap={{ scale: 0.95 }}
         >
           <div className="text-xl">
@@ -617,7 +617,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
               setShowHelpMenu(false);
               setShowProfileMenu(false);
             }}
-            className="p-2 rounded-full hover:bg-dark-800/70 text-gray-300 hover:text-white transition-colors duration-200"
+            className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors duration-200"
           >
             <div className="text-xl">
               <IconContext.Provider value={{ className: "text-xl" }}>
@@ -631,7 +631,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
               <>
                 <div className="fixed inset-0 z-20" onClick={closeAllMenus} />
                 <motion.div
-                  className="absolute right-0 mt-2 w-48 bg-dark-900/95 rounded-xl shadow-ai-glow border border-ai-blue/20 z-30 overflow-hidden backdrop-blur-sm"
+                  className="absolute right-0 mt-2 w-48 bg-[#121212] rounded-none shadow-2xl border border-white/10 z-30 overflow-hidden"
                   variants={dropdownAnimation}
                   initial="hidden"
                   animate="visible"
@@ -640,8 +640,8 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                   {languages.map((lang) => (
                     <motion.button
                       key={lang.code}
-                      className={`w-full text-left px-4 py-2 flex items-center hover:bg-dark-800/80 transition-colors ${
-                        language === lang.code ? 'bg-dark-800/80 text-ai-blue' : 'text-white'
+                      className={`w-full text-left px-4 py-3 flex items-center hover:bg-white/5 transition-colors ${
+                        language === lang.code ? 'bg-white/5 text-portfolio-orange' : 'text-gray-300'
                       }`}
                       onClick={() => {
                         changeLanguage(lang.code);
@@ -651,10 +651,10 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                       transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     >
                       <span className="mr-3 text-lg">{lang.flag}</span>
-                      <span>{lang.name}</span>
+                      <span className="font-mono text-sm">{lang.name}</span>
                       {language === lang.code && (
                         <motion.div 
-                          className="w-1.5 h-1.5 rounded-full bg-ai-blue ml-auto"
+                          className="w-1.5 h-1.5 rounded-full bg-portfolio-orange ml-auto"
                           layoutId="activeLang" 
                         />
                       )}

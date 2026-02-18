@@ -97,25 +97,25 @@ const PeopleSelectorModal: React.FC<{
       onClick={onClose}
     >
       <motion.div
-        className="w-full max-w-md max-h-[80vh] bg-white dark:bg-dark-800 rounded-lg shadow-xl overflow-hidden"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-4 border-b border-secondary-200 dark:border-dark-700 flex justify-between items-center">
-          <h3 className="text-lg font-semibold flex items-center text-secondary-900 dark:text-white">
-            <RiIcons.RiUserLine className="mr-2" />
-            {title}
-          </h3>
-          <button 
-            className="text-secondary-400 hover:text-secondary-600 dark:text-gray-400 dark:hover:text-gray-200"
-            onClick={onClose}
-          >
-            <RiIcons.RiCloseLine className="text-xl" />
-          </button>
-        </div>
+          className="w-full max-w-md max-h-[80vh] bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-xl overflow-hidden"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.2 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="p-4 border-b border-white/10 flex justify-between items-center">
+            <h3 className="text-lg font-semibold flex items-center text-white">
+              <RiIcons.RiUserLine className="mr-2" />
+              {title}
+            </h3>
+            <button 
+              className="text-secondary-400 hover:text-white transition-colors"
+              onClick={onClose}
+            >
+              <RiIcons.RiCloseLine className="text-xl" />
+            </button>
+          </div>
         
         <div className="p-4 border-b border-secondary-200 dark:border-dark-700">
           <div className="relative">
@@ -1182,7 +1182,7 @@ const RfiPage: React.FC = () => {
             onClick={() => setShowFormSelector(false)}
           >
             <motion.div
-              className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl"
+              className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-xl"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1239,7 +1239,7 @@ const RfiPage: React.FC = () => {
             onClick={() => setInspectionTemplateVisible(false)}
           >
             <motion.div
-              className="w-full max-w-6xl max-h-[90vh] overflow-auto"
+              className="bg-dark-900/80 backdrop-blur-md border border-white/10 shadow-lg rounded-xl overflow-hidden w-full max-w-6xl max-h-[90vh] overflow-auto"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1506,7 +1506,7 @@ const RfiPage: React.FC = () => {
             onClick={handleCancelProcessFlow}
           >
             <motion.div
-              className="w-full max-w-7xl max-h-[90vh] overflow-auto bg-white dark:bg-dark-900 rounded-xl shadow-2xl"
+              className="bg-dark-900/80 backdrop-blur-md border border-white/10 shadow-lg rounded-xl overflow-hidden w-full max-w-7xl max-h-[90vh] overflow-auto"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}

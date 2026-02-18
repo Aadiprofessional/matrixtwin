@@ -102,7 +102,7 @@ const PeopleSelectorModal: React.FC<{
       onClick={onClose}
     >
       <motion.div
-        className="w-full max-w-md max-h-[80vh] bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden"
+        className="bg-dark-900/80 backdrop-blur-md border border-white/10 shadow-lg rounded-lg overflow-hidden w-full max-w-md max-h-[80vh]"
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
@@ -159,7 +159,7 @@ const PeopleSelectorModal: React.FC<{
                       className="w-10 h-10 rounded-full mr-3"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 flex items-center justify-center font-medium mr-3">
+                    <div className="w-10 h-10 rounded-full bg-portfolio-orange/10 text-portfolio-orange border border-portfolio-orange/20 flex items-center justify-center font-medium mr-3">
                       {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                     </div>
                   )}

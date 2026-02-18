@@ -673,7 +673,7 @@ const TeamPage: React.FC = () => {
         initial="hidden"
         animate="visible"
         exit="exit"
-        className="bg-dark-900 rounded-xl overflow-hidden max-w-md w-full mx-auto p-6"
+        className="bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden max-w-md w-full mx-auto p-6"
       >
         <h2 className="text-xl font-bold text-white mb-4">Delete Team Member</h2>
         <p className="text-gray-300 mb-4">
@@ -1392,7 +1392,7 @@ const TeamPage: React.FC = () => {
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="bg-dark-900 rounded-xl overflow-hidden max-w-3xl w-full mx-auto"
+              className="bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden max-w-3xl w-full mx-auto"
             >
               <div className="flex flex-col md:flex-row">
                 {/* Sidebar with photo and basic details */}
@@ -1510,7 +1510,7 @@ const TeamPage: React.FC = () => {
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="bg-dark-900 rounded-xl overflow-hidden max-w-2xl w-full mx-auto"
+              className="bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden max-w-2xl w-full mx-auto"
             >
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
@@ -1659,7 +1659,7 @@ const TeamPage: React.FC = () => {
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="bg-dark-900 rounded-xl overflow-hidden max-w-2xl w-full mx-auto"
+              className="bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden max-w-2xl w-full mx-auto"
             >
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">

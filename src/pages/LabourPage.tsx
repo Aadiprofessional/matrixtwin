@@ -105,7 +105,7 @@ const PeopleSelectorModal: React.FC<{
       onClick={onClose}
     >
       <motion.div
-        className="w-full max-w-md max-h-[80vh] bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden"
+        className="w-full max-w-md max-h-[80vh] bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-xl overflow-hidden"
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
@@ -162,7 +162,7 @@ const PeopleSelectorModal: React.FC<{
                       className="w-10 h-10 rounded-full mr-3"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 flex items-center justify-center font-medium mr-3">
+                    <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 flex items-center justify-center font-medium mr-3">
                       {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                     </div>
                   )}
@@ -744,7 +744,7 @@ const LabourPage: React.FC = () => {
   const getWorkflowStatusBadge = (entry: LabourEntry) => {
     const statusColors = {
       pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-      in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+      in_progress: 'bg-portfolio-orange/10 text-portfolio-orange dark:bg-portfolio-orange/10 dark:text-portfolio-orange',
       completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
       rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
     };
@@ -759,7 +759,7 @@ const LabourPage: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto pb-12">
       {/* Enhanced Header with gradient and pattern */}
-      <div className="relative overflow-hidden rounded-xl mb-8 bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900">
+      <div className="relative overflow-hidden rounded-xl mb-8 bg-gradient-to-r from-zinc-900 via-black to-zinc-900 border border-white/10">
         <div className="absolute inset-0 bg-ai-dots opacity-20"></div>
         <div className="absolute right-0 top-0 w-1/3 h-full">
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
@@ -773,8 +773,8 @@ const LabourPage: React.FC = () => {
             />
             <defs>
               <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#3b82f6" />
-                <stop offset="100%" stopColor="#6366f1" />
+                <stop offset="0%" stopColor="#FF5722" />
+                <stop offset="100%" stopColor="#FF8A65" />
               </linearGradient>
             </defs>
           </svg>
@@ -789,10 +789,10 @@ const LabourPage: React.FC = () => {
                 transition={{ duration: 0.5 }}
               >
                 <h1 className="text-3xl md:text-4xl font-display font-bold text-white flex items-center">
-                  <RiGroupLine className="mr-3 text-blue-400" />
+                  <RiGroupLine className="mr-3 text-portfolio-orange" />
                   {t('labour.title')}
                 </h1>
-                <p className="text-blue-200 mt-2 max-w-2xl">
+                <p className="text-gray-400 mt-2 max-w-2xl">
                   Track workforce attendance, manage worker hours, and generate accurate labour reports for project costing
                 </p>
               </motion.div>
@@ -832,32 +832,32 @@ const LabourPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-blue-500/20 rounded-full mr-4">
-                <RiUserLine className="text-2xl text-blue-300" />
+            <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 flex items-center border border-white/10">
+              <div className="p-3 bg-portfolio-orange/20 rounded-full mr-4">
+                <RiUserLine className="text-2xl text-portfolio-orange" />
               </div>
               <div>
-                <div className="text-sm text-blue-200">Total Workers</div>
+                <div className="text-sm text-gray-400">Total Workers</div>
                 <div className="text-2xl font-bold text-white">{labourEntries.length}</div>
               </div>
             </div>
             
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-indigo-500/20 rounded-full mr-4">
-                <RiTimeLine className="text-2xl text-indigo-300" />
+            <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 flex items-center border border-white/10">
+              <div className="p-3 bg-portfolio-orange/20 rounded-full mr-4">
+                <RiTimeLine className="text-2xl text-portfolio-orange" />
               </div>
               <div>
-                <div className="text-sm text-blue-200">Total Hours</div>
+                <div className="text-sm text-gray-400">Total Hours</div>
                 <div className="text-2xl font-bold text-white">{labourEntries.reduce((total, entry) => total + entry.hours_worked, 0)}</div>
               </div>
             </div>
             
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-purple-500/20 rounded-full mr-4">
-                <RiCalendarCheckLine className="text-2xl text-purple-300" />
+            <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 flex items-center border border-white/10">
+              <div className="p-3 bg-portfolio-orange/20 rounded-full mr-4">
+                <RiCalendarCheckLine className="text-2xl text-portfolio-orange" />
               </div>
               <div>
-                <div className="text-sm text-blue-200">Average Hours per Entry</div>
+                <div className="text-sm text-gray-400">Average Hours per Entry</div>
                 <div className="text-2xl font-bold text-white">{labourEntries.length > 0 ? (labourEntries.reduce((total, entry) => total + entry.hours_worked, 0) / labourEntries.length).toFixed(2) : '0.00'}</div>
               </div>
             </div>
@@ -865,21 +865,21 @@ const LabourPage: React.FC = () => {
 
           {/* Time Period Selector */}
           <div className="mt-4 flex justify-end">
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-1 inline-flex">
+            <div className="bg-white/5 backdrop-blur-sm rounded-lg p-1 inline-flex border border-white/10">
               <button 
-                className={`px-3 py-1 rounded-md text-sm ${statsTimeframe === 'day' ? 'bg-white/20 text-white' : 'text-blue-200 hover:bg-white/10'}`}
+                className={`px-3 py-1 rounded-md text-sm ${statsTimeframe === 'day' ? 'bg-portfolio-orange text-white' : 'text-gray-400 hover:bg-white/10'}`}
                 onClick={() => setStatsTimeframe('day')}
               >
                 Today
               </button>
               <button 
-                className={`px-3 py-1 rounded-md text-sm ${statsTimeframe === 'week' ? 'bg-white/20 text-white' : 'text-blue-200 hover:bg-white/10'}`}
+                className={`px-3 py-1 rounded-md text-sm ${statsTimeframe === 'week' ? 'bg-portfolio-orange text-white' : 'text-gray-400 hover:bg-white/10'}`}
                 onClick={() => setStatsTimeframe('week')}
               >
                 This Week
               </button>
               <button 
-                className={`px-3 py-1 rounded-md text-sm ${statsTimeframe === 'month' ? 'bg-white/20 text-white' : 'text-blue-200 hover:bg-white/10'}`}
+                className={`px-3 py-1 rounded-md text-sm ${statsTimeframe === 'month' ? 'bg-portfolio-orange text-white' : 'text-gray-400 hover:bg-white/10'}`}
                 onClick={() => setStatsTimeframe('month')}
               >
                 This Month
@@ -920,38 +920,38 @@ const LabourPage: React.FC = () => {
         className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
       >
         <Card className="p-6 flex items-center">
-          <div className="rounded-full p-3 bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 mr-4">
+          <div className="rounded-full p-3 bg-portfolio-orange/10 text-portfolio-orange mr-4">
             <RiUserLine className="text-2xl" />
           </div>
           <div>
             <h3 className="text-2xl font-display font-semibold">
               {labourEntries.length}
             </h3>
-            <p className="text-sm text-secondary-600 dark:text-secondary-400">Total Returns</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Total Returns</p>
           </div>
         </Card>
         
         <Card className="p-6 flex items-center">
-          <div className="rounded-full p-3 bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 mr-4">
+          <div className="rounded-full p-3 bg-portfolio-orange/10 text-portfolio-orange mr-4">
             <RiTimeLine className="text-2xl" />
           </div>
           <div>
             <h3 className="text-2xl font-display font-semibold">
               {labourEntries.reduce((total, entry) => total + entry.hours_worked, 0)}
             </h3>
-            <p className="text-sm text-secondary-600 dark:text-secondary-400">Total Hours</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Total Hours</p>
           </div>
         </Card>
         
         <Card className="p-6 flex items-center">
-          <div className="rounded-full p-3 bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 mr-4">
+          <div className="rounded-full p-3 bg-portfolio-orange/10 text-portfolio-orange mr-4">
             <RiCalendarCheckLine className="text-2xl" />
           </div>
           <div>
             <h3 className="text-2xl font-display font-semibold">
               {labourEntries.length > 0 ? (labourEntries.reduce((total, entry) => total + entry.hours_worked, 0) / labourEntries.length).toFixed(2) : '0.00'}
             </h3>
-            <p className="text-sm text-secondary-600 dark:text-secondary-400">Average Hours per Entry</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Average Hours per Entry</p>
           </div>
         </Card>
       </motion.div>
@@ -1001,8 +1001,8 @@ const LabourPage: React.FC = () => {
               <button 
                 className={`px-4 py-2 rounded-full flex items-center transition-all duration-200 ${
                   showFilters
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                    : 'bg-secondary-100 dark:bg-secondary-800 hover:bg-secondary-200 dark:hover:bg-secondary-700'
+                    ? 'bg-portfolio-orange text-white shadow-lg shadow-portfolio-orange/30'
+                    : 'bg-secondary-100 dark:bg-zinc-800 hover:bg-secondary-200 dark:hover:bg-zinc-700 text-gray-400'
                 }`}
                 onClick={() => setShowFilters(!showFilters)}
               >
@@ -1022,14 +1022,14 @@ const LabourPage: React.FC = () => {
                 transition={{ duration: 0.3, ease: "easeInOut" }}
                 className="border-b border-secondary-200 dark:border-secondary-700 overflow-hidden backdrop-blur-md"
               >
-                <div className="p-4 bg-gradient-to-r from-secondary-50/90 to-secondary-100/90 dark:from-secondary-800/90 dark:to-secondary-900/90">
+                <div className="p-4 bg-gradient-to-r from-zinc-900 to-zinc-800">
                   {/* Filter tabs */}
-                  <div className="flex flex-wrap mb-4 border-b border-secondary-200 dark:border-secondary-700 gap-1">
+                  <div className="flex flex-wrap mb-4 border-b border-gray-700 gap-1">
                     <button
                       className={`px-4 py-2 rounded-t-lg text-sm font-medium transition duration-200 ${
                         activeFilterTab === 'status'
-                          ? 'bg-white dark:bg-secondary-700 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600'
-                          : 'text-secondary-600 dark:text-secondary-400 hover:bg-white/50 dark:hover:bg-secondary-700/50'
+                          ? 'bg-zinc-800 text-portfolio-orange border-b-2 border-portfolio-orange'
+                          : 'text-gray-400 hover:bg-zinc-700/50'
                       }`}
                       onClick={() => setActiveFilterTab('status')}
                     >
@@ -1038,8 +1038,8 @@ const LabourPage: React.FC = () => {
                     <button
                       className={`px-4 py-2 rounded-t-lg text-sm font-medium transition duration-200 ${
                         activeFilterTab === 'project'
-                          ? 'bg-white dark:bg-secondary-700 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600'
-                          : 'text-secondary-600 dark:text-secondary-400 hover:bg-white/50 dark:hover:bg-secondary-700/50'
+                          ? 'bg-zinc-800 text-portfolio-orange border-b-2 border-portfolio-orange'
+                          : 'text-gray-400 hover:bg-zinc-700/50'
                       }`}
                       onClick={() => setActiveFilterTab('project')}
                     >
@@ -1048,8 +1048,8 @@ const LabourPage: React.FC = () => {
                     <button
                       className={`px-4 py-2 rounded-t-lg text-sm font-medium transition duration-200 ${
                         activeFilterTab === 'date'
-                          ? 'bg-white dark:bg-secondary-700 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600'
-                          : 'text-secondary-600 dark:text-secondary-400 hover:bg-white/50 dark:hover:bg-secondary-700/50'
+                          ? 'bg-zinc-800 text-portfolio-orange border-b-2 border-portfolio-orange'
+                          : 'text-gray-400 hover:bg-zinc-700/50'
                       }`}
                       onClick={() => setActiveFilterTab('date')}
                     >
@@ -1058,7 +1058,7 @@ const LabourPage: React.FC = () => {
                     
                     <div className="ml-auto">
                       <button
-                        className="px-3 py-1.5 text-xs bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition duration-200 flex items-center"
+                        className="px-3 py-1.5 text-xs bg-portfolio-orange/10 text-portfolio-orange rounded-full hover:bg-portfolio-orange/20 transition duration-200 flex items-center"
                         onClick={() => {
                           setFilterStatus('all');
                           setFilterType('all');
@@ -1073,7 +1073,7 @@ const LabourPage: React.FC = () => {
                   </div>
                   
                   {/* Filter content based on active tab */}
-                  <div className="bg-white/80 dark:bg-secondary-800/80 rounded-lg p-4 shadow-sm">
+                  <div className="bg-zinc-800/80 rounded-lg p-4 shadow-sm">
                     <AnimatePresence mode="wait">
                       {activeFilterTab === 'status' && (
                         <motion.div
@@ -1125,7 +1125,7 @@ const LabourPage: React.FC = () => {
                                 filterType === project
                                   ? project === 'all'
                                     ? 'bg-secondary-200 dark:bg-secondary-700 text-secondary-900 dark:text-white'
-                                    : 'bg-blue-600 text-white'
+                                    : 'bg-portfolio-orange text-white'
                                   : 'bg-white dark:bg-secondary-700 text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-600'
                               }`}
                               onClick={() => setFilterType(project)}
@@ -1151,7 +1151,7 @@ const LabourPage: React.FC = () => {
                               </label>
                               <input 
                                 type="date" 
-                                className="w-full p-3 border border-secondary-300 dark:border-secondary-600 rounded-lg bg-white dark:bg-secondary-700 focus:ring-2 focus:ring-blue-600/50 focus:border-blue-600"
+                                className="w-full p-3 border border-secondary-300 dark:border-secondary-600 rounded-lg bg-white dark:bg-secondary-700 focus:ring-2 focus:ring-portfolio-orange/50 focus:border-portfolio-orange"
                                 value={filterDateFrom}
                                 onChange={(e) => setFilterDateFrom(e.target.value)}
                               />
@@ -1162,7 +1162,7 @@ const LabourPage: React.FC = () => {
                               </label>
                               <input 
                                 type="date" 
-                                className="w-full p-3 border border-secondary-300 dark:border-secondary-600 rounded-lg bg-white dark:bg-secondary-700 focus:ring-2 focus:ring-blue-600/50 focus:border-blue-600"
+                                className="w-full p-3 border border-secondary-300 dark:border-secondary-600 rounded-lg bg-white dark:bg-secondary-700 focus:ring-2 focus:ring-portfolio-orange/50 focus:border-portfolio-orange"
                                 value={filterDateTo}
                                 onChange={(e) => setFilterDateTo(e.target.value)}
                               />
@@ -1199,7 +1199,7 @@ const LabourPage: React.FC = () => {
                     {filterType !== 'all' && (
                       <div className="px-2 py-1 rounded-full text-xs bg-secondary-100 dark:bg-secondary-700 flex items-center">
                         <span className="mr-1">Project: </span>
-                        <span className="font-medium text-blue-600 dark:text-blue-400">{filterType}</span>
+                        <span className="font-medium text-portfolio-orange dark:text-portfolio-orange">{filterType}</span>
                         <button 
                           className="ml-1 text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-200"
                           onClick={() => setFilterType('all')}
@@ -1212,7 +1212,7 @@ const LabourPage: React.FC = () => {
                     {(filterDateFrom || filterDateTo) && (
                       <div className="px-2 py-1 rounded-full text-xs bg-secondary-100 dark:bg-secondary-700 flex items-center">
                         <span className="mr-1">Date: </span>
-                        <span className="font-medium text-blue-600 dark:text-blue-400">
+                        <span className="font-medium text-portfolio-orange dark:text-portfolio-orange">
                           {filterDateFrom ? filterDateFrom : 'Any'} → {filterDateTo ? filterDateTo : 'Any'}
                         </span>
                         <button 
@@ -1299,7 +1299,7 @@ const LabourPage: React.FC = () => {
                               size="sm"
                               onClick={() => handleViewForm(entry)}
                               leftIcon={<RiFileListLine />}
-                              className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                              className="hover:bg-portfolio-orange/5 dark:hover:bg-portfolio-orange/10"
                             >
                               {canUserUpdateForm(entry) ? 'Edit Form' : 'View Form'}
                             </Button>
@@ -1379,7 +1379,7 @@ const LabourPage: React.FC = () => {
                             variant="ghost" 
                             size="sm"
                             onClick={() => handleViewForm(entry)}
-                            className="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                            className="hover:bg-portfolio-orange/5 hover:text-portfolio-orange dark:hover:bg-portfolio-orange/10 dark:hover:text-portfolio-orange"
                           >
                             {canUserUpdateForm(entry) ? 'Edit' : 'Form'}
                           </Button>
@@ -1389,7 +1389,7 @@ const LabourPage: React.FC = () => {
                             variant="ghost" 
                             size="sm"
                             onClick={() => handleViewDetails(entry)}
-                            className="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                            className="hover:bg-portfolio-orange/5 hover:text-portfolio-orange dark:hover:bg-portfolio-orange/10 dark:hover:text-portfolio-orange"
                           >
                             Details
                           </Button>
@@ -1714,7 +1714,7 @@ const LabourPage: React.FC = () => {
                       variant="primary"
                       leftIcon={<RiCheckLine />}
                       onClick={handleFinalSave}
-                      className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                      className="bg-gradient-to-r from-portfolio-orange to-orange-600 hover:from-orange-600 hover:to-orange-700"
                     >
                       Save Labour Return
                     </Button>
@@ -1748,7 +1748,7 @@ const LabourPage: React.FC = () => {
             onClick={() => setShowDetails(false)}
           >
             <motion.div
-              className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl"
+              className="bg-dark-900/80 backdrop-blur-md border border-white/10 shadow-lg rounded-lg overflow-hidden w-full max-w-4xl max-h-[90vh] overflow-auto"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1756,9 +1756,9 @@ const LabourPage: React.FC = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-6 space-y-6">
-                <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                  <div className="text-lg font-bold text-blue-900 dark:text-blue-300 flex items-center">
-                    <RiTeamLine className="mr-2 text-blue-600 dark:text-blue-400" />
+                <div className="flex justify-between items-center bg-portfolio-orange/5 dark:bg-portfolio-orange/10 p-4 rounded-lg">
+                  <div className="text-lg font-bold text-portfolio-orange dark:text-portfolio-orange flex items-center">
+                    <RiTeamLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
                     Labour Return - {selectedLabourEntry.date}
                   </div>
                   <div className="px-3 py-1 bg-white dark:bg-gray-700 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
@@ -1769,7 +1769,7 @@ const LabourPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiUserLine className="mr-2 text-blue-600 dark:text-blue-400" />
+                      <RiUserLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
                       <span className="text-sm font-medium uppercase tracking-wide">Submitter</span>
                     </div>
                     <div className="font-medium">{selectedLabourEntry.submitter}</div>
@@ -1777,7 +1777,7 @@ const LabourPage: React.FC = () => {
                   
                   <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiTeamLine className="mr-2 text-blue-600 dark:text-blue-400" />
+                      <RiTeamLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
                       <span className="text-sm font-medium uppercase tracking-wide">Worker Count</span>
                     </div>
                     <div className="font-medium">{selectedLabourEntry.worker_count}</div>
@@ -1785,7 +1785,7 @@ const LabourPage: React.FC = () => {
                   
                   <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiTimeLine className="mr-2 text-blue-600 dark:text-blue-400" />
+                      <RiTimeLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
                       <span className="text-sm font-medium uppercase tracking-wide">Hours Worked</span>
                     </div>
                     <div className="font-medium">{selectedLabourEntry.hours_worked}</div>
@@ -1793,7 +1793,7 @@ const LabourPage: React.FC = () => {
                   
                   <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiPercentLine className="mr-2 text-blue-600 dark:text-blue-400" />
+                      <RiPercentLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
                       <span className="text-sm font-medium uppercase tracking-wide">Trade Type</span>
                     </div>
                     <div className="font-medium">{selectedLabourEntry.trade_type}</div>
@@ -1802,7 +1802,7 @@ const LabourPage: React.FC = () => {
                 
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                   <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                    <RiTaskLine className="mr-2 text-blue-600 dark:text-blue-400" />
+                    <RiTaskLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
                     <span className="text-sm font-medium uppercase tracking-wide">Work Description</span>
                   </div>
                   <div className="whitespace-pre-line">{selectedLabourEntry.work_description || 'None'}</div>
@@ -1810,7 +1810,7 @@ const LabourPage: React.FC = () => {
                 
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                   <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                    <RiErrorWarningLine className="mr-2 text-blue-600 dark:text-blue-400" />
+                    <RiErrorWarningLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
                     <span className="text-sm font-medium uppercase tracking-wide">Labour Type</span>
                   </div>
                   <div className="whitespace-pre-line">{selectedLabourEntry.labour_type || 'None'}</div>
@@ -1820,7 +1820,7 @@ const LabourPage: React.FC = () => {
                 {selectedLabourEntry.labour_workflow_nodes && selectedLabourEntry.labour_workflow_nodes.length > 0 && (
                   <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center text-gray-600 dark:text-gray-400 mb-4">
-                      <RiFlowChart className="mr-2 text-blue-600 dark:text-blue-400" />
+                      <RiFlowChart className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
                       <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
                     </div>
                     
@@ -1868,7 +1868,7 @@ const LabourPage: React.FC = () => {
                 {selectedLabourEntry.labour_comments && selectedLabourEntry.labour_comments.length > 0 && (
                   <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center text-gray-600 dark:text-gray-400 mb-4">
-                      <RiNotificationLine className="mr-2 text-blue-600 dark:text-blue-400" />
+                      <RiNotificationLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
                       <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
                     </div>
                     
@@ -1884,7 +1884,7 @@ const LabourPage: React.FC = () => {
                                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                     comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
                                     comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                                    'bg-portfolio-orange/10 text-portfolio-orange dark:bg-portfolio-orange/10 dark:text-portfolio-orange'
                                   }`}>
                                     {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
                                   </span>

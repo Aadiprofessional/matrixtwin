@@ -65,14 +65,14 @@ export const UserSelectionModal: React.FC<UserSelectionModalProps> = ({
           onClick={onClose}
         >
           <motion.div
-            className="w-full max-w-2xl"
+            className="w-full max-w-2xl bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-xl overflow-hidden"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.3 }}
             onClick={e => e.stopPropagation()}
           >
-            <Card variant="ai" className="p-6">
+            <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <div>
                   <h2 className="text-xl font-semibold">{title}</h2>
@@ -156,7 +156,7 @@ export const UserSelectionModal: React.FC<UserSelectionModalProps> = ({
                   Assign Users ({selectedUsers.length})
                 </Button>
               </div>
-            </Card>
+            </div>
           </motion.div>
         </div>
       )}

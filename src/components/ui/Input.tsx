@@ -27,7 +27,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
   const baseClasses = 'input flex items-center';
   const variantClasses = {
     default: '',
-    futuristic: 'border-0 bg-secondary-50/50 dark:bg-dark-800/50 backdrop-blur-sm focus:ring-primary-400 dark:focus:ring-primary-400',
+    futuristic: 'border-0 bg-secondary-50/50 dark:bg-dark-800/50 backdrop-blur-sm focus:ring-portfolio-orange dark:focus:ring-portfolio-orange',
   };
   
   return (
@@ -73,7 +73,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
         
         {isFocused && variant === 'futuristic' && (
           <div 
-            className="absolute bottom-0 left-0 h-0.5 bg-primary-500 w-full transition-all duration-300"
+            className="absolute bottom-0 left-0 h-0.5 bg-portfolio-orange w-full transition-all duration-300"
           />
         )}
       </div>

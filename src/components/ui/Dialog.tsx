@@ -18,6 +18,7 @@ export interface DialogProps {
   maxWidth?: string;
   fullWidth?: boolean;
   className?: string;
+  disablePadding?: boolean;
 }
 
 export const Dialog: React.FC<DialogProps> = ({
@@ -31,7 +32,8 @@ export const Dialog: React.FC<DialogProps> = ({
   showCloseButton = true,
   maxWidth = '600px',
   fullWidth = false,
-  className = ''
+  className = '',
+  disablePadding = false
 }) => {
   const [open, setOpen] = useState(isOpen);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -105,7 +107,7 @@ export const Dialog: React.FC<DialogProps> = ({
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.2 }}
               style={{ maxWidth, width: fullWidth ? '100%' : 'auto' }}
-              className={`bg-dark-900 shadow-lg rounded-lg overflow-hidden ${className}`}
+              className={`bg-black/70 backdrop-blur-2xl border border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden ${className}`}
             >
               {title && (
                 <div className="flex items-center justify-between p-4 border-b border-dark-800">
@@ -121,7 +123,7 @@ export const Dialog: React.FC<DialogProps> = ({
                   )}
                 </div>
               )}
-              <div className="p-4">
+              <div className={disablePadding ? '' : 'p-4'}>
                 {children}
               </div>
               {actions && (

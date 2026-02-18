@@ -13,7 +13,7 @@ interface StatCardProps {
     label: string;
     isPositive?: boolean;
   };
-  color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple' | 'indigo' | 'cyan' | 'orange' | 'emerald';
+  color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple' | 'indigo' | 'cyan' | 'orange' | 'emerald' | 'brand';
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   onClick?: () => void;
@@ -27,13 +27,21 @@ const StatCard: React.FC<StatCardProps> = ({
   description,
   icon: Icon,
   trend,
-  color = 'blue',
+  color = 'brand',
   size = 'md',
   className = '',
   onClick,
   loading = false
 }) => {
   const colorConfig = {
+    brand: {
+      gradient: 'from-portfolio-orange/20 to-portfolio-orange/5',
+      border: 'border-portfolio-orange/30',
+      icon: 'text-portfolio-orange',
+      value: 'text-white',
+      unit: 'text-portfolio-orange/80',
+      description: 'text-gray-400'
+    },
     blue: {
       gradient: 'from-blue-900/40 to-blue-700/20',
       border: 'border-blue-800/50',

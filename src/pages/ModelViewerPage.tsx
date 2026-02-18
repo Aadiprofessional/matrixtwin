@@ -4012,7 +4012,7 @@ const ModelViewerPage: React.FC = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] pointer-events-auto"
+              className="fixed inset-0 bg-dark-900/80 backdrop-blur-md flex items-center justify-center z-[9999] pointer-events-auto"
               onClick={() => setShowFullEventPanel(false)}
             >
               <motion.div

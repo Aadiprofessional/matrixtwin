@@ -85,7 +85,7 @@ const PeopleSelectorModal: React.FC<{
       onClick={onClose}
     >
       <motion.div
-        className="w-full max-w-md max-h-[80vh] bg-white dark:bg-dark-800 rounded-lg shadow-xl overflow-hidden"
+        className="w-full max-w-md max-h-[80vh] bg-white/80 dark:bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-xl overflow-hidden"
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
@@ -142,7 +142,7 @@ const PeopleSelectorModal: React.FC<{
                       className="w-10 h-10 rounded-full mr-3"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 flex items-center justify-center font-medium mr-3">
+                    <div className="w-10 h-10 rounded-full bg-portfolio-orange/10 text-portfolio-orange border border-portfolio-orange/20 flex items-center justify-center font-medium mr-3">
                       {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                     </div>
                   )}
@@ -820,8 +820,8 @@ const DiaryPage: React.FC = () => {
             />
             <defs>
               <linearGradient id="diaryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#0ea5e9" />
-                <stop offset="100%" stopColor="#3b82f6" />
+                <stop offset="0%" stopColor="#FF5722" />
+                <stop offset="100%" stopColor="#FF8A65" />
               </linearGradient>
             </defs>
           </svg>
@@ -836,15 +836,15 @@ const DiaryPage: React.FC = () => {
                 transition={{ duration: 0.5 }}
               >
                 <h1 className="text-3xl md:text-4xl font-display font-bold text-white flex items-center">
-                  <RiIcons.RiBookmarkLine className="mr-3 text-blue-300" />
+                  <RiIcons.RiBookmarkLine className="mr-3 text-portfolio-orange" />
                   {t('diary.title')}
                 </h1>
-                <p className="text-blue-200 mt-2 max-w-2xl">
+                <p className="text-zinc-400 mt-2 max-w-2xl">
                   Record daily site activities, track progress, and maintain a comprehensive record of your construction project
                 </p>
                 {/* Project indicator */}
                 {selectedProject ? (
-                  <div className="mt-3 flex items-center text-blue-100">
+                  <div className="mt-3 flex items-center text-portfolio-orange/90">
                     <RiIcons.RiBuilding4Line className="mr-2" />
                     <span className="text-sm">
                       Showing diary entries for: <span className="font-semibold">{selectedProject.name}</span>
@@ -899,31 +899,31 @@ const DiaryPage: React.FC = () => {
             transition={{ duration: 0.5, delay: 0.2 }}
           >
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-blue-500/20 rounded-full mr-4">
-                <RiIcons.RiBookmarkLine className="text-2xl text-blue-300" />
+              <div className="p-3 bg-portfolio-orange/20 rounded-full mr-4">
+                <RiIcons.RiBookmarkLine className="text-2xl text-portfolio-orange" />
               </div>
               <div>
-                <div className="text-sm text-blue-200">Total Entries</div>
+                <div className="text-sm text-zinc-400">Total Entries</div>
                 <div className="text-2xl font-bold text-white">{stats.totalEntries}</div>
               </div>
             </div>
             
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-blue-500/20 rounded-full mr-4">
-                <RiIcons.RiCalendarLine className="text-2xl text-blue-300" />
+              <div className="p-3 bg-portfolio-orange/20 rounded-full mr-4">
+                <RiIcons.RiCalendarLine className="text-2xl text-portfolio-orange" />
               </div>
               <div>
-                <div className="text-sm text-blue-200">This Week</div>
+                <div className="text-sm text-zinc-400">This Week</div>
                 <div className="text-2xl font-bold text-white">{stats.thisWeekEntries}</div>
               </div>
             </div>
             
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-blue-500/20 rounded-full mr-4">
-                <RiIcons.RiUser3Line className="text-2xl text-blue-300" />
+              <div className="p-3 bg-portfolio-orange/20 rounded-full mr-4">
+                <RiIcons.RiUser3Line className="text-2xl text-portfolio-orange" />
               </div>
               <div>
-                <div className="text-sm text-blue-200">Contributors</div>
+                <div className="text-sm text-zinc-400">Contributors</div>
                 <div className="text-2xl font-bold text-white">{stats.uniqueAuthors}</div>
               </div>
             </div>
@@ -1042,8 +1042,8 @@ const DiaryPage: React.FC = () => {
                           variant="outline" 
                           size="sm"
                           onClick={() => handleViewForm(entry)}
-                          leftIcon={<RiIcons.RiFileTextLine />}
-                          className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                          leftIcon={<RiIcons.RiFileListLine />}
+                          className="hover:bg-portfolio-orange/5 dark:hover:bg-portfolio-orange/10"
                         >
                           {canUserUpdateForm(entry) ? 'Edit Form' : 'View Form'}
                         </Button>
@@ -1137,7 +1137,7 @@ const DiaryPage: React.FC = () => {
             onClick={() => setShowNewEntry(false)}
           >
             <motion.div
-              className="w-full max-w-6xl max-h-[90vh] overflow-auto"
+              className="bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl w-full max-w-6xl max-h-[90vh] overflow-auto"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1169,7 +1169,7 @@ const DiaryPage: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="bg-white dark:bg-dark-800 p-4 rounded-lg shadow-sm border border-secondary-100 dark:border-dark-700">
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
                   <RiIcons.RiUserLine className="mr-2 text-primary-600 dark:text-primary-400" />
                   <span className="text-sm font-medium uppercase tracking-wide">{t('diary.author')}</span>
@@ -1177,7 +1177,7 @@ const DiaryPage: React.FC = () => {
                 <div className="font-medium">{selectedDiaryEntry.author}</div>
               </div>
               
-              <div className="bg-white dark:bg-dark-800 p-4 rounded-lg shadow-sm border border-secondary-100 dark:border-dark-700">
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
                   <div className="mr-2 text-primary-600 dark:text-primary-400">
                     {getWeatherIcon(selectedDiaryEntry.weather)}
@@ -1188,7 +1188,7 @@ const DiaryPage: React.FC = () => {
               </div>
             </div>
             
-            <div className="bg-white dark:bg-dark-800 p-4 rounded-lg shadow-sm border border-secondary-100 dark:border-dark-700">
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
                 <RiIcons.RiTaskLine className="mr-2 text-primary-600 dark:text-primary-400" />
                 <span className="text-sm font-medium uppercase tracking-wide">{t('diary.workCompleted')}</span>
@@ -1196,7 +1196,7 @@ const DiaryPage: React.FC = () => {
               <div className="whitespace-pre-line">{selectedDiaryEntry.work_completed}</div>
             </div>
             
-            <div className="bg-white dark:bg-dark-800 p-4 rounded-lg shadow-sm border border-secondary-100 dark:border-dark-700">
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
                 <RiIcons.RiAlertLine className="mr-2 text-primary-600 dark:text-primary-400" />
                 <span className="text-sm font-medium uppercase tracking-wide">{t('diary.incidentsReported')}</span>
@@ -1204,7 +1204,7 @@ const DiaryPage: React.FC = () => {
               <div>{selectedDiaryEntry.incidents_reported || t('common.none')}</div>
             </div>
             
-            <div className="bg-white dark:bg-dark-800 p-4 rounded-lg shadow-sm border border-secondary-100 dark:border-dark-700">
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
                 <RiIcons.RiTruckLine className="mr-2 text-primary-600 dark:text-primary-400" />
                 <span className="text-sm font-medium uppercase tracking-wide">{t('diary.materialsDelivered')}</span>
@@ -1212,7 +1212,7 @@ const DiaryPage: React.FC = () => {
               <div>{selectedDiaryEntry.materials_delivered || t('common.none')}</div>
             </div>
             
-            <div className="bg-white dark:bg-dark-800 p-4 rounded-lg shadow-sm border border-secondary-100 dark:border-dark-700">
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
                 <RiIcons.RiFileTextLine className="mr-2 text-primary-600 dark:text-primary-400" />
                 <span className="text-sm font-medium uppercase tracking-wide">{t('diary.notes')}</span>
@@ -1222,7 +1222,7 @@ const DiaryPage: React.FC = () => {
             
             {/* Workflow Status Section */}
             {selectedDiaryEntry.diary_workflow_nodes && selectedDiaryEntry.diary_workflow_nodes.length > 0 && (
-              <div className="bg-white dark:bg-dark-800 p-4 rounded-lg shadow-sm border border-secondary-100 dark:border-dark-700">
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
                   <RiIcons.RiFlowChart className="mr-2 text-primary-600 dark:text-primary-400" />
                   <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
@@ -1270,7 +1270,7 @@ const DiaryPage: React.FC = () => {
             
             {/* Comments Section */}
             {selectedDiaryEntry.diary_comments && selectedDiaryEntry.diary_comments.length > 0 && (
-              <div className="bg-white dark:bg-dark-800 p-4 rounded-lg shadow-sm border border-secondary-100 dark:border-dark-700">
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
                   <RiIcons.RiChat3Line className="mr-2 text-primary-600 dark:text-primary-400" />
                   <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
@@ -1287,9 +1287,9 @@ const DiaryPage: React.FC = () => {
                             {comment.action && (
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                 comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-                                comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
-                                'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
-                              }`}>
+                              comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                              'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-400'
+                            }`}>
                                 {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
                               </span>
                             )}
@@ -1412,7 +1412,7 @@ const DiaryPage: React.FC = () => {
             onClick={handleCancelProcessFlow}
           >
             <motion.div
-              className="w-full max-w-7xl max-h-[90vh] overflow-auto bg-white dark:bg-dark-900 rounded-xl shadow-2xl"
+              className="w-full max-w-7xl max-h-[90vh] overflow-auto bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1485,7 +1485,7 @@ const DiaryPage: React.FC = () => {
                               setProcessNodes(updatedNodes);
                               setSelectedNode(updatedNode);
                             }}
-                            className="bg-white dark:bg-dark-800"
+                            className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10"
                           />
                           
                           {selectedNode.type === 'node' && (

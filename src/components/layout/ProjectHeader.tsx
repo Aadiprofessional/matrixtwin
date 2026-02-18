@@ -38,14 +38,14 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   };
   
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 bg-dark-950 z-50 w-full">
-      <div className="flex items-center justify-between h-full w-full px-4 md:px-6">
+    <header className="fixed top-0 left-0 right-0 h-20 bg-portfolio-dark/80 backdrop-blur-md border-b border-white/5 z-50 w-full transition-all duration-300">
+      <div className="flex items-center justify-between h-full w-full px-6 md:px-12 max-w-7xl mx-auto">
         <div className="flex-1 flex items-center">
           {/* Mobile menu toggle */}
           {isMobile && (
             <motion.button 
               onClick={onMenuToggle}
-              className="mr-3 p-2 rounded-full bg-dark-800/50 hover:bg-dark-700 text-gray-400 hover:text-white transition-colors"
+              className="mr-3 p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -56,24 +56,24 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           )}
           
           {/* Logo and title */}
-          <Link to="/" className="flex items-center">
+          <Link to="/" className="flex items-center group">
             <div className="flex items-center">
-              <div className="mr-2 text-2xl text-rose-500">
-                <RiIcons.RiBuilding2Line />
+              <div className="mr-3 text-3xl text-portfolio-orange group-hover:scale-110 transition-transform duration-300">
+                <RiIcons.RiBuilding2Fill />
               </div>
-              <h1 className="text-xl font-semibold text-white hidden sm:block">
-                {t('app.name') || 'BuildSphere'}
+              <h1 className="text-xl font-bold text-white tracking-tight group-hover:text-portfolio-orange transition-colors duration-300">
+                MT<span className="text-portfolio-orange">.</span>
               </h1>
             </div>
           </Link>
         </div>
         
         {/* Right Actions */}
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="flex items-center gap-4">
           {/* Quick Actions Button - Hide on small screens */}
           <motion.button
             onClick={onQuickActionsToggle}
-            className="hidden sm:flex p-2 rounded-full bg-ai-blue/20 hover:bg-ai-blue/30 text-ai-blue hover:text-white transition-colors duration-200"
+            className="hidden sm:flex p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors duration-200"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
@@ -87,7 +87,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           {/* Theme Toggle */}
           <motion.button
             onClick={toggleDarkMode}
-            className="p-2 rounded-full hover:bg-dark-800/70 text-gray-300 hover:text-white transition-colors duration-200"
+            className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors duration-200"
             whileTap={{ scale: 0.95 }}
           >
             <div className="text-xl">

@@ -61,9 +61,9 @@
     "zustand": "^5.0.3"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
+    "start": "react-app-rewired start",
+    "build": "react-app-rewired build",
+    "test": "react-app-rewired test",
     "eject": "react-scripts eject",
     "proxy-server": "node server.js",
     "dev": "concurrently \"npm run proxy-server\" \"npm start\"",

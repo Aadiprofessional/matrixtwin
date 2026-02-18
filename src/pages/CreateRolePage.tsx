@@ -45,7 +45,7 @@ const permissionLevels: PermissionLevel[] = [
     level: 1,
     name: 'Read Only',
     description: 'View access only',
-    color: 'from-blue-500 to-blue-600',
+    color: 'from-gray-600 to-gray-500',
     icon: <RiEyeLine />
   },
   {
@@ -82,9 +82,9 @@ const getCategoryIcon = (category: string) => {
 const getCategoryColor = (category: string) => {
   switch (category.toLowerCase()) {
     case 'twin':
-      return 'from-purple-500 to-purple-600';
+      return 'from-orange-600 to-orange-500';
     case 'dashboard':
-      return 'from-blue-500 to-blue-600';
+      return 'from-gray-600 to-gray-500';
     case 'maximo':
       return 'from-orange-500 to-orange-600';
     case 'ibms':
@@ -237,7 +237,7 @@ const CreateRolePage: React.FC = () => {
     return (
       <div className="min-h-screen bg-dark-950 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ai-blue mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-portfolio-orange mx-auto mb-4"></div>
           <p className="text-gray-400">Loading permissions...</p>
         </div>
       </div>
@@ -260,7 +260,7 @@ const CreateRolePage: React.FC = () => {
                 <RiArrowLeftLine className="text-xl" />
               </motion.button>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-ai-blue to-ai-purple bg-clip-text">
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-portfolio-orange to-orange-600 bg-clip-text">
                   Create New Role
                 </h1>
                 <p className="text-gray-400 mt-1">Define permissions and access levels for team members</p>
@@ -270,7 +270,7 @@ const CreateRolePage: React.FC = () => {
               <Button
                 variant="outline"
                 onClick={() => setShowPreview(!showPreview)}
-                className="border-ai-blue/30 text-ai-blue hover:bg-ai-blue/10"
+                className="border-portfolio-orange/30 text-portfolio-orange hover:bg-portfolio-orange/10"
               >
                 <RiEyeLine className="mr-2" />
                 Preview
@@ -278,7 +278,7 @@ const CreateRolePage: React.FC = () => {
               <Button
                 onClick={handleCreateRole}
                 disabled={saving || !roleName.trim() || selectedPermissions.size === 0}
-                className="bg-gradient-to-r from-ai-blue to-ai-purple hover:from-ai-blue/80 hover:to-ai-purple/80"
+                className="bg-gradient-to-r from-portfolio-orange to-orange-600 hover:from-portfolio-orange/80 hover:to-orange-600/80"
               >
                 {saving ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -300,7 +300,7 @@ const CreateRolePage: React.FC = () => {
             <Card className="bg-dark-900/50 border-dark-700">
               <div className="p-6">
                 <h2 className="text-xl font-semibold mb-4 flex items-center">
-                  <RiShieldUserLine className="mr-2 text-ai-blue" />
+                  <RiShieldUserLine className="mr-2 text-portfolio-orange" />
                   Role Information
                 </h2>
                 <div className="space-y-4">
@@ -313,7 +313,7 @@ const CreateRolePage: React.FC = () => {
                       value={roleName}
                       onChange={(e) => setRoleName(e.target.value)}
                       placeholder="e.g., Client, Viewer, Editor"
-                      className="w-full px-4 py-3 bg-dark-800 border border-dark-600 rounded-lg text-white placeholder-gray-400 focus:border-ai-blue focus:ring-1 focus:ring-ai-blue transition-colors"
+                      className="w-full px-4 py-3 bg-dark-800 border border-dark-600 rounded-lg text-white placeholder-gray-400 focus:border-portfolio-orange focus:ring-1 focus:ring-portfolio-orange transition-colors"
                     />
                   </div>
                   <div>
@@ -325,7 +325,7 @@ const CreateRolePage: React.FC = () => {
                       onChange={(e) => setRoleDescription(e.target.value)}
                       placeholder="Describe what this role is for and its intended use..."
                       rows={3}
-                      className="w-full px-4 py-3 bg-dark-800 border border-dark-600 rounded-lg text-white placeholder-gray-400 focus:border-ai-blue focus:ring-1 focus:ring-ai-blue transition-colors resize-none"
+                      className="w-full px-4 py-3 bg-dark-800 border border-dark-600 rounded-lg text-white placeholder-gray-400 focus:border-portfolio-orange focus:ring-1 focus:ring-portfolio-orange transition-colors resize-none"
                     />
                   </div>
                 </div>
@@ -337,7 +337,7 @@ const CreateRolePage: React.FC = () => {
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-semibold flex items-center">
-                    <RiLockLine className="mr-2 text-ai-blue" />
+                    <RiLockLine className="mr-2 text-portfolio-orange" />
                     Permissions ({getSelectedPermissionsCount()} selected)
                   </h2>
                   <div className="flex items-center space-x-3">
@@ -348,13 +348,13 @@ const CreateRolePage: React.FC = () => {
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         placeholder="Search permissions..."
-                        className="pl-10 pr-4 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white placeholder-gray-400 focus:border-ai-blue focus:ring-1 focus:ring-ai-blue transition-colors"
+                        className="pl-10 pr-4 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white placeholder-gray-400 focus:border-portfolio-orange focus:ring-1 focus:ring-portfolio-orange transition-colors"
                       />
                     </div>
                     <select
                       value={selectedCategory}
                       onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white focus:border-ai-blue focus:ring-1 focus:ring-ai-blue transition-colors"
+                      className="px-4 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white focus:border-portfolio-orange focus:ring-1 focus:ring-portfolio-orange transition-colors"
                     >
                       {getCategories().map(category => (
                         <option key={category} value={category}>
@@ -459,9 +459,9 @@ const CreateRolePage: React.FC = () => {
                                 <motion.div
                                   initial={{ opacity: 0, y: 10 }}
                                   animate={{ opacity: 1, y: 0 }}
-                                  className="mt-3 p-2 bg-dark-900/50 rounded-lg border-l-4 border-ai-blue"
+                                  className="mt-3 p-2 bg-dark-900/50 rounded-lg border-l-4 border-portfolio-orange"
                                 >
-                                  <div className="text-sm text-ai-blue font-medium">
+                                  <div className="text-sm text-portfolio-orange font-medium">
                                     ✓ {permissionLevels.find(l => l.level === selectedPermissions.get(permission.id))?.name} access granted
                                   </div>
                                 </motion.div>
@@ -565,7 +565,7 @@ const CreateRolePage: React.FC = () => {
             <Card className="bg-dark-900/50 border-dark-700">
               <div className="p-6">
                 <h3 className="text-lg font-semibold mb-4 flex items-center">
-                  <RiInformationLine className="mr-2 text-ai-blue" />
+                  <RiInformationLine className="mr-2 text-portfolio-orange" />
                   Help
                 </h3>
                 <div className="space-y-3 text-sm text-gray-400">

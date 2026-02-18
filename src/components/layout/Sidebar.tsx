@@ -56,8 +56,8 @@ const Logo: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
             <img src={matrixAILogo} alt="MatrixAI Logo" className="h-10 w-10 object-contain relative z-10" />
           </motion.div>
           <div className="font-display font-bold text-xl">
-            <span className="bg-gradient-to-r from-ai-blue via-purple-500 to-ai-purple bg-clip-text text-transparent">
-              Matrix<span className="text-white">Twin</span>
+            <span className="text-white">
+              Matrix<span className="text-portfolio-orange">Twin</span>
             </span>
           </div>
         </div>
@@ -107,14 +107,14 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCoun
       className={({ isActive }) =>
         `flex items-center px-4 py-3 relative ${
           isActive 
-          ? 'text-white font-medium bg-gradient-to-r from-ai-blue/20 to-ai-purple/20 border-l-2 border-ai-blue shadow-[0_0_10px_rgba(30,144,255,0.3)]' 
-          : 'text-gray-400 dark:text-gray-300 hover:text-gray-100'
+          ? 'text-white font-medium bg-portfolio-orange/10 border-l-2 border-portfolio-orange' 
+          : 'text-gray-400 dark:text-gray-300 hover:text-white hover:bg-white/5'
         } ${
           collapsed && !mobile ? 'justify-center' : 'justify-between'
-        } rounded-lg transition-all duration-300 hover:bg-dark-800/50 ${
+        } rounded-lg transition-all duration-300 ${
           mobile ? 'py-4' : ''
         } ${
-          isPressed ? 'scale-95 bg-ai-blue/20' : ''
+          isPressed ? 'scale-95' : ''
         }`
       }
     >
@@ -124,21 +124,20 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCoun
             <motion.div
               className="absolute inset-0 rounded-lg opacity-30 z-0 overflow-hidden"
               initial={{ opacity: 0 }}
-              animate={{ opacity: 0.1 }}
+              animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="absolute inset-0 bg-ai-dots" />
-              <div className="absolute -inset-1 bg-gradient-to-r from-ai-blue to-ai-purple blur-xl" />
+              <div className="absolute inset-0 bg-portfolio-orange/5" />
             </motion.div>
           )}
           <div className="flex items-center relative z-10">
             <motion.div
               animate={{ 
                 scale: isActive || isHovered ? 1.1 : 1,
-                color: isActive ? 'rgb(30, 144, 255)' : isHovered ? 'rgb(200, 200, 200)' : 'rgb(156, 163, 175)'
+                color: isActive ? '#FF4D00' : isHovered ? '#FFFFFF' : 'rgb(156, 163, 175)'
               }}
               transition={{ duration: 0.2 }}
-              className={`${isActive ? 'text-ai-blue' : ''}`}
+              className={`${isActive ? 'text-portfolio-orange' : ''}`}
             >
               <IconContext.Provider value={{ size: '22px' }}>
                 {icon}
@@ -155,7 +154,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCoun
                 {t(label)}
                 {isActive && (
                   <motion.span 
-                    className="absolute -bottom-1 left-0 right-0 h-[2px] bg-gradient-to-r from-ai-blue to-ai-purple"
+                    className="absolute -bottom-1 left-0 right-0 h-[2px] bg-gradient-to-r from-portfolio-orange to-orange-600"
                     layoutId="underline"
                   />
                 )}
@@ -164,7 +163,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCoun
           </div>
           
           {badgeCount > 0 && (!collapsed || mobile) && (
-            <span className="bg-gradient-to-r from-ai-blue to-ai-purple text-white text-xs font-semibold px-2 py-1 rounded-full relative z-10 shadow-[0_0_10px_rgba(30,144,255,0.5)]">
+            <span className="bg-gradient-to-r from-portfolio-orange to-orange-600 text-white text-xs font-semibold px-2 py-1 rounded-full relative z-10 shadow-[0_0_10px_rgba(255,87,34,0.5)]">
               {badgeCount}
             </span>
           )}
@@ -350,7 +349,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
     <motion.aside 
       className={`
         ${mobile ? 'fixed top-0 left-0 h-screen z-50' : 'fixed top-0 left-0 h-screen'}
-        bg-dark-950 shadow-xl flex flex-col
+        bg-portfolio-dark border-r border-white/5 shadow-xl flex flex-col
         transition-all duration-300 ease-in-out 
         ${mobile ? 'w-64' : collapsed ? 'w-16' : 'w-64'}
       `}
@@ -369,9 +368,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
 
       <div className="relative overflow-hidden h-full">
         {/* Beautiful gradient backdrop */}
-        <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-ai-blue/10 to-transparent pointer-events-none" />
+        <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-portfolio-orange/5 to-transparent pointer-events-none" />
         
-        <div className="absolute bottom-0 right-0 w-full h-64 bg-gradient-to-t from-ai-purple/10 to-transparent pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-full h-64 bg-gradient-to-t from-portfolio-orange/5 to-transparent pointer-events-none" />
         
         {/* Moving gradient based on scroll */}
         <motion.div 

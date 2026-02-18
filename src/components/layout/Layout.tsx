@@ -79,7 +79,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, hideHeader = false }) 
         {isMobile && showSidebar && (
           <>
             <div 
-              className="fixed inset-0 bg-black bg-opacity-80 z-40"
+              className="fixed inset-0 bg-dark-900/80 backdrop-blur-md z-40"
               onClick={() => setShowSidebar(false)}
             />
             
@@ -136,7 +136,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, hideHeader = false }) 
         {!isAIPage && (
           <button 
             onClick={toggleAIPopup}
-            className="fixed right-6 bottom-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full p-5 shadow-lg hover:shadow-xl transition-all z-50"
+            className="fixed right-6 bottom-6 bg-portfolio-orange hover:bg-orange-600 text-white rounded-full p-5 shadow-lg hover:shadow-xl transition-all z-50"
             title={showAIPopup ? "Close AI Assistant" : "Ask AI Assistant"}
           >
             {showAIPopup ? (

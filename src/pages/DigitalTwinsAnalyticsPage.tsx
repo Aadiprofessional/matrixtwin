@@ -122,8 +122,8 @@ const DigitalTwinsAnalyticsPage: React.FC = () => {
       {
         label: 'Energy Usage (kWh)',
         data: energyUsageData.data,
-        borderColor: 'rgb(53, 162, 235)',
-        backgroundColor: 'rgba(53, 162, 235, 0.2)',
+        borderColor: '#FF5722',
+        backgroundColor: 'rgba(255, 87, 34, 0.2)',
         tension: 0.4,
         fill: true,
       },
@@ -138,8 +138,8 @@ const DigitalTwinsAnalyticsPage: React.FC = () => {
       {
         label: 'Water Usage (gallons)',
         data: waterUsageData.data,
-        borderColor: 'rgb(75, 192, 192)',
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        borderColor: '#FF9800',
+        backgroundColor: 'rgba(255, 152, 0, 0.2)',
         tension: 0.4,
         fill: true,
       },
@@ -153,18 +153,18 @@ const DigitalTwinsAnalyticsPage: React.FC = () => {
       {
         data: energyBreakdown.values,
         backgroundColor: [
-          'rgba(255, 99, 132, 0.7)',
-          'rgba(54, 162, 235, 0.7)',
-          'rgba(255, 206, 86, 0.7)',
-          'rgba(75, 192, 192, 0.7)',
-          'rgba(153, 102, 255, 0.7)',
+          'rgba(255, 87, 34, 0.8)',
+          'rgba(255, 152, 0, 0.8)',
+          'rgba(255, 87, 34, 0.5)',
+          'rgba(255, 152, 0, 0.5)',
+          'rgba(158, 158, 158, 0.5)',
         ],
         borderColor: [
-          'rgba(255, 99, 132, 1)',
-          'rgba(54, 162, 235, 1)',
-          'rgba(255, 206, 86, 1)',
-          'rgba(75, 192, 192, 1)',
-          'rgba(153, 102, 255, 1)',
+          'rgba(255, 87, 34, 1)',
+          'rgba(255, 152, 0, 1)',
+          'rgba(255, 87, 34, 1)',
+          'rgba(255, 152, 0, 1)',
+          'rgba(158, 158, 158, 1)',
         ],
         borderWidth: 1,
       },
@@ -178,7 +178,7 @@ const DigitalTwinsAnalyticsPage: React.FC = () => {
       {
         label: 'Water Usage by Floor (%)',
         data: waterUsageByFloor.values,
-        backgroundColor: 'rgba(75, 192, 192, 0.7)',
+        backgroundColor: 'rgba(255, 87, 34, 0.7)',
       },
     ],
   };
@@ -200,7 +200,7 @@ const DigitalTwinsAnalyticsPage: React.FC = () => {
     scales: {
       x: {
         grid: {
-          color: 'rgba(100, 116, 139, 0.2)',
+          color: 'rgba(255, 255, 255, 0.1)',
         },
         ticks: {
           color: 'rgb(229, 231, 235)',
@@ -208,7 +208,7 @@ const DigitalTwinsAnalyticsPage: React.FC = () => {
       },
       y: {
         grid: {
-          color: 'rgba(100, 116, 139, 0.2)',
+          color: 'rgba(255, 255, 255, 0.1)',
         },
         ticks: {
           color: 'rgb(229, 231, 235)',
@@ -230,7 +230,7 @@ const DigitalTwinsAnalyticsPage: React.FC = () => {
     scales: {
       x: {
         grid: {
-          color: 'rgba(100, 116, 139, 0.2)',
+          color: 'rgba(255, 255, 255, 0.1)',
         },
         ticks: {
           color: 'rgb(229, 231, 235)',
@@ -238,7 +238,7 @@ const DigitalTwinsAnalyticsPage: React.FC = () => {
       },
       y: {
         grid: {
-          color: 'rgba(100, 116, 139, 0.2)',
+          color: 'rgba(255, 255, 255, 0.1)',
         },
         ticks: {
           color: 'rgb(229, 231, 235)',
@@ -264,7 +264,7 @@ const DigitalTwinsAnalyticsPage: React.FC = () => {
           <Link to="/digital-twins" className="dta-back-button text-gray-400 hover:text-white mr-4" style={baseStyle}>
             <RiArrowGoBackLine className="text-xl" />
           </Link>
-          <RiDashboardLine className="dta-header-icon text-ai-blue text-3xl mr-3" style={baseStyle} />
+          <RiDashboardLine className="dta-header-icon text-portfolio-orange text-3xl mr-3" style={baseStyle} />
           <h1 className="dta-title text-2xl font-bold text-white" style={baseStyle}>
             Building Analytics
           </h1>
@@ -290,7 +290,7 @@ const DigitalTwinsAnalyticsPage: React.FC = () => {
             <select 
               value={buildingModel}
               onChange={(e) => setBuildingModel(e.target.value)}
-              className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-ai-blue focus:border-transparent"
+              className="bg-dark-700 border border-dark-600 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-portfolio-orange focus:border-transparent"
               style={baseStyle}
             >
               <option value="office-hq">Office HQ</option>
@@ -306,13 +306,13 @@ const DigitalTwinsAnalyticsPage: React.FC = () => {
                 <button
                   key={range}
                   onClick={() => setTimeRange(range as any)}
-                  className={`px-3 py-1.5 text-sm ${
-                    timeRange === range 
-                      ? 'bg-ai-blue text-white' 
-                      : 'text-gray-300 hover:bg-dark-600'
-                  }`}
-                  style={baseStyle}
-                >
+                className={`px-3 py-1.5 text-sm ${
+                  timeRange === range 
+                    ? 'bg-portfolio-orange text-white' 
+                    : 'text-gray-300 hover:bg-dark-600'
+                }`}
+                style={baseStyle}
+              >
                   {range.charAt(0).toUpperCase() + range.slice(1)}
                 </button>
               ))}
@@ -337,28 +337,28 @@ const DigitalTwinsAnalyticsPage: React.FC = () => {
           let gradientColors;
           switch (key) {
             case 'energyUsage':
-              icon = <RiLightbulbLine className="text-2xl" />;
-              gradientColors = 'from-yellow-500/30 to-amber-600/20';
+              icon = <RiLightbulbLine className="text-2xl text-portfolio-orange" />;
+              gradientColors = 'from-zinc-800/30 to-zinc-900/20';
               break;
             case 'waterConsumption':
-              icon = <RiWaterFlashLine className="text-2xl" />;
-              gradientColors = 'from-blue-500/30 to-cyan-600/20';
+              icon = <RiWaterFlashLine className="text-2xl text-portfolio-orange" />;
+              gradientColors = 'from-zinc-800/30 to-zinc-900/20';
               break;
             case 'occupancy':
-              icon = <RiBuilding2Line className="text-2xl" />;
-              gradientColors = 'from-purple-500/30 to-indigo-600/20';
+              icon = <RiBuilding2Line className="text-2xl text-portfolio-orange" />;
+              gradientColors = 'from-zinc-800/30 to-zinc-900/20';
               break;
             case 'temperature':
-              icon = <RiTempHotLine className="text-2xl" />;
-              gradientColors = 'from-red-500/30 to-orange-600/20';
+              icon = <RiTempHotLine className="text-2xl text-portfolio-orange" />;
+              gradientColors = 'from-zinc-800/30 to-zinc-900/20';
               break;
             case 'co2Levels':
-              icon = <RiWindyLine className="text-2xl" />;
-              gradientColors = 'from-green-500/30 to-emerald-600/20';
+              icon = <RiWindyLine className="text-2xl text-portfolio-orange" />;
+              gradientColors = 'from-zinc-800/30 to-zinc-900/20';
               break;
             default:
-              icon = <RiDashboardLine className="text-2xl" />;
-              gradientColors = 'from-gray-500/30 to-gray-600/20';
+              icon = <RiDashboardLine className="text-2xl text-portfolio-orange" />;
+              gradientColors = 'from-zinc-800/30 to-zinc-900/20';
           }
           
           // Format the title from camelCase

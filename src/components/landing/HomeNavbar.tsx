@@ -34,7 +34,7 @@ const HomeNavbar: React.FC<HomeNavbarProps> = () => {
                 <img src={matrixLogo} alt="Matrix AI" className="w-16 h-16 object-contain -my-2" />
                 <span className={`font-bold text-xl hidden sm:block ${
                   darkMode ? 'text-white' : 'text-gray-900'
-                }`}>matrixtwin<span className="text-red-500">.</span>io</span>
+                }`}>matrixtwin<span className="text-red-500">.</span>com</span>
               </Link>
             </div>
             
