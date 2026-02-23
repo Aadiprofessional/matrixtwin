@@ -40,7 +40,7 @@ export const ProjectSelector: React.FC<ProjectSelectorProps> = ({ collapsed = fa
   const handleProjectSelect = (project: any) => {
     setSelectedProject(project);
     setIsOpen(false);
-    navigate('/dashboard');
+    navigate(`/dashboard/${project.id}`);
   };
   
   const handleBackToProjects = () => {

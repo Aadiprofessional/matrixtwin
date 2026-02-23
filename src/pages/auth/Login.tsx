@@ -36,7 +36,7 @@ const Login: React.FC = () => {
   const [alertMessage, setAlertMessage] = useState('');
   const turnstileRef = useRef<any>(null);
   
-  const { setUser, setIsAuthenticated, verifyTwoFactor, isAuthenticated } = useAuth();
+  const { setUser, setIsAuthenticated, verifyTwoFactor, isAuthenticated, user } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -86,9 +86,18 @@ const Login: React.FC = () => {
       return;
     }
     
-    if (isAuthenticated) {
-      console.log('User detected, redirecting to dashboard');
-      navigate('/projects');
+    if (isAuthenticated && user) {
+      console.log('User detected, redirecting...');
+      // If user is approved, has a company, or is not a regular user, go to projects
+      if (
+        user.status === 'approved' || 
+        user.company_id || 
+        user.role !== 'user'
+      ) {
+        navigate('/projects');
+      } else {
+        navigate('/company');
+      }
     }
     
     // Only clear auth data if user is not already authenticated
@@ -169,7 +178,7 @@ const Login: React.FC = () => {
       setIsLoading(true);
       
       // Make API call to the remote server (same as other pages)
-      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/login', {
+      const response = await fetch('https://server.matrixtwin.com/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -207,10 +216,19 @@ const Login: React.FC = () => {
       // Store successful login info
       sessionStorage.setItem('login_success', 'true');
       
-      // Navigate to projects page
-      console.log('Navigating to projects...');
+      // Navigate based on user role and company status
+      console.log('Navigating...');
       setTimeout(() => {
-        navigate('/projects', { replace: true });
+        // If user is approved, has a company, or is not a regular user, go to projects
+        if (
+          data.user.status === 'approved' || 
+          data.user.company_id || 
+          data.user.role !== 'user'
+        ) {
+          navigate('/projects', { replace: true });
+        } else {
+          navigate('/company', { replace: true });
+        }
       }, 500);
       
     } catch (err) {
@@ -468,6 +486,16 @@ const Login: React.FC = () => {
                   <p className="text-yellow-200 text-sm">
                     <RiIcons.RiInformationLine className="inline mr-2" />
                     Your session has expired. Please log in again to continue.
+                  </p>
+                </div>
+              )}
+
+              {/* Email Verification / Signup Success Message */}
+              {showAlert && (
+                <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-3 mb-6">
+                  <p className="text-blue-200 text-sm">
+                    <RiIcons.RiInformationLine className="inline mr-2" />
+                    {alertMessage}
                   </p>
                 </div>
               )}

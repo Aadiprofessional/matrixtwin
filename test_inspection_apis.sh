@@ -3,7 +3,7 @@
 # Test script for Inspection APIs
 # Usage: ./test_inspection_apis.sh
 
-BASE_URL="http://localhost:5001"
+BASE_URL="https://server.matrixtwin.com"
 USER_ID="5fcf581f-f854-459b-b521-aae507891337"
 EMAIL="admin@buildsphere.com"
 PASSWORD="admin123"

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 export interface FormResponse {
   id: string;

@@ -2,7 +2,7 @@
 export {};
 
 // API utility functions for authenticated requests
-const API_BASE_URL = 'https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api';
+export const API_BASE_URL = 'https://server.matrixtwin.com/api';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -205,13 +205,38 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
-  signup: (name: string, email: string, password: string) =>
+  signup: (name: string, email: string, password: string, turnstileToken?: string | null) =>
     apiRequest('/auth/signup', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, turnstileToken }),
     }),
 
-  // User methods
+  // Admin Request methods
+  createAdminRequest: (data: any) =>
+    apiRequest('/admin-requests/request-admin', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateAdminRequest: (requestId: string, data: any) =>
+    apiRequest(`/admin-requests/request-admin/${requestId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  getAdminRequest: () =>
+    apiRequest('/admin-requests/my-request'),
+
+  // Company methods
+  getCompany: (companyId: string) =>
+    apiRequest(`/companies/${companyId}`),
+
+  joinCompany: (companyId: string) =>
+    apiRequest('/companies/join', {
+      method: 'POST',
+      body: JSON.stringify({ company_id: companyId }),
+    }),
+
   getUsers: (userId: string) =>
     apiRequest(`/auth/users/${userId}`),
 
@@ -219,11 +244,43 @@ export const api = {
     apiRequest('/auth/me'),
 
   // Project methods
+  getProjectsList: () =>
+    apiRequest('/projects/list'),
+
   getProjects: (creatorId: string) =>
     apiRequest(`/projects/assigned?creator_uid=${creatorId}`),
 
+  createProject: (data: any) =>
+    apiRequest('/projects/create', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateProject: (projectId: string, data: any) =>
+    apiRequest(`/projects/${projectId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  deleteProject: (projectId: string) =>
+    apiRequest(`/projects/${projectId}`, {
+      method: 'DELETE',
+    }),
+
   getProject: (projectId: string) =>
     apiRequest(`/projects/${projectId}`),
+
+  assignProjectMember: (projectId: string, userIds: string[]) =>
+    apiRequest(`/projects/${projectId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ userIds }),
+    }),
+
+  getProjectMembers: (projectId: string) =>
+    apiRequest(`/projects/${projectId}/members`),
+
+  getStaffAllocation: (projectId: string) =>
+    apiRequest(`/projects/${projectId}/staff-allocation`),
 
   // Safety methods
   createSafetyEntry: (data: any) =>

@@ -33,6 +33,7 @@ const Signup: React.FC = () => {
   
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { signup, user, isAuthenticated } = useAuth();
   
   // Check if we're in localhost/development environment
   const isLocalhost = window.location.hostname === 'localhost' || 
@@ -67,38 +68,22 @@ const Signup: React.FC = () => {
     setError('');
     
     try {
-      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-          turnstileToken
-        }),
-      });
-
-      const data = await response.json();
+      await signup(name, email, password, turnstileToken);
+      setSignupSuccess(true);
       
-      if (response.ok) {
-        // Store the token
-        localStorage.setItem('token', data.token);
-        
-        // Store user info
-        setUserInfo(data.user);
-        
-        setSignupSuccess(true);
-        // Navigate to projects page after successful signup
-        navigate('/projects');
-      } else {
-        throw new Error(data.message || 'Signup failed');
-      }
+      // Redirect to login page with pre-filled credentials
+      navigate('/login', { 
+        state: { 
+          email, 
+          password,
+          showEmailVerificationAlert: true,
+          alertMessage: 'Signup successful! Please check your email to verify your account before logging in.'
+        } 
+      });
     } catch (err) {
       const error = err as Error;
       console.error('Signup failed with error:', error);
-      setError(error.message);
+      setError(error.message || 'Signup failed. Please try again.');
       
       // Reset Turnstile on error (only if not localhost)
       if (!isLocalhost && turnstileRef.current) {

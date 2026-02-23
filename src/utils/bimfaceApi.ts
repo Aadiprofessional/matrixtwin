@@ -61,8 +61,8 @@ export interface TranslationConfig {
 }
 
 // API Endpoints
-const API_BASE_URL = 'http://localhost:3333/api/bimface';
-const FILE_API_BASE_URL = 'http://localhost:3333/api/bimface-file';
+const API_BASE_URL = `${process.env.REACT_APP_API_BASE_URL}/api/bimface`;
+const FILE_API_BASE_URL = `${process.env.REACT_APP_API_BASE_URL}/api/bimface-file`;
 
 // Map of fileId to known working tokens
 

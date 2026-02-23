@@ -15,6 +15,7 @@ import { ProjectCard } from '../components/projects/ProjectCard';
 import UserAvatar from '../components/common/UserAvatar';
 import matrixAILogo from '../assets/MatrixAILogo.png';
 import { getUserInfo } from '../utils/userInfo';
+import { api } from '../utils/api';
 import { useProjects } from '../contexts/ProjectContext';
 
 interface Project {
@@ -68,6 +69,7 @@ const Projects: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserDetails, setShowUserDetails] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [company, setCompany] = useState<any>(null);
 
   // New project form state
   const [newProjectData, setNewProjectData] = useState({
@@ -105,21 +107,33 @@ const Projects: React.FC = () => {
     fetchProjects();
   }, []);
 
+  useEffect(() => {
+    const fetchCompanyInfo = async () => {
+      if (user?.company_id) {
+        try {
+          // If we have an endpoint for company details
+          const data = await api.getCompany(user.company_id);
+          setCompany(data);
+        } catch (error) {
+          console.error('Error fetching company info:', error);
+        }
+      }
+    };
+    
+    if (user?.company_id) {
+      fetchCompanyInfo();
+    }
+  }, [user]);
+
   const fetchProjects = async () => {
     try {
       setIsRefetching(true);
-      const userInfo = getUserInfo();
-      if (!userInfo) return;
-
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects/assigned?creator_uid=${userInfo.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
+      const data = await api.getProjectsList();
+      if (Array.isArray(data)) {
         setProjects(data);
+      } else if (data && Array.isArray(data.data)) {
+        // Handle if response is wrapped in { success: true, data: [...] }
+        setProjects(data.data);
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
@@ -162,50 +176,36 @@ const Projects: React.FC = () => {
     try {
       setIsCreatingProject(true);
       const userInfo = getUserInfo();
-      if (!userInfo) return;
-
-      const formData = new FormData();
-      formData.append('creator_uid', userInfo.id);
-      formData.append('name', newProjectData.name);
-      formData.append('location', newProjectData.location);
-      formData.append('client', newProjectData.client);
-      formData.append('description', newProjectData.description);
-      formData.append('deadline', newProjectData.deadline);
       
-      // Handle image upload correctly
-      if (newProjectData.image) {
-        formData.append('image', newProjectData.image, newProjectData.image.name);
-      }
+      const projectData = {
+        name: newProjectData.name,
+        location: newProjectData.location,
+        client: newProjectData.client,
+        description: newProjectData.description,
+        deadline: newProjectData.deadline,
+        image: newProjectData.imagePreview || null,
+        status: 'active',
+        creator_uid: userInfo?.id
+      };
 
-      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
+      await api.createProject(projectData);
+
+      // Reset form
+      setNewProjectData({
+        name: '',
+        location: '',
+        client: '',
+        description: '',
+        deadline: '',
+        image: null,
+        imagePreview: ''
       });
-
-      if (response.ok) {
-        // Reset form
-    setNewProjectData({
-      name: '',
-      location: '',
-      client: '',
-      description: '',
-      deadline: '',
-      image: null,
-      imagePreview: ''
-    });
         
-        // Close modal
-    setShowNewProject(false);
+      // Close modal
+      setShowNewProject(false);
         
-        // Refresh projects list
-        await fetchProjects();
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create project');
-      }
+      // Refresh projects list
+      await fetchProjects();
     } catch (error) {
       console.error('Error creating project:', error);
       // You might want to show an error message to the user here
@@ -223,7 +223,7 @@ const Projects: React.FC = () => {
   // Handle navigation to project dashboard
   const handleGoToProject = (project: Project) => {
     setSelectedProject(project);
-    navigate('/dashboard');
+    navigate(`/dashboard/${project.id}`);
   };
   
   // Filter projects based on user role and search/status filters
@@ -270,34 +270,31 @@ const Projects: React.FC = () => {
 
   
   const handleUpdateProjectStatus = async (projectId: string, newStatus: string) => {
+    if (user?.role !== 'admin') {
+      console.warn('Only admins can update project status');
+      return;
+    }
+
     try {
       setIsUpdatingStatus(true);
       const userInfo = getUserInfo();
-      if (!userInfo) return;
-
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects/${projectId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          creator_uid: userInfo.id,
-          status: newStatus
-        })
+      
+      await api.updateProject(projectId, {
+        status: newStatus,
+        creator_uid: userInfo?.id
       });
 
-      if (response.ok) {
-        // Update project status locally
-        setProjects(prev => prev.map(p => 
-          p.id === projectId ? { ...p, status: newStatus } : p
-        ));
-        
-        // Show success message or notification
+      // Update project status locally
+      setProjects(prev => prev.map(p => 
+        p.id === projectId ? { ...p, status: newStatus } : p
+      ));
+      
+      // Also update the selected project if it's the one being modified
+      if (selectedProject && selectedProject.id === projectId) {
+        setLocalSelectedProject({ ...selectedProject, status: newStatus });
       }
     } catch (error) {
       console.error('Error updating project status:', error);
-      // Show error message to user
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -305,34 +302,28 @@ const Projects: React.FC = () => {
 
   const handleDeleteProject = async () => {
     if (!projectToDelete || deleteConfirmText !== 'DELETE') return;
+    if (user?.role !== 'admin') {
+      console.warn('Only admins can delete projects');
+      return;
+    }
 
     try {
       setIsDeletingProject(true);
-      const userInfo = getUserInfo();
-      if (!userInfo) return;
+      
+      await api.deleteProject(projectToDelete.id);
 
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects/${projectToDelete.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          creator_uid: userInfo.id
-        })
-      });
-
-      if (response.ok) {
-        setProjects(prev => prev.filter(p => p.id !== projectToDelete.id));
-        setShowDeleteConfirm(false);
-        setProjectToDelete(null);
-        setDeleteConfirmText('');
-        
-        // Show success message
+      setProjects(prev => prev.filter(p => p.id !== projectToDelete.id));
+      setShowDeleteConfirm(false);
+      setProjectToDelete(null);
+      setDeleteConfirmText('');
+      
+      // If the deleted project was open in details view, close it
+      if (selectedProject && selectedProject.id === projectToDelete.id) {
+        setShowProjectDetails(false);
+        setLocalSelectedProject(null);
       }
     } catch (error) {
       console.error('Error deleting project:', error);
-      // Show error message to user
     } finally {
       setIsDeletingProject(false);
     }
@@ -340,9 +331,11 @@ const Projects: React.FC = () => {
 
   // Fetch users when staff modal opens
   const fetchUsers = async () => {
+    if (!user) return;
+    
     try {
       setIsLoadingUsers(true);
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${user?.id}`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/auth/users/${user.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -367,7 +360,7 @@ const Projects: React.FC = () => {
       const userInfo = getUserInfo();
       if (!userInfo) return;
 
-      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects/assign', {
+      const response = await fetch('https://server.matrixtwin.com/api/projects/assign', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -429,6 +422,66 @@ const Projects: React.FC = () => {
     <div className="min-h-screen bg-dark-950 text-white">
       {/* Use the custom ProjectHeader component */}
       <ProjectHeader />
+      
+      {company && (
+        <div className="bg-portfolio-dark/50 backdrop-blur-md border-b border-white/5 py-8">
+          <div className="max-w-[1800px] mx-auto px-6 md:px-12">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="flex items-center gap-6">
+                {company.logo_url ? (
+                  <div className="w-20 h-20 rounded-xl overflow-hidden bg-white/5 border border-white/10">
+                    <img src={company.logo_url} alt={company.name} className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-portfolio-orange to-orange-600 flex items-center justify-center text-white text-3xl font-bold">
+                    {company.name ? company.name.charAt(0).toUpperCase() : 'C'}
+                  </div>
+                )}
+                
+                <div>
+                  <h1 className="text-3xl font-bold text-white mb-2">{company.name}</h1>
+                  <div className="flex flex-wrap gap-6 text-gray-400 text-sm">
+                    {company.address && (
+                      <div className="flex items-center gap-2">
+                        <RiIcons.RiMapPinLine className="text-portfolio-orange" />
+                        <span>{company.address}</span>
+                      </div>
+                    )}
+                    {company.phone && (
+                      <div className="flex items-center gap-2">
+                        <RiIcons.RiPhoneLine className="text-portfolio-orange" />
+                        <span>{company.phone}</span>
+                      </div>
+                    )}
+                    {company.website && (
+                      <div className="flex items-center gap-2">
+                        <RiIcons.RiGlobalLine className="text-portfolio-orange" />
+                        <a 
+                          href={company.website.startsWith('http') ? company.website : `https://${company.website}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="hover:text-white transition-colors"
+                        >
+                          {company.website}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                 {/* Company specific actions could go here */}
+                 <div className="px-4 py-2 bg-white/5 rounded-lg border border-white/10 text-center">
+                   <div className="text-2xl font-bold text-white">{projects.length}</div>
+                   <div className="text-xs text-gray-400 uppercase tracking-wider">Projects</div>
+                 </div>
+                 {/* Add more stats if available */}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       <ProjectsHero 
         onCreateProject={() => setShowNewProject(true)}
@@ -550,7 +603,7 @@ const Projects: React.FC = () => {
                       
                       <div>
                         <h3 className="text-xs font-mono text-gray-500 uppercase tracking-widest mb-3">Status</h3>
-                      {(user?.role === 'admin' || user?.role === 'projectManager' || user?.role === 'contractor') && (
+                      {user?.role === 'admin' && (
                         <div className="mt-4">
                           <label className="block text-sm font-medium text-gray-300 mb-1">
                             Project Status

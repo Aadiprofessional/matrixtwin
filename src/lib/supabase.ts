@@ -1,17 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://ahtardktcamfwgjuwmeb.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFodGFyZGt0Y2FtZndnanV3bWViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzMTI5ODIsImV4cCI6MjA2MDg4ODk4Mn0.9yk6uUEpX-eIHTziSlG9nTDmKb2LRR0YY_P0pH6A_lc';
+export const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL as string;
+export const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY as string;
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-export type UserRole = 'admin' | 'projectManager' | 'siteInspector' | 'contractor' | 'worker';
+export type UserRole = 'admin' | 'projectManager' | 'siteInspector' | 'contractor' | 'worker' | 'user';
 
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  company_id?: string;
   avatar?: string;
   bio?: string;
   phone?: string;
@@ -20,6 +21,7 @@ export interface User {
   theme_preference?: 'light' | 'dark';
   language_preference?: string;
   is_verified?: boolean;
+  status?: string;
   created_at?: string;
   updated_at?: string;
 } 

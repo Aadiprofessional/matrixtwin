@@ -192,7 +192,7 @@ const Dashboard: React.FC = () => {
           const userInfo = getUserInfo();
           if (!userInfo) return;
 
-          const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects/${selectedProject.id}`, {
+          const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/projects/${selectedProject.id}`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('token')}`
             }

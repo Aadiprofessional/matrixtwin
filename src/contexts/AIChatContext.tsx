@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useRef, useCallback, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 
 interface Message {
   id: string;
@@ -82,6 +83,7 @@ const loadChatHistory = (): ChatSession[] => {
 };
 
 export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
+  const { user } = useAuth();
   const [chatHistory, setChatHistory] = useState<ChatSession[]>(loadChatHistory);
   const [currentChatId, setCurrentChatId] = useState<string>(chatHistory[0].id);
   const currentSessionRef = useRef<string>(currentChatId);
@@ -251,16 +253,15 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
       
       console.log('🚀 Sending request to API...');
       
-      // Make the streaming request to the Dashscope API
-      const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+      // Make the streaming request to the new webhook
+      const response = await fetch('https://n8n.matrixaiserver.com/webhook/MatrixTwin/DashboardSearch', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer sk-9f7b91a0bb81406b9da7ff884ddd2592',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: "qwen-plus",
           messages: messages,
+          user: user || { id: 'anonymous', role: 'guest', name: 'Guest' },
           stream: true
         })
       });
@@ -294,38 +295,63 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
 
             // Decode the chunk
             const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
+            
+            // Check if it's SSE format
+            if (chunk.includes('data: ')) {
+                const lines = chunk.split('\n');
+                for (const line of lines) {
+                    if (line.trim() === '') continue;
+                    
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6).trim();
+                        
+                        if (data === '[DONE]') {
+                            console.log('🏁 Received [DONE] signal');
+                            updateMessageContent(aiMessageId, fullContent, true);
+                            return;
+                        }
 
-            for (const line of lines) {
-              if (line.trim() === '') continue;
-              
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6).trim();
-                
-                if (data === '[DONE]') {
-                  console.log('🏁 Received [DONE] signal');
-                  updateMessageContent(aiMessageId, fullContent, true);
-                  return;
-                }
-
-                try {
-                  const parsed = JSON.parse(data);
-                  console.log('📦 Parsed chunk:', parsed);
-                  
-                  // Handle the response format from Dashscope API
-                  if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta) {
-                    const delta = parsed.choices[0].delta;
-                    if (delta.content) {
-                      fullContent += delta.content;
-                      // Update the message content in real-time
-                      updateMessageContent(aiMessageId, fullContent, false);
+                        try {
+                            // Try to parse as JSON first
+                            const parsed = JSON.parse(data);
+                            // Handle various potential response formats
+                            const content = parsed.choices?.[0]?.delta?.content || 
+                                          parsed.response || 
+                                          parsed.output || 
+                                          parsed.text || 
+                                          parsed.content ||
+                                          '';
+                            
+                            if (content) {
+                                fullContent += content;
+                                updateMessageContent(aiMessageId, fullContent, false);
+                            } else if (typeof parsed === 'string') {
+                                fullContent += parsed;
+                                updateMessageContent(aiMessageId, fullContent, false);
+                            }
+                        } catch (e) {
+                            // If not JSON, treat as raw text
+                            fullContent += data;
+                            updateMessageContent(aiMessageId, fullContent, false);
+                        }
                     }
-                  }
-                } catch (parseError) {
-                  console.error('❌ Error parsing streaming data:', parseError);
-                  console.log('Raw data:', data);
                 }
-              }
+            } else {
+                // Not SSE, treat as raw text stream or plain JSON response
+                try {
+                    // Check if the whole chunk is a valid JSON object (might be a non-streaming response)
+                    const parsed = JSON.parse(chunk);
+                    const content = parsed.response || parsed.output || parsed.text || parsed.content;
+                    if (content) {
+                        fullContent += content;
+                    } else {
+                        fullContent += chunk;
+                    }
+                } catch {
+                    // Not JSON, just append raw text
+                    fullContent += chunk;
+                }
+                updateMessageContent(aiMessageId, fullContent, false);
             }
           }
         } catch (streamError) {

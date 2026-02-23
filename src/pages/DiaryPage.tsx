@@ -204,10 +204,12 @@ const DiaryPage: React.FC = () => {
 
   // Fetch diary entries from API with project filtering
   const fetchDiaryEntries = async () => {
+    if (!user) return;
+
     try {
       setLoading(true);
       const projectParam = selectedProject?.id ? `?projectId=${selectedProject.id}` : '';
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/diary/list/${user?.id}${projectParam}`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/diary/list/${user.id}${projectParam}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -228,9 +230,11 @@ const DiaryPage: React.FC = () => {
 
   // Fetch users from API (similar to Projects.tsx)
   const fetchUsers = async () => {
+    if (!user) return;
+    
     try {
       setLoadingUsers(true);
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${user?.id}`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/auth/users/${user.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -352,7 +356,7 @@ const DiaryPage: React.FC = () => {
         projectId: selectedProject?.id
       });
 
-      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/diary/create', {
+      const response = await fetch('https://server.matrixtwin.com/api/diary/create', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -410,7 +414,7 @@ const DiaryPage: React.FC = () => {
   const handleViewDetails = async (entry: DiaryEntry) => {
     try {
       // Fetch full entry details including workflow and comments
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/diary/${entry.id}`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/diary/${entry.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -435,7 +439,7 @@ const DiaryPage: React.FC = () => {
   const handleViewForm = async (entry: DiaryEntry) => {
     try {
       // Fetch full entry details including form data
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/diary/${entry.id}`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/diary/${entry.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -471,7 +475,7 @@ const DiaryPage: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/diary/${selectedDiaryEntry.id}/update`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/diary/${selectedDiaryEntry.id}/update`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -520,7 +524,7 @@ const DiaryPage: React.FC = () => {
     if (!selectedDiaryEntry || !user?.id) return;
     
     try {
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/diary/${selectedDiaryEntry.id}/update`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/diary/${selectedDiaryEntry.id}/update`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -695,7 +699,7 @@ const DiaryPage: React.FC = () => {
     if (!confirmDelete) return;
 
     try {
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/diary/${entry.id}`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/diary/${entry.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

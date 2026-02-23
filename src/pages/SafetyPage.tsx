@@ -278,10 +278,11 @@ const SafetyPage: React.FC = () => {
 
   // Fetch safety entries from API with project filtering
   const fetchSafetyEntries = async () => {
+    if (!user) return;
     try {
       setLoading(true);
       const projectParam = selectedProject?.id ? `?projectId=${selectedProject.id}` : '';
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/safety/list/${user?.id}${projectParam}`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/safety/list/${user.id}${projectParam}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -302,9 +303,10 @@ const SafetyPage: React.FC = () => {
 
   // Fetch users from API (similar to Projects.tsx)
   const fetchUsers = async () => {
+    if (!user) return;
     try {
       setLoadingUsers(true);
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${user?.id}`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/auth/users/${user.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -425,7 +427,7 @@ const SafetyPage: React.FC = () => {
         projectId: selectedProject?.id
       });
 
-      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/safety/create', {
+      const response = await fetch('https://server.matrixtwin.com/api/safety/create', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -491,7 +493,7 @@ const SafetyPage: React.FC = () => {
   const handleViewDetails = async (entry: SafetyEntry) => {
     try {
       // Fetch full entry details including workflow and comments
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/safety/${entry.id}`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/safety/${entry.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -515,7 +517,7 @@ const SafetyPage: React.FC = () => {
   const handleViewForm = async (entry: SafetyEntry) => {
     try {
       // Fetch full entry details including form data
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/safety/${entry.id}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/safety/${entry.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -540,7 +542,7 @@ const SafetyPage: React.FC = () => {
     if (!selectedSafetyEntry || !user?.id) return;
     
     try {
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/safety/${selectedSafetyEntry.id}/update`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/safety/${selectedSafetyEntry.id}/update`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -583,7 +585,7 @@ const SafetyPage: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/safety/${selectedSafetyEntry.id}/update`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/safety/${selectedSafetyEntry.id}/update`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -816,7 +818,7 @@ const SafetyPage: React.FC = () => {
     if (!confirmDelete) return;
 
     try {
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/safety/${entry.id}`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/safety/${entry.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

@@ -87,7 +87,21 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCoun
   // Add project ID to navigation if a project is selected
   const getNavigationPath = () => {
     if (selectedProject && to !== '/projects') {
-      return `${to}`;
+      if (to === '/dashboard') {
+        return `/dashboard/${selectedProject.id}`;
+      }
+
+      const projectScopedRoutes = [
+        '/tasks', '/team', '/create-role', '/rfi', '/diary', 
+        '/safety', '/labour', '/cleansing', '/forms', '/reports', 
+        '/analytics', '/settings', '/voice-call', '/digital-twins'
+      ];
+
+      const isProjectScoped = projectScopedRoutes.some(route => to.startsWith(route));
+
+      if (isProjectScoped) {
+        return `/dashboard/${selectedProject.id}${to}`;
+      }
     }
     return to;
   };

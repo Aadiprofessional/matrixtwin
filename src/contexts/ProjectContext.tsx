@@ -58,13 +58,32 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Prevent direct URL access to dashboard with project ID
+  // Sync selected project with URL
   useEffect(() => {
+    if (loading) return;
+    
     const path = location.pathname;
-    if (path.startsWith('/dashboard/') && !selectedProject) {
-      navigate('/projects');
+    if (path.startsWith('/dashboard/')) {
+      const match = path.match(/\/dashboard\/([^\/]+)/);
+      const projectIdFromUrl = match ? match[1] : null;
+      
+      if (projectIdFromUrl) {
+        if (!selectedProject || selectedProject.id !== projectIdFromUrl) {
+          const project = projects.find(p => p.id === projectIdFromUrl);
+          if (project) {
+            setSelectedProject(project);
+          } else {
+            // Project not found or not accessible
+            // Only redirect if we are sure the projects list is loaded and complete
+            if (projects.length > 0) {
+               console.warn(`Project ${projectIdFromUrl} not found in available projects`);
+               // navigate('/projects');
+            }
+          }
+        }
+      }
     }
-  }, [location.pathname, selectedProject, navigate]);
+  }, [location.pathname, projects, loading, selectedProject]);
 
   // Handle project selection and navigation
   const handleProjectSelection = (project: Project | null) => {
@@ -72,7 +91,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (project === null) {
       navigate('/projects');
     } else if (location.pathname === '/projects') {
-      navigate('/dashboard');
+      navigate(`/dashboard/${project.id}`);
     }
   };
 

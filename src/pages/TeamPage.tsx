@@ -316,7 +316,7 @@ const TeamPage: React.FC = () => {
       try {
         if (!user?.id) return;
         
-        const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${user.id}`);
+        const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/auth/users/${user.id}`);
         if (!response.ok) {
           throw new Error('Failed to fetch team members');
         }
@@ -342,7 +342,7 @@ const TeamPage: React.FC = () => {
   // Handle project assignment
   const handleAssignProject = async (userId: string, projectId: string, role: string) => {
     try {
-      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/projects/assign', {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/projects/assign`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -360,7 +360,7 @@ const TeamPage: React.FC = () => {
       }
 
       // Refresh team members data after assignment
-      const updatedResponse = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${user?.id}`);
+      const updatedResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/auth/users/${user?.id}`);
       const updatedData = await updatedResponse.json();
       setTeamMembers(updatedData);
 
@@ -562,7 +562,7 @@ const TeamPage: React.FC = () => {
     try {
       setIsDeletingMember(true);
       
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${memberId}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/auth/users/${memberId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -604,7 +604,7 @@ const TeamPage: React.FC = () => {
     try {
       // Call the role update API if role has changed
       if (selectedMember.role !== newMemberData.role) {
-        const roleResponse = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/role', {
+        const roleResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/auth/users/role`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',

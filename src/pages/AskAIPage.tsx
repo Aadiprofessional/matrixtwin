@@ -201,7 +201,7 @@ const AskAIPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)] relative bg-black">
+    <div className="flex flex-col h-screen relative bg-black">
       {/* Background decorations - Subtle Orange Theme */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-portfolio-orange/5 via-transparent to-transparent opacity-20 pointer-events-none"></div>
       

@@ -1,15 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { User, UserRole } from '../lib/supabase';
+import { api } from '../utils/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  signup: (name: string, email: string, password: string) => Promise<void>;
+  signup: (name: string, email: string, password: string, turnstileToken?: string | null) => Promise<void>;
   updateUser: (userData: Partial<User>) => Promise<void>;
   isLoading: boolean;
+  isInitialized: boolean;
   error: string | null;
   verifyTwoFactor: (code: string) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
@@ -26,6 +28,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   // Force re-login by clearing all auth data
@@ -103,6 +106,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     checkAuth();
+    // Use setTimeout to ensure state updates are processed and avoid race conditions
+    setTimeout(() => {
+      setIsInitialized(true);
+    }, 100);
 
     // Set up event listener for forceReLogin
     const handleForceReLogin = () => {
@@ -124,144 +131,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       console.log('Attempting login with:', email);
       
-      // Special case simplified login for anadi.mpvm@gmail.com
-      if (email === 'anadi.mpvm@gmail.com') {
-        console.log('Special user login detected, using simplified auth...');
-        
-        // Authenticate with Supabase but use a simpler flow
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-        
-        if (error) {
-          console.error('Auth error:', error.message);
-          throw new Error(`Authentication error: ${error.message}`);
-        }
-        
-        if (!data?.user?.id) {
-          console.error('No user data returned');
-          throw new Error('No user data returned from authentication');
-        }
-        
-        console.log('Auth successful for special user, setting state...');
-        
-        // Create user data
-        const userData = {
-          id: data.user.id,
-          email: data.user.email || email,
-          name: 'Bill Kong',
-          role: 'admin',
-          is_verified: true
-        } as User;
-        
-        // Update state in order
-        setUser(userData);
-        setIsAuthenticated(true);
-        
-        // Save to localStorage using consistent keys
-        localStorage.setItem('token', data.session?.access_token || 'dummy-token');
-        localStorage.setItem('user', JSON.stringify(userData));
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('auth.user', JSON.stringify(userData));
-        localStorage.setItem('auth.session', JSON.stringify(data.session));
-        
-        console.log('Special user login completed successfully');
-        return;
+      const response = await api.login(email, password);
+      
+      if (!response.token) {
+        throw new Error('No token returned from login');
       }
       
-      // Regular user flow
-      console.log('Regular user login flow...');
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
+      const userData = response.user;
       
-      if (error) {
-        console.error('Auth error:', error.message);
-        throw new Error(`Authentication error: ${error.message}`);
+      if (!userData) {
+         throw new Error('No user data returned from login');
       }
+
+      console.log('Login successful, user:', userData);
+
+      setUser(userData);
+      setIsAuthenticated(true);
       
-      if (!data?.user?.id) {
-        console.error('No user data returned');
-        throw new Error('No user data returned from authentication');
-      }
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('isAuthenticated', 'true');
+      localStorage.setItem('auth.user', JSON.stringify(userData));
       
-      console.log('Auth successful, user ID:', data.user.id);
-      
-      // Get user profile data
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
-      
-      if (userError) {
-        console.error('Error fetching user profile:', userError.message);
-        // Create minimal user
-        const defaultUser = {
-          id: data.user.id,
-          email: data.user.email || email,
-          name: email.split('@')[0],
-          role: 'contractor',
-          is_verified: true
-        } as User;
-        
-        setUser(defaultUser);
-        setIsAuthenticated(true);
-        localStorage.setItem('token', data.session?.access_token || 'dummy-token');
-        localStorage.setItem('user', JSON.stringify(defaultUser));
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('auth.user', JSON.stringify(defaultUser));
-        localStorage.setItem('auth.session', JSON.stringify(data.session));
-      } else if (!userData) {
-        console.warn('No profile found, creating minimal user object');
-        const defaultUser = {
-          id: data.user.id,
-          email: data.user.email || email,
-          name: email.split('@')[0],
-          role: 'contractor',
-          is_verified: true
-        } as User;
-        
-        setUser(defaultUser);
-        setIsAuthenticated(true);
-        localStorage.setItem('token', data.session?.access_token || 'dummy-token');
-        localStorage.setItem('user', JSON.stringify(defaultUser));
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('auth.user', JSON.stringify(defaultUser));
-        localStorage.setItem('auth.session', JSON.stringify(data.session));
-      } else {
-        console.log('User profile loaded:', userData.email);
-        
-        // Check verification
-        if (!userData.is_verified) {
-          console.warn('User not verified, updating verification status');
-          // Try to auto-verify the user
-          const { error: updateError } = await supabase
-            .from('users')
-            .update({ is_verified: true })
-            .eq('id', userData.id);
-            
-          if (updateError) {
-            console.error('Failed to auto-verify user:', updateError);
-          } else {
-            userData.is_verified = true;
-            console.log('User auto-verified successfully');
-          }
-        }
-        
-        setUser(userData);
-        setIsAuthenticated(true);
-        localStorage.setItem('token', data.session?.access_token || 'dummy-token');
-        localStorage.setItem('user', JSON.stringify(userData));
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('auth.user', JSON.stringify(userData));
-        localStorage.setItem('auth.session', JSON.stringify(data.session));
-      }
-      
-      console.log('Login successful, user state set');
     } catch (err) {
+      console.error('Login error:', err);
       setError((err as Error).message);
       throw err;
     } finally {
@@ -282,8 +175,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       sessionStorage.removeItem('user');
       sessionStorage.removeItem('isAuthenticated');
       
-      // Sign out from Supabase
-      await supabase.auth.signOut();
+      // Sign out from Supabase if needed (optional now)
+      // await supabase.auth.signOut();
       
       setUser(null);
       setIsAuthenticated(false);
@@ -296,59 +189,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const signup = async (name: string, email: string, password: string): Promise<void> => {
+  const signup = async (name: string, email: string, password: string, turnstileToken?: string | null): Promise<void> => {
     setIsLoading(true);
     setError(null);
     
     try {
       console.log('Attempting signup with:', email);
       
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
-          },
-        },
-      });
+      const response = await api.signup(name, email, password, turnstileToken);
       
-      if (error) throw new Error(error.message);
+      if (!response.token) {
+        // If the API requires login after signup, we might not get a token here.
+        // But assuming standard JWT flow where signup returns token.
+        // If not, we should probably just return and let the user login.
+        // However, based on existing code, it expects auto-login.
+        if (response.success && !response.token) {
+            // Maybe just success message
+            return;
+        }
+        throw new Error('No token returned from signup');
+      }
       
-      if (!data?.user?.id) {
+      const userData = response.user;
+      if (!userData) {
         throw new Error('No user data returned from signup');
       }
+
+      console.log('Signup successful, user:', userData);
       
-      console.log('Signup successful, user ID:', data.user.id);
+      // Don't auto-login after signup
+      // setUser(userData);
+      // setIsAuthenticated(true);
+      // localStorage.setItem('token', response.token);
+      // localStorage.setItem('user', JSON.stringify(userData));
+      // localStorage.setItem('isAuthenticated', 'true');
+      // localStorage.setItem('auth.user', JSON.stringify(userData));
       
-      // Create user profile
-      const userData = {
-        id: data.user.id,
-        email: data.user.email || email,
-        name: name,
-        role: 'contractor' as UserRole,
-        is_verified: false
-      } as User;
-      
-      // Insert user profile
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert([userData]);
-      
-      if (insertError) {
-        console.error('Error creating user profile:', insertError);
-        // Continue anyway, we'll handle this in the login flow
-      }
-      
-      setUser(userData);
-      setIsAuthenticated(true);
-      localStorage.setItem('token', data.session?.access_token || 'dummy-token');
-      localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('auth.user', JSON.stringify(userData));
-      localStorage.setItem('auth.session', JSON.stringify(data.session));
-      
-      console.log('Signup completed successfully');
     } catch (err) {
       setError((err as Error).message);
       throw err;
@@ -469,6 +345,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         signup,
         updateUser,
         isLoading,
+        isInitialized,
         error,
         verifyTwoFactor,
         requestPasswordReset,

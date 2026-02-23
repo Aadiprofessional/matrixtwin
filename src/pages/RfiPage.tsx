@@ -11,6 +11,7 @@ import { useProjects } from '../contexts/ProjectContext';
 import { createForm, getForms, respondToForm, updateFormStatus, FormResponse } from '../api/forms';
 import { UserSelectionModal } from '../components/modals/UserSelectionModal';
 import { generateFormPdf } from '../utils/pdfUtils';
+import { API_BASE_URL } from '../utils/api';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
 
 // Import only the template components we need
@@ -230,7 +231,7 @@ const RfiPage: React.FC = () => {
       setIsLoadingUsers(true);
       if (!user?.id) return;
 
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${user.id}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/auth/users/${user.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -269,7 +270,7 @@ const RfiPage: React.FC = () => {
   const loadSurveys = async () => {
     try {
       const projectParam = selectedProject?.id ? `?projectId=${selectedProject.id}` : '';
-      const surveyResponse = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/survey/list/${user?.id}${projectParam}`, {
+      const surveyResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/survey/list/${user?.id}${projectParam}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -315,7 +316,7 @@ const RfiPage: React.FC = () => {
   const loadInspections = async () => {
     try {
       const projectParam = selectedProject?.id ? `?projectId=${selectedProject.id}` : '';
-      const inspectionUrl = `https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/inspection/list/${user?.id}${projectParam}`;
+      const inspectionUrl = `${process.env.REACT_APP_API_BASE_URL}/api/inspection/list/${user?.id}${projectParam}`;
       
       console.log('Loading inspections from:', inspectionUrl);
       
@@ -797,8 +798,8 @@ const RfiPage: React.FC = () => {
         projectId: selectedProject?.id,
         formType,
         endpoint: formType === 'survey' 
-          ? 'https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/survey/create'
-          : 'https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/inspection/create'
+          ? `${API_BASE_URL}/survey/create`
+          : `${API_BASE_URL}/inspection/create`
       });
 
       // Additional validation logging for inspection forms
@@ -821,8 +822,8 @@ const RfiPage: React.FC = () => {
 
       // Use the correct API endpoint based on form type
       const apiEndpoint = formType === 'survey' 
-        ? 'https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/survey/create'
-        : 'https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/inspection/create';
+        ? `${API_BASE_URL}/survey/create`
+        : `${API_BASE_URL}/inspection/create`;
 
       const response = await fetch(apiEndpoint, {
         method: 'POST',
