@@ -203,6 +203,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/dashboard/:projectId/analytics" element={<ProtectedRoute requiredRoles={['admin', 'projectManager', 'contractor']}><Layout><AnalyticsPage /></Layout></ProtectedRoute>} />
         <Route path="/dashboard/:projectId/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
         <Route path="/dashboard/:projectId/voice-call" element={<ProtectedRoute><Layout><VoiceCallPage /></Layout></ProtectedRoute>} />
+        <Route path="/dashboard/:projectId/ask-ai" element={<ProtectedRoute><Layout><AskAIPage /></Layout></ProtectedRoute>} />
         
         {/* Digital Twins Scoped Routes */}
         <Route path="/dashboard/:projectId/digital-twins" element={<ProtectedRoute><Layout><DigitalTwinsPage /></Layout></ProtectedRoute>} />
@@ -335,7 +336,11 @@ const AppRoutes: React.FC = () => {
         <Route
           path="/ask-ai"
           element={
-            <AskAIPage />
+            <ProtectedRoute>
+              <Layout>
+                <AskAIPage />
+              </Layout>
+            </ProtectedRoute>
           }
         />
         

@@ -12,6 +12,7 @@ interface Message {
 
 interface ChatSession {
   id: string;
+  projectId?: string; // Optional projectId to scope chats
   title: string;
   messages: Message[];
   createdAt: Date;
@@ -21,10 +22,11 @@ interface ChatSession {
 interface AIChatContextType {
   currentChat: ChatSession;
   chatHistory: ChatSession[];
-  sendMessage: (content: string, projectId?: number | null, imageBase64?: string) => Promise<void>;
+  sendMessage: (content: string, projectId?: string | number | null, imageBase64?: string) => Promise<void>;
   clearMessages: () => void;
-  startNewChat: () => void;
+  startNewChat: (projectId?: string) => void;
   switchToChat: (chatId: string) => void;
+  getProjectChats: (projectId: string) => ChatSession[];
 }
 
 const AIChatContext = createContext<AIChatContextType | undefined>(undefined);
@@ -48,10 +50,11 @@ const createInitialGreeting = (): Message => ({
   timestamp: new Date()
 });
 
-const createNewChatSession = (): ChatSession => {
+const createNewChatSession = (projectId?: string): ChatSession => {
   const now = new Date();
   return {
     id: `chat-${Date.now()}`,
+    projectId: projectId,
     title: `Chat ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`,
     messages: [createInitialGreeting()],
     createdAt: now,
@@ -158,7 +161,7 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
   }, []);
 
   // Send a message in the current chat
-  const sendMessage = async (messageText: string, projectId: number | null = null, imageBase64?: string) => {
+  const sendMessage = async (messageText: string, projectId: string | number | null = null, imageBase64?: string) => {
     if ((!messageText.trim() && !imageBase64)) return;
     
     // Create user message
@@ -180,50 +183,19 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     const aiMessageId = (Date.now() + 1).toString();
     
     try {
-      // Get current chat messages from state
-      const currentChatData = chatHistory.find(chat => chat.id === currentChatId);
-      const currentMessages = currentChatData ? currentChatData.messages : [];
-      
-      // Prepare messages for the API
-      const messages = [];
-      
-      // Add context from previous messages (last 5 messages for context)
-      const recentMessages = currentMessages.slice(-5);
-      for (const msg of recentMessages) {
-        if (msg.sender === 'user') {
-          const content = [];
-          content.push({
-            type: "text",
-            text: msg.content
-          });
-          
-          if (msg.imageUrl) {
-            content.push({
-              type: "image_url",
-              image_url: {
-                url: msg.imageUrl
-              }
-            });
-          }
-          
-          messages.push({
-            role: "user",
-            content: content
-          });
-        } else if (msg.sender === 'ai') {
-          messages.push({
-            role: "assistant",
-            content: msg.content
-          });
-        }
-      }
-      
       // Add the current user message
       const currentContent = [];
-      currentContent.push({
-        type: "text",
-        text: messageText || "Please analyze this image in detail."
-      });
+      if (messageText) {
+        currentContent.push({
+          type: "text",
+          text: messageText
+        });
+      } else if (imageBase64) {
+        currentContent.push({
+          type: "text",
+          text: "Please analyze this image in detail."
+        });
+      }
       
       if (imageBase64) {
         currentContent.push({
@@ -234,10 +206,12 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
         });
       }
       
-      messages.push({
+      const userMessagePayload = {
         role: "user",
         content: currentContent
-      });
+      };
+      
+      const messages = [userMessagePayload];
 
       // Create AI message placeholder
       const aiMessage: Message = {
@@ -262,7 +236,10 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
         body: JSON.stringify({
           messages: messages,
           user: user || { id: 'anonymous', role: 'guest', name: 'Guest' },
-          stream: true
+          stream: true,
+          projectId: projectId,
+          chatId: currentChatId,
+          userId: user?.id
         })
       });
 
@@ -385,8 +362,8 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     setChatHistory(updatedHistory);
   };
   
-  const startNewChat = () => {
-    const newChat = createNewChatSession();
+  const startNewChat = (projectId?: string) => {
+    const newChat = createNewChatSession(projectId);
     setChatHistory([newChat, ...chatHistory]);
     setCurrentChatId(newChat.id);
   };
@@ -397,17 +374,20 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     }
   };
 
+  const getProjectChats = (projectId: string) => {
+    return chatHistory.filter(chat => chat.projectId === projectId);
+  };
+
   return (
-    <AIChatContext.Provider 
-      value={{
-        currentChat,
-        chatHistory,
-        sendMessage,
-        clearMessages,
-        startNewChat,
-        switchToChat
-      }}
-    >
+    <AIChatContext.Provider value={{ 
+      currentChat, 
+      chatHistory, 
+      sendMessage, 
+      clearMessages, 
+      startNewChat, 
+      switchToChat,
+      getProjectChats
+    }}>
       {children}
     </AIChatContext.Provider>
   );

@@ -58,8 +58,9 @@ import {
   RiDashboardLine,
   RiCalendarEventLine,
   RiSearchLine,
-  RiPieChartLine,
+  RiRobot2Line,
   RiFileTextLine,
+  RiPieChartLine,
   RiCheckLine,
   RiExpandDiagonalLine
 } from 'react-icons/ri';
@@ -70,6 +71,7 @@ import { getFreshViewToken } from '../utils/bimfaceTokenApi';
 import { getAllModels, ModelRecord } from '../utils/supabaseModelsApi';
 import { EventPanel } from '../components/viewer/EventPanel';
 import SmartLockDashboard from '../components/SmartLockDashboard';
+import { AIChatPanel } from '../components/ai/AIChatPanel';
 import StatusIndicator, { SensorStatus } from '../components/ui/StatusIndicator';
 import SensorIcon, { SensorType } from '../components/ui/SensorIcon';
 import StatCard from '../components/ui/StatCard';
@@ -113,7 +115,7 @@ interface Sensor {
 // Draggable Panel interface
 interface DraggablePanel {
   id: string;
-  type: 'iot' | 'analytics' | 'controls' | 'info' | 'cctv' | 'smartlock' | 'events' | 'weather';
+  type: 'iot' | 'analytics' | 'controls' | 'info' | 'cctv' | 'smartlock' | 'events' | 'weather' | 'ai';
   title: string;
   position: { x: number; y: number };
   size: { width: number; height: number };
@@ -1973,6 +1975,26 @@ const ModelViewerPage: React.FC = () => {
               
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    // Check if AI panel is already open
+                    if (!openPanels.some(p => p.type === 'ai')) {
+                      setOpenPanels([...openPanels, {
+                        id: `ai-panel-${Date.now()}`,
+                        type: 'ai',
+                        title: 'AI Assistant',
+                        position: { x: window.innerWidth - 450, y: 100 },
+                        size: { width: 400, height: 600 },
+                        zIndex: openPanels.length + 1,
+                        isMinimized: false
+                      }]);
+                    }
+                  }}
+                  className="bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all"
+                  title="AI Assistant"
+                >
+                  <RiRobot2Line className="text-lg" />
+                </button>
                 <button className="bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all">
                   <RiSettings3Line className="text-lg" />
                 </button>
@@ -2085,7 +2107,7 @@ const ModelViewerPage: React.FC = () => {
                   
                   {/* Event Type Tabs */}
                   <div className="flex gap-2 flex-wrap">
-                    {['All Events', 'Alarms', 'Predictive', 'Service Request', 'Work Order', 'Sensor Status', 'Security Dashboard', 'Environmental Controls', 'Building Analytics'].map((tab) => (
+                    {['All Events', 'AI Chat', 'Alarms', 'Predictive', 'Service Request', 'Work Order', 'Sensor Status', 'Security Dashboard', 'Environmental Controls', 'Building Analytics'].map((tab) => (
                       <button 
                         key={tab}
                         onClick={() => setActiveLeftTab(tab)}
@@ -2103,7 +2125,12 @@ const ModelViewerPage: React.FC = () => {
                 
                 {/* Content - Made scrollable */}
                 <div className="flex-1 overflow-y-auto bg-slate-900/10 backdrop-blur-md">
-                  <div className="p-4">
+                  {activeLeftTab === 'AI Chat' ? (
+                    <div className="h-full">
+                      <AIChatPanel showHeader={false} className="h-full" />
+                    </div>
+                  ) : (
+                    <div className="p-4">
                     {activeLeftTab === 'All Events' && (
                     <div className="space-y-4">
                         {/* Comprehensive Filter Section */}
@@ -3058,6 +3085,7 @@ const ModelViewerPage: React.FC = () => {
                     </div>
                   )}
                 </div>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -4563,6 +4591,57 @@ const ModelViewerPage: React.FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Draggable Panels */}
+        {openPanels.map((panel) => (
+          <DraggablePanelComponent
+            key={panel.id}
+            panel={panel}
+            onClose={() => {
+              setOpenPanels(openPanels.filter(p => p.id !== panel.id));
+            }}
+            onMinimize={() => {
+              setOpenPanels(openPanels.map(p => 
+                p.id === panel.id ? { ...p, isMinimized: !p.isMinimized } : p
+              ));
+            }}
+            onBringToFront={() => {
+              const maxZ = Math.max(...openPanels.map(p => p.zIndex), 0);
+              if (panel.zIndex < maxZ) {
+                setOpenPanels(openPanels.map(p => 
+                  p.id === panel.id ? { ...p, zIndex: maxZ + 1 } : p
+                ));
+              }
+            }}
+            onUpdatePosition={(newPos) => {
+              setOpenPanels(openPanels.map(p => 
+                p.id === panel.id ? { ...p, position: newPos } : p
+              ));
+            }}
+            sensors={sensors}
+            cctvCameras={cctvCameras}
+            selectedSensor={selectedSensor}
+            selectedCamera={selectedCamera}
+            setSelectedSensor={setSelectedSensor}
+            setSelectedCamera={setSelectedCamera}
+            hvacEnabled={hvacEnabled}
+            setHvacEnabled={setHvacEnabled}
+            lightingEnabled={lightingEnabled}
+            setLightingEnabled={setLightingEnabled}
+            targetTemp={targetTemp}
+            setTargetTemp={setTargetTemp}
+            lightingLevel={lightingLevel}
+            setLightingLevel={setLightingLevel}
+            weatherData={weatherData}
+            fetchWeatherData={fetchWeatherData}
+            getWeatherIcon={getWeatherIcon}
+            models={models}
+            viewToken={viewToken}
+            getSensorIcon={getSensorIcon}
+            getStatusColor={getStatusColor}
+            generateTimeSeriesData={generateTimeSeriesData}
+          />
+        ))}
       </div>
 
       {/* 3D Viewer - Below Header */}

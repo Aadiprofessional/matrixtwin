@@ -23,7 +23,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, hideHeader = false }) 
   const mainRef = useRef<HTMLDivElement>(null);
   
   // Check if current page is AI-related
-  const isAIPage = location.pathname === '/ask-ai' || location.pathname === '/voice-call';
+  const isAIPage = location.pathname === '/ask-ai' || 
+                   location.pathname === '/voice-call' ||
+                   location.pathname.endsWith('/ask-ai') ||
+                   location.pathname.endsWith('/voice-call');
   
   const toggleSidebar = () => {
     if (isMobile) {

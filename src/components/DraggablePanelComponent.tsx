@@ -26,7 +26,8 @@ import {
   RiRainyLine,
   RiThunderstormsLine,
   RiWindyLine,
-  RiDropLine
+  RiDropLine,
+  RiRobot2Line
 } from 'react-icons/ri';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
 import StatusIndicator, { SensorStatus } from './ui/StatusIndicator';
@@ -34,11 +35,12 @@ import SensorIcon, { SensorType } from './ui/SensorIcon';
 import StatCard from './ui/StatCard';
 import { EventPanel } from './viewer/EventPanel';
 import SmartLockDashboard from './SmartLockDashboard';
+import { AIChatPanel } from './ai/AIChatPanel';
 
 // Types
 interface DraggablePanel {
   id: string;
-  type: 'iot' | 'analytics' | 'controls' | 'info' | 'cctv' | 'smartlock' | 'events' | 'weather';
+  type: 'iot' | 'analytics' | 'controls' | 'info' | 'cctv' | 'smartlock' | 'events' | 'weather' | 'ai';
   title: string;
   position: { x: number; y: number };
   size: { width: number; height: number };
@@ -204,12 +206,19 @@ const DraggablePanelComponent: React.FC<DraggablePanelComponentProps> = ({
       case 'smartlock': return <RiDoorLockLine />;
       case 'events': return <RiBellLine />;
       case 'weather': return <RiCloudyLine />;
+      case 'ai': return <RiRobot2Line />;
       default: return <RiInformationLine />;
     }
   };
 
   const renderPanelContent = () => {
     switch (panel.type) {
+      case 'ai':
+        return (
+          <div className="h-full flex flex-col">
+            <AIChatPanel showHeader={false} className="flex-1" />
+          </div>
+        );
       case 'iot':
         return (
           <div className="space-y-4">

@@ -94,7 +94,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCoun
       const projectScopedRoutes = [
         '/tasks', '/team', '/create-role', '/rfi', '/diary', 
         '/safety', '/labour', '/cleansing', '/forms', '/reports', 
-        '/analytics', '/settings', '/voice-call', '/digital-twins'
+        '/analytics', '/settings', '/voice-call', '/digital-twins', '/ask-ai'
       ];
 
       const isProjectScoped = projectScopedRoutes.some(route => to.startsWith(route));

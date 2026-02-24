@@ -1309,99 +1309,115 @@ const DiaryPage: React.FC = () => {
               </div>
             )}
             
-            <div className="pt-4 border-t border-secondary-200 dark:border-dark-700">
-              {/* First row - Primary action buttons */}
-              <div className="flex justify-end space-x-3 mb-3">
-                <Button 
-                  variant="outline"
-                  leftIcon={<RiIcons.RiDownload2Line />}
-                >
-                  {t('common.export')}
-                </Button>
-                <Button 
-                  variant="outline"
-                  leftIcon={<RiIcons.RiPrinterLine />}
-                >
-                  {t('common.print')}
-                </Button>
-                
-                {/* Admin delete button */}
-                {user?.role === 'admin' && (
+            <div className="pt-6 mt-6 border-t border-white/10">
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
+                {/* Left side: Utility actions */}
+                <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
+                   <Button 
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<RiIcons.RiDownload2Line />}
+                    className="text-secondary-400 hover:text-white hover:bg-white/5"
+                  >
+                    {t('common.export')}
+                  </Button>
+                  <Button 
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<RiIcons.RiPrinterLine />}
+                    className="text-secondary-400 hover:text-white hover:bg-white/5"
+                  >
+                    {t('common.print')}
+                  </Button>
+                  
+                  {/* Admin delete button */}
+                  {user?.role === 'admin' && (
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={<RiIcons.RiDeleteBinLine />}
+                      onClick={() => {
+                        setShowDetails(false);
+                        handleDeleteEntry(selectedDiaryEntry);
+                      }}
+                      className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+
+                {/* Right side: Workflow actions */}
+                <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-end">
                   <Button 
                     variant="outline"
-                    leftIcon={<RiIcons.RiDeleteBinLine />}
-                    onClick={() => {
-                      setShowDetails(false);
-                      handleDeleteEntry(selectedDiaryEntry);
-                    }}
-                    className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    size="sm"
+                    onClick={() => setShowDetails(false)}
+                    className="border-white/10 hover:bg-white/5"
                   >
-                    Delete Entry
+                    {t('common.close')}
                   </Button>
-                )}
-              </div>
 
-              {/* Second row - Workflow action buttons */}
-              <div className="flex justify-end space-x-3">
-                {/* Workflow Action Buttons - show for pending entries and rejected entries where user has permissions */}
-                {(selectedDiaryEntry.status === 'pending' || selectedDiaryEntry.status === 'rejected') && (
-                  <>
-                    {/* Admin can edit when entry is pending or rejected */}
-                    {canUserEditEntry(selectedDiaryEntry) && (
-                      <Button 
-                        variant="outline"
-                        leftIcon={<RiIcons.RiEditLine />}
-                        onClick={() => {
-                          setShowDetails(false);
-                          setShowFormView(true);
-                        }}
-                      >
-                        Edit Form
-                      </Button>
-                    )}
-                    
-                    {/* Current node executor can approve, reject, or send back */}
-                    {canUserApproveEntry(selectedDiaryEntry) && (
-                      <>
-                        {/* Back to previous node button (only if not first node) */}
-                        {selectedDiaryEntry.current_node_index > 0 && (
-                          <Button 
-                            variant="outline"
-                            leftIcon={<RiIcons.RiArrowLeftLine />}
-                            onClick={() => handleWorkflowAction('back')}
-                            className="text-orange-600 border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                          >
-                            Send Back
-                          </Button>
-                        )}
-                        
+                  {/* Workflow Action Buttons */}
+                  {(selectedDiaryEntry.status === 'pending' || selectedDiaryEntry.status === 'rejected') && (
+                    <>
+                      {/* Send Back (if applicable) */}
+                      {canUserApproveEntry(selectedDiaryEntry) && selectedDiaryEntry.current_node_index > 0 && (
                         <Button 
                           variant="outline"
+                          size="sm"
+                          leftIcon={<RiIcons.RiArrowLeftLine />}
+                          onClick={() => handleWorkflowAction('back')}
+                          className="text-orange-500 border-orange-500/30 hover:bg-orange-500/10 hover:border-orange-500"
+                        >
+                          Send Back
+                        </Button>
+                      )}
+                      
+                      {/* Reject */}
+                      {canUserApproveEntry(selectedDiaryEntry) && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
                           leftIcon={<RiIcons.RiCloseLine />}
                           onClick={() => handleWorkflowAction('reject')}
-                          className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          className="text-red-500 border-red-500/30 hover:bg-red-500/10 hover:border-red-500"
                         >
                           Reject
                         </Button>
+                      )}
+
+                      {/* Edit Form */}
+                      {canUserEditEntry(selectedDiaryEntry) && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<RiIcons.RiEditLine />}
+                          onClick={() => {
+                            setShowDetails(false);
+                            setShowFormView(true);
+                          }}
+                          className="hover:bg-white/5"
+                        >
+                          Edit
+                        </Button>
+                      )}
+
+                      {/* Approve/Complete */}
+                      {canUserApproveEntry(selectedDiaryEntry) && (
                         <Button 
                           variant="primary"
+                          size="sm"
                           leftIcon={<RiIcons.RiCheckLine />}
                           onClick={() => handleWorkflowAction('approve')}
-                          className="bg-green-600 hover:bg-green-700"
+                          className="bg-portfolio-orange hover:bg-portfolio-orange/80 text-white border-none shadow-lg shadow-portfolio-orange/20"
                         >
                           {selectedDiaryEntry.current_node_index === 1 ? 'Complete' : 'Approve'}
                         </Button>
-                      </>
-                    )}
-                  </>
-                )}
-                
-                <Button 
-                  variant="primary"
-                  onClick={() => setShowDetails(false)}
-                >
-                  {t('common.close')}
-                </Button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
