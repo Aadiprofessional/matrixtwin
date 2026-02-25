@@ -66,8 +66,9 @@ const Dashboard: React.FC = () => {
   const [projectData, setProjectData] = useState<any>(null);
   const { projectId } = useParams();
   
+  
   useEffect(() => {
-    console.log('Selected Project ID:', selectedProject?.id);
+    // console.log('Selected Project ID:', selectedProject?.id);
   }, [selectedProject]);
   
   // Filter projects based on user role
@@ -215,6 +216,16 @@ const Dashboard: React.FC = () => {
 
     fetchProjectData();
   }, [selectedProject]);
+
+  // If we have a projectId in the URL but no selected project yet, show loading
+  // This prevents the dashboard from rendering in a "generic" state while the project context is initializing
+  if (projectId && (!selectedProject || selectedProject.id !== projectId)) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-portfolio-orange"></div>
+      </div>
+    );
+  }
   
   // Chart colors based on theme
   const chartColors = {

@@ -10,7 +10,8 @@ import {
   RiHistoryLine,
   RiPhoneLine,
   RiUserLine,
-  RiSendPlaneFill
+  RiSendPlaneFill,
+  RiDeleteBinLine
 } from 'react-icons/ri';
 import { IconContext } from 'react-icons';
 import { useNavigate } from 'react-router-dom';
@@ -30,6 +31,7 @@ const AskAIPage: React.FC = () => {
     chatHistory, 
     sendMessage,
     startNewChat,
+    deleteChat,
     switchToChat,
     getProjectChats
   } = useAIChat();
@@ -99,6 +101,13 @@ const AskAIPage: React.FC = () => {
   const handleChatSelect = (chatId: string) => {
     switchToChat(chatId);
     setShowChatHistory(false);
+  };
+
+  const handleDeleteChat = async (e: React.MouseEvent, chatId: string) => {
+    e.stopPropagation();
+    if (window.confirm(t('askAI.confirmDelete', 'Are you sure you want to delete this chat?'))) {
+      await deleteChat(chatId);
+    }
   };
 
   const handleSwitchToVoice = () => {
@@ -171,50 +180,83 @@ const AskAIPage: React.FC = () => {
           </div>
         </div>
         
-        {/* Chat History Drawer - Floating below buttons */}
+        {/* Chat History Drawer - Right Panel with Backdrop */}
         <AnimatePresence>
           {showChatHistory && (
-            <div className="absolute top-20 right-4 z-50 w-80 max-h-[calc(100%-6rem)]">
-              <Card variant="ai-dark" className="p-0 h-full overflow-hidden border border-white/10 shadow-xl bg-black/80 backdrop-blur-xl">
-                <div className="flex justify-between items-center p-3 border-b border-white/10 bg-black/40">
-                  <h3 className="text-sm font-display font-semibold flex items-center text-white">
-                    <IconContext.Provider value={{ className: "mr-2 text-portfolio-orange" }}>
-                      <RiHistoryLine />
-                    </IconContext.Provider>
-                    Chat History
-                  </h3>
-                  <button 
-                    onClick={toggleChatHistory}
-                    className="text-gray-400 hover:text-white p-1 rounded hover:bg-white/10"
-                  >
-                    <RiCloseCircleLine />
-                  </button>
-                </div>
-                
-                <div className="space-y-1 p-2 max-h-[300px] overflow-y-auto">
-                  {filteredHistory.map((chat) => (
-                    <button
-                      key={chat.id}
-                      onClick={() => handleChatSelect(chat.id)}
-                      className={`w-full text-left p-2 rounded-md transition-all text-sm ${
-                        currentChat.id === chat.id
-                          ? 'bg-portfolio-orange/10 border border-portfolio-orange/30 text-white'
-                          : 'hover:bg-white/5 text-gray-400 hover:text-gray-200'
-                      }`}
+            <>
+              {/* Backdrop for click-outside to close */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={toggleChatHistory}
+                className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
+              />
+              
+              {/* Right Side Panel */}
+              <motion.div
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="fixed top-0 right-0 bottom-0 z-50 w-80 h-full shadow-2xl"
+              >
+                <Card variant="ai-dark" className="p-0 h-full flex flex-col border-l border-white/10 bg-black/90 backdrop-blur-xl">
+                  <div className="flex justify-between items-center p-4 border-b border-white/10 bg-black/40">
+                    <h3 className="text-sm font-display font-semibold flex items-center text-white">
+                      <IconContext.Provider value={{ className: "mr-2 text-portfolio-orange" }}>
+                        <RiHistoryLine />
+                      </IconContext.Provider>
+                      Chat History
+                    </h3>
+                    <button 
+                      onClick={toggleChatHistory}
+                      className="text-gray-400 hover:text-white p-1 rounded hover:bg-white/10 transition-colors"
                     >
-                      <div className="flex items-center">
-                        <div className="overflow-hidden">
-                          <div className="font-medium truncate">{chat.title}</div>
-                          <div className="text-[10px] text-gray-600 mt-0.5">
-                            {new Date(chat.lastUpdatedAt).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </div>
+                      <RiCloseCircleLine className="text-xl" />
                     </button>
-                  ))}
-                </div>
-              </Card>
-            </div>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                    {filteredHistory.length === 0 ? (
+                      <div className="text-center py-10 text-gray-500 text-sm">
+                        No history found
+                      </div>
+                    ) : (
+                      filteredHistory.map((chat) => (
+                        <div
+                          key={chat.id}
+                          onClick={() => handleChatSelect(chat.id)}
+                          className={`group w-full text-left p-3 rounded-md transition-all text-sm cursor-pointer relative flex items-center justify-between ${
+                            currentChat.id === chat.id
+                              ? 'bg-portfolio-orange/10 border border-portfolio-orange/30 text-white'
+                              : 'hover:bg-white/5 text-gray-400 hover:text-gray-200 border border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center overflow-hidden flex-1 mr-2">
+                            <div className="overflow-hidden w-full">
+                              <div className="font-medium truncate pr-1">{chat.title}</div>
+                              <div className="text-[10px] text-gray-600 mt-1 flex items-center justify-between">
+                                <span>{new Date(chat.lastUpdatedAt).toLocaleDateString()}</span>
+                                <span className="text-xs opacity-60">{new Date(chat.lastUpdatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={(e) => handleDeleteChat(e, chat.id)}
+                            className="text-gray-500 hover:text-red-500 p-1.5 rounded opacity-0 group-hover:opacity-100 transition-all hover:bg-white/10"
+                            title="Delete chat"
+                          >
+                            <RiDeleteBinLine />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Card>
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
         

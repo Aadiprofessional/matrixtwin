@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface Message {
   id: string;
@@ -25,8 +26,10 @@ interface AIChatContextType {
   sendMessage: (content: string, projectId?: string | number | null, imageBase64?: string) => Promise<void>;
   clearMessages: () => void;
   startNewChat: (projectId?: string) => void;
+  deleteChat: (chatId: string) => Promise<void>;
   switchToChat: (chatId: string) => void;
   getProjectChats: (projectId: string) => ChatSession[];
+  isLoading: boolean;
 }
 
 const AIChatContext = createContext<AIChatContextType | undefined>(undefined);
@@ -50,65 +53,102 @@ const createInitialGreeting = (): Message => ({
   timestamp: new Date()
 });
 
-const createNewChatSession = (projectId?: string): ChatSession => {
-  const now = new Date();
-  return {
-    id: `chat-${Date.now()}`,
-    projectId: projectId,
-    title: `Chat ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`,
-    messages: [createInitialGreeting()],
-    createdAt: now,
-    lastUpdatedAt: now
-  };
-};
-
-// Load chat history from local storage
-const loadChatHistory = (): ChatSession[] => {
-  try {
-    const savedHistory = localStorage.getItem('chatHistory');
-    if (savedHistory) {
-      const parsed = JSON.parse(savedHistory);
-      // Convert string dates back to Date objects
-      return parsed.map((chat: any) => ({
-        ...chat,
-        createdAt: new Date(chat.createdAt),
-        lastUpdatedAt: new Date(chat.lastUpdatedAt),
-        messages: chat.messages.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }))
-      }));
-    }
-  } catch (error) {
-    console.error('Error loading chat history:', error);
-  }
-  return [createNewChatSession()];
-};
-
 export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
   const { user } = useAuth();
-  const [chatHistory, setChatHistory] = useState<ChatSession[]>(loadChatHistory);
-  const [currentChatId, setCurrentChatId] = useState<string>(chatHistory[0].id);
+  const [chatHistory, setChatHistory] = useState<ChatSession[]>([]);
+  const [currentChatId, setCurrentChatId] = useState<string>('');
+  const [tempChatProjectId, setTempChatProjectId] = useState<string | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const currentSessionRef = useRef<string>(currentChatId);
 
   // Keep the ref updated with the current chat ID
   useEffect(() => {
     currentSessionRef.current = currentChatId;
   }, [currentChatId]);
-  
-  // Save chat history to local storage when it changes
+
+  // Load chat history from Supabase
   useEffect(() => {
-    localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
-  }, [chatHistory]);
+    const fetchChatHistory = async () => {
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const { data: sessions, error } = await supabase
+          .from('chat_sessions')
+          .select(`
+            *,
+            chat_messages (*)
+          `)
+          .eq('user_id', user.id)
+          .order('last_updated_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (sessions && sessions.length > 0) {
+          const formattedSessions: ChatSession[] = sessions.map(session => ({
+            id: session.id,
+            projectId: session.project_id,
+            title: session.title,
+            createdAt: new Date(session.created_at),
+            lastUpdatedAt: new Date(session.last_updated_at),
+            messages: session.chat_messages
+              .map((msg: any) => ({
+                id: msg.id,
+                content: msg.content,
+                sender: msg.sender,
+                timestamp: new Date(msg.timestamp),
+                imageUrl: msg.image_url,
+                isStreaming: msg.is_streaming
+              }))
+              .sort((a: Message, b: Message) => a.timestamp.getTime() - b.timestamp.getTime())
+          }));
+          
+          setChatHistory(formattedSessions);
+          if (!currentChatId && formattedSessions.length > 0) {
+            setCurrentChatId(formattedSessions[0].id);
+          }
+        } else {
+          // If no sessions exist, clear currentChatId so it falls back to temp
+          setCurrentChatId('');
+        }
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchChatHistory();
+  }, [user]);
 
   // Get the current chat from chatHistory
-  const currentChat = chatHistory.find(chat => chat.id === currentChatId) || chatHistory[0];
+  const currentChat = chatHistory.find(chat => chat.id === currentChatId) || 
+    (currentChatId === 'temp' || !currentChatId ? {
+      id: 'temp',
+      projectId: tempChatProjectId,
+      title: 'New Chat',
+      messages: [createInitialGreeting()],
+      createdAt: new Date(),
+      lastUpdatedAt: new Date()
+    } : (chatHistory[0] || {
+      id: 'temp',
+      projectId: tempChatProjectId,
+      title: 'New Chat',
+      messages: [createInitialGreeting()],
+      createdAt: new Date(),
+      lastUpdatedAt: new Date()
+    }));
 
   // Update chat with message (used for both user and AI messages)
-  const updateChatWithMessage = useCallback((message: Message) => {
+  const updateChatWithMessage = useCallback((message: Message, targetChatId?: string) => {
+    const chatIdToUpdate = targetChatId || currentSessionRef.current;
+    
     setChatHistory(prevHistory => {
       return prevHistory.map(chat => {
-        if (chat.id === currentSessionRef.current) {
+        if (chat.id === chatIdToUpdate) {
           return {
             ...chat,
             messages: [...chat.messages, message],
@@ -121,7 +161,7 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
   }, []);
 
   // Update existing message content (for streaming)
-  const updateMessageContent = useCallback((messageId: string, newContent: string, isComplete: boolean = false) => {
+  const updateMessageContent = useCallback(async (messageId: string, newContent: string, isComplete: boolean = false) => {
     setChatHistory(prevHistory => {
       return prevHistory.map(chat => {
         if (chat.id === currentSessionRef.current) {
@@ -138,35 +178,128 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
         return chat;
       });
     });
+
+    // Update Supabase when streaming is complete
+    if (isComplete) {
+      try {
+        await supabase
+          .from('chat_messages')
+          .update({ 
+            content: newContent,
+            is_streaming: false 
+          })
+          .eq('id', messageId);
+          
+        // Also update session last_updated_at
+        await supabase
+          .from('chat_sessions')
+          .update({ last_updated_at: new Date().toISOString() })
+          .eq('id', currentSessionRef.current);
+      } catch (error) {
+        console.error('Error updating message in Supabase:', error);
+      }
+    }
   }, []);
 
   // Update chat title based on first user message
-  const updateChatTitle = useCallback((chatId: string, messageText: string) => {
+  const updateChatTitle = useCallback(async (chatId: string, messageText: string) => {
+    const newTitle = messageText.length > 30 
+      ? messageText.substring(0, 27) + '...' 
+      : messageText;
+
     setChatHistory(prevHistory => {
       return prevHistory.map(chat => {
         if (chat.id === chatId) {
           // Only update title if this is the first user message
-          if (chat.messages.length === 1 && chat.messages[0].sender === 'ai') {
+          // Check if there are only 2 messages (greeting + user message)
+          if (chat.messages.length <= 2) {
             return {
               ...chat,
-              title: messageText.length > 30 
-                ? messageText.substring(0, 27) + '...' 
-                : messageText
+              title: newTitle
             };
           }
         }
         return chat;
       });
     });
-  }, []);
+
+    // Update title in Supabase if it's the first user message
+    const chat = chatHistory.find(c => c.id === chatId);
+    if (chat && chat.messages.length <= 2) {
+      try {
+        await supabase
+          .from('chat_sessions')
+          .update({ title: newTitle })
+          .eq('id', chatId);
+      } catch (error) {
+        console.error('Error updating chat title in Supabase:', error);
+      }
+    }
+  }, [chatHistory]);
 
   // Send a message in the current chat
   const sendMessage = async (messageText: string, projectId: string | number | null = null, imageBase64?: string) => {
     if ((!messageText.trim() && !imageBase64)) return;
     
+    let targetChatId = currentChatId;
+    
+    // Check if we need to create a new session (lazy creation)
+    if (targetChatId === 'temp' || !targetChatId) {
+      if (!user) return;
+      
+      const now = new Date();
+      const newChatId = crypto.randomUUID();
+      const effectiveProjectId = projectId ? String(projectId) : tempChatProjectId;
+      
+      const newChat: ChatSession = {
+        id: newChatId,
+        projectId: effectiveProjectId,
+        title: `Chat ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`,
+        messages: [createInitialGreeting()],
+        createdAt: now,
+        lastUpdatedAt: now
+      };
+      
+      // Optimistic update - add to history
+      setChatHistory(prev => [newChat, ...prev]);
+      setCurrentChatId(newChatId);
+      currentSessionRef.current = newChatId; // Update ref manually for immediate use
+      targetChatId = newChatId;
+      
+      try {
+        // Create session in Supabase
+        const { error: sessionError } = await supabase
+          .from('chat_sessions')
+          .insert({
+            id: newChat.id,
+            user_id: user.id,
+            project_id: newChat.projectId,
+            title: newChat.title,
+            created_at: newChat.createdAt.toISOString(),
+            last_updated_at: newChat.lastUpdatedAt.toISOString()
+          });
+
+        if (sessionError) throw sessionError;
+
+        // Create initial greeting message in Supabase
+        const greeting = newChat.messages[0];
+        await supabase.from('chat_messages').insert({
+          id: crypto.randomUUID(), // New ID for the greeting in DB
+          session_id: newChat.id,
+          content: greeting.content,
+          sender: greeting.sender,
+          timestamp: greeting.timestamp.toISOString()
+        });
+
+      } catch (error) {
+        console.error('Error creating new chat in Supabase:', error);
+        // Should we abort? For now, continue to try sending message
+      }
+    }
+    
     // Create user message
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       content: messageText || "Analyze this image",
       sender: 'user',
       timestamp: new Date(),
@@ -174,13 +307,27 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     };
     
     // First add the user message immediately to the UI
-    updateChatWithMessage(userMessage);
+    updateChatWithMessage(userMessage, targetChatId);
+    
+    // Save user message to Supabase
+    try {
+      await supabase.from('chat_messages').insert({
+        id: userMessage.id,
+        session_id: targetChatId,
+        content: userMessage.content,
+        sender: userMessage.sender,
+        image_url: userMessage.imageUrl,
+        timestamp: userMessage.timestamp.toISOString()
+      });
+    } catch (error) {
+      console.error('Error saving user message to Supabase:', error);
+    }
     
     // Update the chat title if needed
-    updateChatTitle(currentChatId, messageText || "Image analysis");
+    updateChatTitle(targetChatId, messageText || "Image analysis");
     
     // Create AI message placeholder ID
-    const aiMessageId = (Date.now() + 1).toString();
+    const aiMessageId = crypto.randomUUID();
     
     try {
       // Add the current user message
@@ -223,7 +370,21 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
       };
       
       // Add the placeholder AI message
-      updateChatWithMessage(aiMessage);
+      updateChatWithMessage(aiMessage, targetChatId);
+      
+      // Save initial AI placeholder to Supabase
+      try {
+        await supabase.from('chat_messages').insert({
+          id: aiMessageId,
+          session_id: targetChatId,
+          content: "",
+          sender: 'ai',
+          timestamp: aiMessage.timestamp.toISOString(),
+          is_streaming: true
+        });
+      } catch (error) {
+        console.error('Error saving AI placeholder to Supabase:', error);
+      }
       
       console.log('🚀 Sending request to API...');
       
@@ -238,7 +399,7 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
           user: user || { id: 'anonymous', role: 'guest', name: 'Guest' },
           stream: true,
           projectId: projectId,
-          chatId: currentChatId,
+          chatId: targetChatId,
           userId: user?.id
         })
       });
@@ -347,30 +508,59 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     }
   };
 
-  const clearMessages = () => {
-    const updatedHistory = chatHistory.map(chat => {
-      if (chat.id === currentChatId) {
-        return {
-          ...chat,
-          messages: [createInitialGreeting()],
-          lastUpdatedAt: new Date()
-        };
-      }
-      return chat;
-    });
-    
-    setChatHistory(updatedHistory);
+  const clearMessages = async () => {
+    // For now, we'll just create a new chat instead of clearing messages in the current one
+    // This preserves history while giving a fresh start
+    startNewChat(currentChat.projectId);
   };
   
   const startNewChat = (projectId?: string) => {
-    const newChat = createNewChatSession(projectId);
-    setChatHistory([newChat, ...chatHistory]);
-    setCurrentChatId(newChat.id);
+    setTempChatProjectId(projectId);
+    setCurrentChatId('temp');
   };
   
+  const deleteChat = async (chatId: string) => {
+    if (!user) return;
+
+    // Optimistic update
+    const updatedHistory = chatHistory.filter(chat => chat.id !== chatId);
+    setChatHistory(updatedHistory);
+    
+    // If we deleted the current chat, switch to another one
+    if (currentChatId === chatId) {
+      // Find another chat for the same project if possible
+      const currentProjectChat = chatHistory.find(c => c.id === chatId);
+      const projectId = currentProjectChat?.projectId;
+      
+      const nextChat = updatedHistory.find(c => c.projectId === projectId) || updatedHistory[0];
+      
+      if (nextChat) {
+        setCurrentChatId(nextChat.id);
+      } else {
+        // No chats left, start a new one
+        startNewChat(projectId);
+      }
+    }
+
+    try {
+      const { error } = await supabase
+        .from('chat_sessions')
+        .delete()
+        .eq('id', chatId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      // We could reload history here if deletion failed, but for now we'll just log it
+    }
+  };
+
   const switchToChat = (chatId: string) => {
     if (chatHistory.some(chat => chat.id === chatId)) {
       setCurrentChatId(chatId);
+    } else if (chatId === 'temp') {
+      setCurrentChatId('temp');
     }
   };
 
@@ -385,8 +575,10 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
       sendMessage, 
       clearMessages, 
       startNewChat, 
+      deleteChat,
       switchToChat,
-      getProjectChats
+      getProjectChats,
+      isLoading
     }}>
       {children}
     </AIChatContext.Provider>

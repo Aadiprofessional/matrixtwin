@@ -20,7 +20,7 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({
   onNewChat,
   className = ''
 }) => {
-  const { currentChat, sendMessage, startNewChat, getProjectChats, switchToChat } = useAIChat();
+  const { currentChat, sendMessage, startNewChat, getProjectChats, switchToChat, isLoading } = useAIChat();
   const { selectedProject } = useProjects();
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -28,16 +28,14 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({
 
   // Switch to project-specific chat when project changes
   useEffect(() => {
+    if (isLoading) return; // Wait for chat history to load
+
     if (selectedProject?.id) {
       // If current chat is not for this project, switch or create new
       if (currentChat.projectId !== String(selectedProject.id)) {
         const projectChats = getProjectChats(String(selectedProject.id));
         if (projectChats.length > 0) {
           // Switch to the most recent chat for this project
-          // Assuming chats are ordered by createdAt or lastUpdatedAt descending, or just pick first
-          // Actually getProjectChats returns array from chatHistory which is likely ordered by creation if we appended new ones.
-          // But chatHistory in Context is initialized from localStorage.
-          // Let's sort to find latest
           const latestChat = [...projectChats].sort((a, b) => 
             new Date(b.lastUpdatedAt).getTime() - new Date(a.lastUpdatedAt).getTime()
           )[0];
@@ -48,7 +46,7 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({
         }
       }
     }
-  }, [selectedProject?.id, currentChat.projectId, getProjectChats, switchToChat, startNewChat]);
+  }, [selectedProject?.id, currentChat.projectId, getProjectChats, switchToChat, startNewChat, isLoading]);
   
   const handleSend = async () => {
     if (!inputValue.trim()) return;
@@ -139,66 +137,74 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({
       
       {/* Chat messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {currentChat.messages.map((message) => (
-          <div 
-            key={message.id} 
-            className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div 
-              className={`rounded-2xl py-2 px-3 max-w-[85%] text-xs ${
-                message.sender === 'user' 
-                  ? 'bg-ai-blue text-white rounded-tr-none' 
-                  : message.isStreaming
-                    ? 'bg-dark-800 text-gray-100 rounded-tl-none border border-ai-blue/30'
-                    : 'bg-dark-800 text-gray-100 rounded-tl-none'
-              }`}
-            >
-              {message.imageUrl && (
-                <div className="mb-2 rounded overflow-hidden">
-                  <img 
-                    src={message.imageUrl} 
-                    alt="Uploaded" 
-                    className="max-w-full h-auto max-h-40 object-contain bg-dark-950/50"
-                  />
-                </div>
-              )}
-              <div className="flex items-start">
-                <div className="flex-1">
-                  {message.content}
-                  {message.isStreaming && message.content === '' && (
-                    <div className="flex items-center text-ai-blue">
-                      <div className="flex space-x-1">
-                        <div className="w-1 h-1 bg-ai-blue rounded-full animate-typing-dots" style={{ animationDelay: '0ms' }} />
-                        <div className="w-1 h-1 bg-ai-purple rounded-full animate-typing-dots" style={{ animationDelay: '200ms' }} />
-                        <div className="w-1 h-1 bg-ai-teal rounded-full animate-typing-dots" style={{ animationDelay: '400ms' }} />
-                      </div>
-                      <span className="ml-2 text-xs">Thinking...</span>
+        {isLoading ? (
+          <div className="flex justify-center items-center h-full">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ai-blue"></div>
+          </div>
+        ) : (
+          <>
+            {currentChat.messages.map((message) => (
+              <div 
+                key={message.id} 
+                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div 
+                  className={`rounded-2xl py-2 px-3 max-w-[85%] text-xs ${
+                    message.sender === 'user' 
+                      ? 'bg-ai-blue text-white rounded-tr-none' 
+                      : message.isStreaming
+                        ? 'bg-dark-800 text-gray-100 rounded-tl-none border border-ai-blue/30'
+                        : 'bg-dark-800 text-gray-100 rounded-tl-none'
+                  }`}
+                >
+                  {message.imageUrl && (
+                    <div className="mb-2 rounded overflow-hidden">
+                      <img 
+                        src={message.imageUrl} 
+                        alt="Uploaded" 
+                        className="max-w-full h-auto max-h-40 object-contain bg-dark-950/50"
+                      />
                     </div>
                   )}
-                </div>
-                {message.isStreaming && message.content !== '' && (
-                  <div className="ml-2 flex items-center">
-                    <div className="w-1 h-1 bg-gradient-to-r from-ai-blue to-ai-purple rounded-full animate-streaming-pulse" />
+                  <div className="flex items-start">
+                    <div className="flex-1">
+                      {message.content}
+                      {message.isStreaming && message.content === '' && (
+                        <div className="flex items-center text-ai-blue">
+                          <div className="flex space-x-1">
+                            <div className="w-1 h-1 bg-ai-blue rounded-full animate-typing-dots" style={{ animationDelay: '0ms' }} />
+                            <div className="w-1 h-1 bg-ai-purple rounded-full animate-typing-dots" style={{ animationDelay: '200ms' }} />
+                            <div className="w-1 h-1 bg-ai-teal rounded-full animate-typing-dots" style={{ animationDelay: '400ms' }} />
+                          </div>
+                          <span className="ml-2 text-xs">Thinking...</span>
+                        </div>
+                      )}
+                    </div>
+                    {message.isStreaming && message.content !== '' && (
+                      <div className="ml-2 flex items-center">
+                        <div className="w-1 h-1 bg-gradient-to-r from-ai-blue to-ai-purple rounded-full animate-streaming-pulse" />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-        {/* Loading indicator - only show when last message is streaming */}
-        {currentChat.messages.length > 0 && 
-         currentChat.messages[currentChat.messages.length - 1]?.isStreaming && (
-          <div className="flex justify-start mb-4">
-            <div className="bg-gray-100 dark:bg-dark-700 rounded-2xl px-4 py-3 max-w-[80%]">
-              <div className="flex items-center space-x-2">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                 </div>
               </div>
-            </div>
-          </div>
+            ))}
+            {/* Loading indicator - only show when last message is streaming */}
+            {currentChat.messages.length > 0 && 
+             currentChat.messages[currentChat.messages.length - 1]?.isStreaming && (
+              <div className="flex justify-start mb-4">
+                <div className="bg-gray-100 dark:bg-dark-700 rounded-2xl px-4 py-3 max-w-[80%]">
+                  <div className="flex items-center space-x-2">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
         <div ref={messagesEndRef} />
       </div>

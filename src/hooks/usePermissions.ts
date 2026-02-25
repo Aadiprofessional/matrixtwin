@@ -1,32 +1,9 @@
-import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { roleService, UserPermissions } from '../services/roleService';
+import { usePermissionsContext } from '../contexts/PermissionsContext';
 
 export const usePermissions = () => {
   const { user } = useAuth();
-  const [permissions, setPermissions] = useState<UserPermissions['permissions']>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const loadUserPermissions = async () => {
-      if (!user?.id) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const userPermissions = await roleService.getUserPermissions(user.id);
-        setPermissions(userPermissions.permissions || []);
-      } catch (error) {
-        console.error('Failed to load user permissions:', error);
-        setPermissions([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadUserPermissions();
-  }, [user?.id]);
+  const { permissions, loading } = usePermissionsContext();
 
   const hasPermission = (permissionName: string, requiredLevel: number = 1): boolean => {
     // Admin always has all permissions

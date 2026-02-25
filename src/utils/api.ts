@@ -125,6 +125,12 @@ export const apiRequest = async <T = any>(
         console.error('Token is invalid - triggering re-login');
         handleTokenExpiration();
       }
+
+      // If it's a 404 and the error mentions user profile not found, handle it as an auth error
+      if (response.status === 404 && (errorData.message?.includes('User profile not found') || errorData.error?.includes('User profile not found'))) {
+        console.error('User profile not found - triggering re-login');
+        handleTokenExpiration();
+      }
       
       throw new Error(errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`);
     }
