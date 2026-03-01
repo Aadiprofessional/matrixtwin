@@ -34,8 +34,13 @@ export const PermissionsProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
       const userPermissions = await roleService.getUserPermissions(user.id);
       setPermissions(userPermissions.permissions || []);
-    } catch (error) {
-      console.error('Failed to load user permissions:', error);
+    } catch (error: any) {
+      // Don't log server errors as critical failures if they are temporary or related to setup
+      if (error.message && (error.message.includes('Server error') || error.message.includes('User not found'))) {
+        console.warn('Failed to load user permissions (likely due to incomplete setup):', error.message);
+      } else {
+        console.error('Failed to load user permissions:', error);
+      }
       setPermissions([]);
     } finally {
       setLoading(false);

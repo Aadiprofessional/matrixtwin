@@ -22,6 +22,7 @@ import {
 import ProcessFlowBuilder from './ProcessFlowBuilder';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProjects } from '../../contexts/ProjectContext';
+import { projectService } from '../../services/projectService';
 
 // Context for sharing form state between steps
 const FormEditorContext = createContext<any>(null);
@@ -250,32 +251,29 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
     }
   }, [user?.id]);
 
-  // Fetch users from API
+  // Fetch users from API (using project members)
   const fetchUsers = async () => {
-    if (!user?.id) return;
+    if (!selectedProject?.id) return;
     
     try {
       setLoadingUsers(true);
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/auth/users/${user?.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      // Use projectService to fetch project members
+      const members = await projectService.getProjectMembers(selectedProject.id);
       
-      if (response.ok) {
-        const data = await response.json();
-        // Handle the response structure - data should be an array of users
-        if (Array.isArray(data)) {
-          setUsers(data);
-        } else if (data.users && Array.isArray(data.users)) {
-          setUsers(data.users);
-        } else {
-          console.log('Unexpected users API response structure:', data);
-          setUsers([]);
-        }
-      }
+      // Map ProjectMember to User interface
+      const mappedUsers: User[] = members.map(member => ({
+        id: member.user.id,
+        name: member.user.name,
+        role: member.role,
+        email: member.user.email,
+        avatar: member.user.avatar
+      }));
+      
+      setUsers(mappedUsers);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('Error fetching project members:', error);
+      // Fallback to empty array or handle error
+      setUsers([]);
     } finally {
       setLoadingUsers(false);
     }

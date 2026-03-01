@@ -11,6 +11,8 @@ import { DailyCleaningInspectionTemplate } from '../components/forms/DailyCleani
 import { MonthlyReturnTemplate } from '../components/forms/MonthlyReturnTemplate';
 import { InspectionCheckFormTemplate } from '../components/forms/InspectionCheckFormTemplate';
 import { SurveyCheckFormTemplate } from '../components/forms/SurveyCheckFormTemplate';
+import { PdfToFormImporter, ExtractedTable } from '../components/forms/PdfToFormImporter';
+import { PdfWithOverlay } from '../components/forms/PdfWithOverlay';
 import ExcelGrid from '../components/forms/ExcelGrid';
 import { 
   RiAddLine, 
@@ -64,6 +66,7 @@ import {
 import { IconType } from 'react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
+import { aiService } from '../services/aiService';
 
 interface FormField {
   id: string;
@@ -156,6 +159,7 @@ interface FormPage {
     orientation: 'portrait' | 'landscape';
     size: 'A4' | 'A3' | 'A5';
   };
+  pdfPageIndex?: number; // Page index in the source PDF (1-based)
 }
 
 // Excel Grid Utility Functions
@@ -1103,6 +1107,9 @@ interface FormBuilderProps {
   showPreview: boolean;
   setShowPreview: React.Dispatch<React.SetStateAction<boolean>>;
   onFieldContextMenu: (e: React.MouseEvent, fieldId: string) => void;
+  pdfFile?: File | null;
+  extractedTables?: ExtractedTable[];
+  onImportPdf?: () => void;
 }
 
 interface ResizeData {
@@ -1458,27 +1465,7 @@ Analyze the form systematically and create an optimal grid layout that represent
           }
         ];
 
-        const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer sk-9f7b91a0bb81406b9da7ff884ddd2592',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: "qwen-vl-plus",
-            messages: messages,
-            stream: false,
-            temperature: 0.1,
-            max_tokens: 4000
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`API call failed: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        const aiResponse = data.choices[0].message.content;
+        const aiResponse = await aiService.generateFormContent(messages, "qwen-vl-plus");
         
         console.log('AI fieldPairs Response for page', i + 1, ':', aiResponse);
         
@@ -2569,10 +2556,22 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   setActiveTab,
   showPreview,
   setShowPreview,
-  onFieldContextMenu
+  onFieldContextMenu,
+  pdfFile,
+  extractedTables,
+  onImportPdf
 }) => {
   // Zoom functionality
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [rightPanelTab, setRightPanelTab] = useState<'settings' | 'pdf'>('settings');
+
+  // Switch to PDF tab when a PDF is imported
+  useEffect(() => {
+    if (pdfFile) {
+      setRightPanelTab('pdf');
+    }
+  }, [pdfFile]);
+
   const minZoom = 0.5; // Two A4 pages side by side
   const maxZoom = 1.5; // One page zoomed in
   
@@ -2690,7 +2689,6 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   
   // Add state for AI modal
   const [showAIGenerator, setShowAIGenerator] = useState(false);
-  
   // Add page dimension controls
   const [currentPageSize, setCurrentPageSize] = useState<'A4' | 'A3' | 'A5'>('A4');
   const [currentPageOrientation, setCurrentPageOrientation] = useState<'portrait' | 'landscape'>('portrait');
@@ -4725,6 +4723,17 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 AI Generate
               </Button>
               
+              <Button 
+                variant="ai-secondary" 
+                size="sm" 
+                onClick={onImportPdf}
+                title="Import tables from PDF"
+                leftIcon={<RiFilePdfLine />}
+                className="ml-2"
+              >
+                Import PDF
+              </Button>
+              
               {/* Zoom Controls */}
               <div className="flex items-center gap-1 ml-4 border-l border-dark-600/50 pl-4">
                 <Button 
@@ -6668,6 +6677,103 @@ const FormsPage: React.FC = () => {
   ]);
   
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
+
+  // PDF Importer State
+  const [showPdfImporter, setShowPdfImporter] = useState(false);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [extractedTables, setExtractedTables] = useState<ExtractedTable[]>([]);
+
+  const handlePdfImport = (tables: ExtractedTable[], file: File) => {
+    setPdfFile(file);
+    setExtractedTables(tables);
+
+    // Process each extracted table
+    const newPages = [...formPages];
+    
+    tables.forEach((table, index) => {
+      // Create a new page for each table if needed
+      let pageIndex = currentPageIndex + index;
+      
+      // If we need a new page that doesn't exist yet
+      if (pageIndex >= newPages.length) {
+        newPages.push({
+          id: `page-${Date.now()}-${index}`,
+          fields: [],
+          grid: createInitialGrid(),
+          dimensions: {
+            width: 794, // A4 width at 96 DPI
+            height: 1123, // A4 height at 96 DPI
+            orientation: 'portrait',
+            size: 'A4'
+          },
+          pdfPageIndex: table.pageIndex
+        });
+      } else {
+        // Update existing page with PDF page index
+        newPages[pageIndex] = {
+          ...newPages[pageIndex],
+          pdfPageIndex: table.pageIndex
+        };
+      }
+      
+      const page = newPages[pageIndex];
+      
+      // Ensure page has a grid
+      if (!page.grid) {
+        page.grid = createInitialGrid(Math.max(table.rowCount, EXCEL_GRID_CONFIG.DEFAULT_ROWS), Math.max(table.colCount, EXCEL_GRID_CONFIG.DEFAULT_COLS));
+      } else {
+        // Resize grid if needed
+        if (page.grid.rows.length < table.rowCount || page.grid.columns.length < table.colCount) {
+             page.grid = createInitialGrid(Math.max(table.rowCount, page.grid.rows.length), Math.max(table.colCount, page.grid.columns.length));
+        }
+      }
+      
+      // Add fields from extracted cells
+      const newFields: FormField[] = [];
+      
+      table.cells.forEach((cell: any) => {
+        // Find the corresponding grid cell
+        const gridCell = page.grid.cells[cell.row]?.[cell.col];
+        
+        if (gridCell) {
+          const fieldId = `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          
+          // Create a text field for each cell content
+          const newField: FormField = {
+            id: fieldId,
+            type: 'text', // Default to text input
+            label: cell.text || 'Text Field',
+            x: gridCell.x,
+            y: gridCell.y,
+            width: gridCell.width,
+            height: gridCell.height,
+            zIndex: 1,
+            gridRow: cell.row,
+            gridCol: cell.col,
+            cellId: gridCell.id,
+            settings: {
+              required: false,
+              placeholder: cell.text,
+              defaultValue: cell.text,
+              hideTitle: true
+            }
+          };
+          
+          newFields.push(newField);
+          
+          // Mark cell as occupied
+          gridCell.fieldId = fieldId;
+          gridCell.isEmpty = false;
+        }
+      });
+      
+      // Add new fields to page
+      page.fields = [...page.fields, ...newFields];
+    });
+    
+    setFormPages(newPages);
+    setShowPdfImporter(false);
+  };
   const [selectedField, setSelectedField] = useState<FormField | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ row: number; col: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -7358,6 +7464,12 @@ const FormsPage: React.FC = () => {
         </div>
       </div>
 
+      <PdfToFormImporter 
+        isOpen={showPdfImporter} 
+        onClose={() => setShowPdfImporter(false)} 
+        onImport={handlePdfImport} 
+      />
+
       {/* FormCreationFlow Modal */}
       <AnimatePresence>
         {formFlowOpen && (
@@ -7424,6 +7536,9 @@ const FormsPage: React.FC = () => {
                     showPreview={showPreview}
                     setShowPreview={setShowPreview}
                     onFieldContextMenu={onFieldContextMenu}
+                    pdfFile={pdfFile}
+                    extractedTables={extractedTables}
+                    onImportPdf={() => setShowPdfImporter(true)}
                   />
                 }
               />

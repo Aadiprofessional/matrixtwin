@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
+import { apiRequest, API_BASE_URL } from '../utils/api';
 
 export interface Permission {
   id: number;
@@ -48,81 +48,71 @@ export interface UserPermissions {
   }[];
 }
 
-class RoleService {
-  private async makeRequest<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API Error: ${response.status} - ${errorText}`);
-    }
-
-    return response.json();
-  }
-
+export const roleService = {
   // Get all available permissions
-  async getPermissions(): Promise<Permission[]> {
-    return this.makeRequest<Permission[]>('/api/auth/permissions');
-  }
+  getPermissions: async (): Promise<Permission[]> => {
+    return apiRequest<Permission[]>('/auth/permissions');
+  },
 
   // Get all roles
-  async getRoles(): Promise<Role[]> {
-    return this.makeRequest<Role[]>('/api/auth/roles');
-  }
+  getRoles: async (): Promise<Role[]> => {
+    return apiRequest<Role[]>('/auth/roles');
+  },
 
   // Create a new role
-  async createRole(roleData: CreateRoleRequest): Promise<Role> {
-    return this.makeRequest<Role>('/api/auth/roles/create', {
+  createRole: async (roleData: CreateRoleRequest): Promise<Role> => {
+    return apiRequest<Role>('/auth/roles/create', {
       method: 'POST',
       body: JSON.stringify(roleData),
     });
-  }
+  },
 
   // Update role permissions
-  async updateRolePermissions(
+  updateRolePermissions: async (
     roleId: number,
     updateData: UpdateRolePermissionsRequest
-  ): Promise<Role> {
-    return this.makeRequest<Role>(`/api/auth/roles/${roleId}/permissions`, {
+  ): Promise<Role> => {
+    return apiRequest<Role>(`/auth/roles/${roleId}/permissions`, {
       method: 'PUT',
       body: JSON.stringify(updateData),
     });
-  }
+  },
 
   // Delete a role
-  async deleteRole(roleId: number, adminUid: string): Promise<void> {
-    return this.makeRequest<void>(`/api/auth/roles/${roleId}`, {
+  deleteRole: async (roleId: number, adminUid: string): Promise<void> => {
+    return apiRequest<void>(`/auth/roles/${roleId}`, {
       method: 'DELETE',
       body: JSON.stringify({ admin_uid: adminUid }),
     });
-  }
+  },
 
-  // Assign role to user
-  async assignRoleToUser(assignData: AssignRoleRequest): Promise<void> {
-    return this.makeRequest<void>('/api/auth/users/role-dynamic', {
+  // Assign role to user (Dynamic)
+  assignRoleToUser: async (assignData: AssignRoleRequest): Promise<void> => {
+    return apiRequest<void>('/auth/users/role-dynamic', {
       method: 'PATCH',
       body: JSON.stringify(assignData),
     });
-  }
+  },
+
+  // Update User Role (Simple)
+  updateUserRole: async (adminUid: string, userId: string, newRole: string): Promise<void> => {
+    return apiRequest<void>('/auth/users/role', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        admin_uid: adminUid,
+        user_id: userId,
+        new_role: newRole
+      }),
+    });
+  },
 
   // Get user permissions
-  async getUserPermissions(userId: string): Promise<UserPermissions> {
-    return this.makeRequest<UserPermissions>(`/api/auth/users/${userId}/permissions`);
-  }
+  getUserPermissions: async (userId: string): Promise<UserPermissions> => {
+    return apiRequest<UserPermissions>(`/auth/users/${userId}/permissions`);
+  },
 
   // Get all users
-  async getUsers(): Promise<any[]> {
-    return this.makeRequest<any[]>('/api/auth/users');
+  getUsers: async (): Promise<any[]> => {
+    return apiRequest<any[]>('/auth/users');
   }
-}
-
-export const roleService = new RoleService(); 
+};

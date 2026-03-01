@@ -8,6 +8,7 @@ import * as RiIcons from 'react-icons/ri';
 import { IconContext } from 'react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
+import { projectService } from '../services/projectService';
 import { createForm, getForms, respondToForm, updateFormStatus, FormResponse } from '../api/forms';
 import { UserSelectionModal } from '../components/modals/UserSelectionModal';
 import { generateFormPdf } from '../utils/pdfUtils';
@@ -229,30 +230,24 @@ const RfiPage: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setIsLoadingUsers(true);
-      if (!user?.id) return;
+      if (!selectedProject?.id) return;
 
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/auth/users/${user.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      // Use projectService to fetch project members
+      const members = await projectService.getProjectMembers(selectedProject.id);
       
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      } else {
-        // If users endpoint fails, provide a default user (current user)
-        console.log('Users endpoint failed, using current user as default');
-        setUsers([{
-          id: user.id,
-          name: user.name || 'Current User',
-          email: user.email || 'user@example.com',
-          role: user.role || 'admin'
-        }]);
-      }
+      // Map ProjectMember to User interface
+      const mappedUsers: User[] = members.map(member => ({
+        id: member.user.id,
+        name: member.user.name,
+        email: member.user.email,
+        role: member.role,
+        avatar_url: member.user.avatar
+      }));
+
+      setUsers(mappedUsers);
     } catch (error) {
-      console.error('Error fetching users:', error);
-      // Provide fallback user data
+      console.error('Error fetching project members:', error);
+      // Fallback to current user if fetch fails
       if (user) {
         setUsers([{
           id: user.id,

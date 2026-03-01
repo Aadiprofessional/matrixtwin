@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { motion, useAnimation } from 'framer-motion';
+import { motion, useAnimation, AnimatePresence } from 'framer-motion';
 import * as RiIcons from 'react-icons/ri';
-import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { IconContext } from 'react-icons';
@@ -13,10 +11,11 @@ import { ProjectHeader } from '../components/layout/ProjectHeader';
 import { ProjectsHero } from '../components/projects/ProjectsHero';
 import { ProjectCard } from '../components/projects/ProjectCard';
 import UserAvatar from '../components/common/UserAvatar';
-import matrixAILogo from '../assets/MatrixAILogo.png';
 import { getUserInfo } from '../utils/userInfo';
 import { api } from '../utils/api';
 import { useProjects } from '../contexts/ProjectContext';
+import { projectService } from '../services/projectService';
+import { companyService, JoinRequest } from '../services/companyService';
 
 interface Project {
   id: string;
@@ -42,7 +41,6 @@ interface User {
 }
 
 const Projects: React.FC = () => {
-  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -57,7 +55,6 @@ const Projects: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
-  const [statusUpdateLoading, setStatusUpdateLoading] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -70,6 +67,8 @@ const Projects: React.FC = () => {
   const [showUserDetails, setShowUserDetails] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [company, setCompany] = useState<any>(null);
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
+  const [showJoinRequests, setShowJoinRequests] = useState(false);
 
   // New project form state
   const [newProjectData, setNewProjectData] = useState({
@@ -125,6 +124,25 @@ const Projects: React.FC = () => {
     }
   }, [user]);
 
+  // Fetch pending join requests for admins
+  useEffect(() => {
+    const fetchJoinRequests = async () => {
+      if (!user || user.role !== 'admin') return;
+      
+      try {
+        const requests = await companyService.getPendingJoinRequests();
+        setJoinRequests(requests || []);
+      } catch (err) {
+        console.error('Failed to fetch join requests:', err);
+        setJoinRequests([]);
+      }
+    };
+
+    if (user?.role === 'admin') {
+      fetchJoinRequests();
+    }
+  }, [user]);
+
   const fetchProjects = async () => {
     try {
       setIsRefetching(true);
@@ -135,8 +153,13 @@ const Projects: React.FC = () => {
         // Handle if response is wrapped in { success: true, data: [...] }
         setProjects(data.data);
       }
-    } catch (error) {
-      console.error('Error fetching projects:', error);
+    } catch (error: any) {
+      if (error.message && error.message.includes('Admin user is not assigned to a company')) {
+        console.warn('User has no company assigned yet, setting projects to empty.');
+        setProjects([]);
+      } else {
+        console.error('Error fetching projects:', error);
+      }
     } finally {
       setIsRefetching(false);
       setLoading(false);
@@ -257,13 +280,6 @@ const Projects: React.FC = () => {
     upcoming: 'bg-portfolio-orange/10 text-portfolio-orange dark:bg-portfolio-orange/20 dark:text-portfolio-orange',
   };
   
-  // Modal animation
-  const modalVariants = {
-    hidden: { opacity: 0, y: 50, scale: 0.95 },
-    visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.3, ease: 'easeOut' } },
-    exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2, ease: 'easeIn' } }
-  };
-  
 
 
   // Fix for the comparison issues in filterProjects
@@ -300,6 +316,24 @@ const Projects: React.FC = () => {
     }
   };
 
+  const handleApproveRequest = async (requestId: string) => {
+    try {
+      await companyService.approveJoinRequest(requestId);
+      setJoinRequests(prev => prev.filter(req => req.id !== requestId));
+    } catch (err) {
+      console.error('Failed to approve request:', err);
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    try {
+      await companyService.rejectJoinRequest(requestId);
+      setJoinRequests(prev => prev.filter(req => req.id !== requestId));
+    } catch (err) {
+      console.error('Failed to reject request:', err);
+    }
+  };
+
   const handleDeleteProject = async () => {
     if (!projectToDelete || deleteConfirmText !== 'DELETE') return;
     if (user?.role !== 'admin') {
@@ -329,24 +363,84 @@ const Projects: React.FC = () => {
     }
   };
 
-  // Fetch users when staff modal opens
-  const fetchUsers = async () => {
+  // Fetch users and project members when staff modal opens
+  const fetchProjectStaff = async (projectId: string) => {
     if (!user) return;
     
     try {
       setIsLoadingUsers(true);
-      const response = await fetch(`https://server.matrixtwin.com/api/auth/users/${user.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+      
+      // Fetch assignable members with their status
+      const response = await projectService.getAssignableMembers(projectId);
+      
+      if (!response || !response.members) {
+        console.error('Invalid response from assignable members API');
+        setUsers([]);
+        return;
+      }
+      
+      // Map the response to the User interface expected by the component
+      const mappedUsers = response.members.map(member => {
+        const assignedProjects: Project[] = [];
+        
+        // Add current project if assigned
+        // We use the selectedProject from state if available, or create a partial one
+        if (member.assigned_to_current) {
+          if (selectedProject && selectedProject.id === projectId) {
+            assignedProjects.push(selectedProject);
+          } else {
+            // Fallback if selectedProject is not available or doesn't match
+            assignedProjects.push({
+              id: projectId,
+              name: response.project_name || 'Current Project',
+              // Add other required fields with placeholders
+              image_url: '',
+              location: '',
+              client: '',
+              deadline: new Date().toISOString(),
+              description: '',
+              created_at: new Date().toISOString(),
+              created_by: '',
+              updated_at: new Date().toISOString(),
+              status: 'active'
+            });
+          }
         }
+        
+        // Add other assignments
+        if (member.other_assignments && member.other_assignments.length > 0) {
+          member.other_assignments.forEach(assignment => {
+            assignedProjects.push({
+              id: assignment.id,
+              name: assignment.name,
+              // Add other required fields with placeholders
+              image_url: '',
+              location: 'Other Project',
+              client: '',
+              deadline: new Date().toISOString(),
+              description: '',
+              created_at: new Date().toISOString(),
+              created_by: '',
+              updated_at: new Date().toISOString(),
+              status: 'active'
+            });
+          });
+        }
+        
+        return {
+          id: member.user.id,
+          name: member.user.name,
+          email: member.user.email,
+          role: member.user.role,
+          avatar: member.user.avatar || '',
+          assigned_projects: assignedProjects
+        };
       });
       
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      }
+      setUsers(mappedUsers);
+
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('Error fetching staff:', error);
     } finally {
       setIsLoadingUsers(false);
     }
@@ -357,30 +451,11 @@ const Projects: React.FC = () => {
     try {
       setIsAssigningUser(true);
       setAssignError(null);
-      const userInfo = getUserInfo();
-      if (!userInfo) return;
 
-      const response = await fetch('https://server.matrixtwin.com/api/projects/assign', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          creator_uid: userInfo.id,
-          project_id: projectId,
-          user_id: userId
-        })
-      });
+      await projectService.assignMembersToProject(projectId, [userId]);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        // Refresh users list
-        await fetchUsers();
-      } else {
-        setAssignError(data.message || 'Failed to assign user');
-      }
+      // Refresh users list
+      await fetchProjectStaff(projectId);
     } catch (error) {
       console.error('Error assigning user:', error);
       setAssignError('An error occurred while assigning the user');
@@ -392,16 +467,16 @@ const Projects: React.FC = () => {
   // Function to categorize users
   const categorizeUsers = (projectId: string) => {
     const assignedToThisProject = users.filter(user => 
-      user.assigned_projects.some(project => project.id === projectId)
+      user.assigned_projects?.some(project => project.id === projectId)
     );
 
     const unassignedUsers = users.filter(user => 
-      user.assigned_projects.length === 0
+      !user.assigned_projects || user.assigned_projects.length === 0
     );
 
     const assignedToOtherProjects = users.filter(user => 
-      user.assigned_projects.length > 0 && 
-      !user.assigned_projects.some(project => project.id === projectId)
+      (user.assigned_projects?.length || 0) > 0 && 
+      !user.assigned_projects?.some(project => project.id === projectId)
     );
 
     return {
@@ -471,7 +546,23 @@ const Projects: React.FC = () => {
               </div>
               
               <div className="flex items-center gap-4">
-                 {/* Company specific actions could go here */}
+                 {/* Company specific actions */}
+                 {user?.role === 'admin' && (
+                   <Button
+                     variant="outline"
+                     onClick={() => setShowJoinRequests(true)}
+                     className="relative"
+                   >
+                     <RiIcons.RiUserReceivedLine className="mr-2" />
+                     Join Requests
+                     {(joinRequests?.filter(r => r.status === 'pending')?.length || 0) > 0 && (
+                       <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                         {joinRequests?.filter(r => r.status === 'pending')?.length || 0}
+                       </span>
+                     )}
+                   </Button>
+                 )}
+
                  <div className="px-4 py-2 bg-white/5 rounded-lg border border-white/10 text-center">
                    <div className="text-2xl font-bold text-white">{projects.length}</div>
                    <div className="text-xs text-gray-400 uppercase tracking-wider">Projects</div>
@@ -490,6 +581,8 @@ const Projects: React.FC = () => {
         filterStatus={activeFilter}
         onFilterChange={setActiveFilter}
         isAdmin={user?.role === 'admin'}
+        pendingRequestsCount={joinRequests?.filter(r => r.status === 'pending')?.length || 0}
+        onShowRequests={() => setShowJoinRequests(true)}
       />
       
       <div className="bg-portfolio-dark min-h-screen">
@@ -639,7 +732,9 @@ const Projects: React.FC = () => {
                           variant="ai"
                           onClick={() => {
                             setShowStaffModal(true);
-                            fetchUsers();
+                            if (selectedProject) {
+                                fetchProjectStaff(selectedProject.id);
+                            }
                           }}
                         >
                           <RiIcons.RiTeamLine className="mr-2" />
@@ -663,6 +758,118 @@ const Projects: React.FC = () => {
           )}
         </Dialog>
         
+        {/* Join Requests Modal */}
+        <AnimatePresence>
+          {showJoinRequests && (
+            <Dialog onClose={() => setShowJoinRequests(false)}>
+              <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.3 }}
+                className="bg-dark-900/90 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden max-w-3xl w-full mx-auto shadow-2xl"
+              >
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-portfolio-orange/10 rounded-lg">
+                        <RiIcons.RiUserReceivedLine className="text-xl text-portfolio-orange" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-white">Join Requests</h2>
+                        <p className="text-sm text-gray-400">Manage pending requests to join your company</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setShowJoinRequests(false)}
+                      className="p-2 rounded-full hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <RiIcons.RiCloseLine className="text-xl" />
+                    </button>
+                  </div>
+                  
+                  {joinRequests.length === 0 ? (
+                    <div className="py-12 text-center flex flex-col items-center justify-center">
+                      <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                        <RiIcons.RiUserReceivedLine className="text-3xl text-gray-500" />
+                      </div>
+                      <h3 className="text-lg font-medium text-white mb-2">No pending requests</h3>
+                      <p className="text-gray-400 max-w-sm">
+                        There are currently no users requesting to join your company.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                      {joinRequests?.map(request => (
+                        <div key={request.id} className="bg-white/5 border border-white/5 rounded-lg p-5 hover:border-portfolio-orange/30 transition-all group">
+                          <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-portfolio-orange to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                                {(request.user?.name || 'U').charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                  {request.user?.name || 'Unknown User'}
+                                  {request.status === 'pending' && (
+                                    <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/20">
+                                      Pending
+                                    </span>
+                                  )}
+                                </h3>
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm text-gray-400 mt-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <RiIcons.RiMailLine className="text-portfolio-orange" />
+                                    <span>{request.user?.email}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <RiIcons.RiTimeLine className="text-portfolio-orange" />
+                                    <span>{new Date(request.created_at).toLocaleDateString()}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {request.status === 'pending' && (
+                              <div className="flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
+                                <Button
+                                  variant="outline"
+                                  onClick={() => handleRejectRequest(request.id)}
+                                  className="flex-1 md:flex-none border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                                >
+                                  <RiIcons.RiCloseLine className="mr-1" />
+                                  Reject
+                                </Button>
+                                <Button
+                                  variant="ai-gradient"
+                                  onClick={() => handleApproveRequest(request.id)}
+                                  className="flex-1 md:flex-none"
+                                >
+                                  <RiIcons.RiCheckLine className="mr-1" />
+                                  Approve
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">
+                    <Button
+                      variant="ghost"
+                      onClick={() => setShowJoinRequests(false)}
+                      className="text-gray-400 hover:text-white"
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            </Dialog>
+          )}
+        </AnimatePresence>
+
         {/* New project modal */}
         <Dialog 
           isOpen={showNewProject} 

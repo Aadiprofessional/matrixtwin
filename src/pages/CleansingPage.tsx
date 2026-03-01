@@ -11,6 +11,7 @@ import { DailyCleaningInspectionTemplate } from '../components/forms/DailyCleani
 import { Dialog } from '../components/ui/Dialog';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
 import { emailService } from '../services/emailService';
+import { projectService } from '../services/projectService';
 
 interface User {
   id: string;
@@ -293,24 +294,36 @@ const CleansingPage: React.FC = () => {
     }
   };
 
-  // Fetch users from API (similar to Projects.tsx)
+  // Fetch users from API (using project members)
   const fetchUsers = async () => {
+    if (!selectedProject?.id) return;
+    
     try {
       setLoadingUsers(true);
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/auth/users/${user?.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      // Use projectService to fetch project members
+      const members = await projectService.getProjectMembers(selectedProject.id);
       
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      } else {
-        console.error('Failed to fetch users');
-      }
+      // Map ProjectMember to User interface
+      const mappedUsers: User[] = members.map(member => ({
+        id: member.user.id,
+        name: member.user.name,
+        email: member.user.email,
+        role: member.role,
+        avatar: member.user.avatar
+      }));
+      
+      setUsers(mappedUsers);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('Error fetching project members:', error);
+      // Fallback to current user if fetch fails
+      if (user) {
+        setUsers([{
+          id: user.id,
+          name: user.name || 'Current User',
+          email: user.email || 'user@example.com',
+          role: user.role || 'admin'
+        }]);
+      }
     } finally {
       setLoadingUsers(false);
     }

@@ -238,9 +238,15 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
   }, [width, height]);
 
   // Notify parent when merged cells change
+  const onMergedCellsChangeRef = useRef(onMergedCellsChange);
+  
   useEffect(() => {
-    onMergedCellsChange?.(mergedCells);
-  }, [mergedCells, onMergedCellsChange]);
+    onMergedCellsChangeRef.current = onMergedCellsChange;
+  }, [onMergedCellsChange]);
+
+  useEffect(() => {
+    onMergedCellsChangeRef.current?.(mergedCells);
+  }, [mergedCells]);
 
   // Utility functions
   const getCellKey = (row: number, col: number) => `${row}-${col}`;
@@ -853,13 +859,21 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
     }
 
     console.log('ExcelGrid - Initializing with:', { width, height, numRows, numCols, newRows: newRows.length, newColumns: newColumns.length });
-    console.log('ExcelGrid - First few columns:', newColumns.slice(0, 3));
-    console.log('ExcelGrid - First few rows:', newRows.slice(0, 3));
     
     setRows(newRows);
     setColumns(newColumns);
     setCells(newCells);
-  }, [width, height, selectedCell]);
+  }, [width, height]);
+
+  // Update cells selection state when selectedCell changes
+  useEffect(() => {
+    setCells(prev => prev.map(row => 
+      row.map(cell => ({
+        ...cell,
+        selected: selectedCell?.row === cell.row && selectedCell?.col === cell.col
+      }))
+    ));
+  }, [selectedCell]);
 
   const handleCellClick = useCallback((e: React.MouseEvent, row: number, col: number) => {
     e.preventDefault();
@@ -1251,6 +1265,12 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
   }, [isResizing, handleMouseMove, handleMouseUp]);
 
   // Update cells when rows or columns change
+  const onCellResizeRef = useRef(onCellResize);
+  
+  useEffect(() => {
+    onCellResizeRef.current = onCellResize;
+  }, [onCellResize]);
+
   useEffect(() => {
     setCells(prev => {
       const newCells: GridCell[][] = [];
@@ -1273,10 +1293,14 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
     });
     
     // Notify parent component of cell dimension changes
-    if (onCellResize && rows.length > 0 && columns.length > 0) {
-      onCellResize(rows, columns);
+    // Only when rows or columns change, not when selection changes
+  }, [rows, columns, selectedCell]);
+
+  useEffect(() => {
+    if (onCellResizeRef.current && rows.length > 0 && columns.length > 0) {
+      onCellResizeRef.current(rows, columns);
     }
-  }, [rows, columns, selectedCell, onCellResize]);
+  }, [rows, columns]);
 
   return (
     <div 

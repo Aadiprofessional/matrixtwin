@@ -68,12 +68,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const authUser = localStorage.getItem('auth.user');
 
       if ((storedUser || authUser) && (isAuthenticatedFlag || token)) {
-        let userData;
         try {
-          userData = JSON.parse(storedUser || authUser || '{}');
-          setUser(userData);
-          setIsAuthenticated(true);
-          console.log('AuthContext: Authentication restored from localStorage:', userData.email);
+          const userData = JSON.parse(storedUser || authUser || '{}') as User;
+          if (userData && userData.email) {
+            setUser(userData);
+            setIsAuthenticated(true);
+            console.log('AuthContext: Authentication restored from localStorage:', userData.email);
+            
+            // Background refresh of user data to ensure sync with server (e.g. company_id updates)
+            api.getCurrentUser().then((freshUser: any) => {
+              if (freshUser && JSON.stringify(freshUser) !== JSON.stringify(userData)) {
+                console.log('AuthContext: User data refreshed from server');
+                setUser(freshUser as User);
+                localStorage.setItem('user', JSON.stringify(freshUser));
+                localStorage.setItem('auth.user', JSON.stringify(freshUser));
+              }
+            }).catch((err: any) => {
+              console.error('AuthContext: Failed to refresh user data from server:', err);
+              if (err.message?.includes('401') || err.message?.includes('token')) {
+                 // Token might be invalid despite being present
+                 forceReLogin();
+              }
+            });
+          }
         } catch (error) {
           console.error('AuthContext: Error parsing stored user data:', error);
           // Clear corrupted data
@@ -152,6 +169,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('auth.user', JSON.stringify(userData));
+
+      // Fetch fresh user data to ensure we have company_id and other details
+      // The login response might be minimal or outdated
+      api.getCurrentUser().then(freshUser => {
+        if (freshUser && JSON.stringify(freshUser) !== JSON.stringify(userData)) {
+          console.log('Login: User data refreshed from server');
+          setUser(freshUser as User);
+          localStorage.setItem('user', JSON.stringify(freshUser));
+          localStorage.setItem('auth.user', JSON.stringify(freshUser));
+        }
+      }).catch(err => {
+        console.error('Login: Failed to fetch fresh user data:', err);
+      });
       
     } catch (err) {
       console.error('Login error:', err);
@@ -240,9 +270,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setError(null);
     
     try {
+      // Create a copy of userData without fields that don't exist in the users table
+      // The 'status' field is often returned by the API (joined from other tables) but not present in the users table
+      const { status, company_id, ...updatePayload } = userData as any;
+      
+      // Only include company_id if it's a valid UUID
+      if (company_id && company_id !== 'inferred-from-projects' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(company_id)) {
+        updatePayload.company_id = company_id;
+      }
+      
       const { error } = await supabase
         .from('users')
-        .update(userData)
+        .update(updatePayload)
         .eq('id', user.id);
       
       if (error) throw new Error(error.message);

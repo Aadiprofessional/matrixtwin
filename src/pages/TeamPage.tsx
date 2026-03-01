@@ -9,6 +9,8 @@ import { Dialog } from '../components/ui/Dialog';
 import ReactDOM from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { roleService, Role } from '../services/roleService';
+import { companyService, JoinRequest } from '../services/companyService';
+import { projectService } from '../services/projectService';
 import { 
   RiUserLine,
   RiTeamLine,
@@ -68,7 +70,7 @@ const dropdownVariants = {
 };
 
 interface WorkerApplication {
-  id: number;
+  id: string | number;
   name: string;
   email: string;
   phone: string;
@@ -295,9 +297,10 @@ const TeamPage: React.FC = () => {
     try {
       setLoadingRoles(true);
       const roles = await roleService.getRoles();
-      setCustomRoles(roles);
+      setCustomRoles(roles || []);
     } catch (err) {
       console.error('Error loading custom roles:', err);
+      setCustomRoles([]);
     } finally {
       setLoadingRoles(false);
     }
@@ -314,15 +317,9 @@ const TeamPage: React.FC = () => {
   useEffect(() => {
     const fetchTeamMembers = async () => {
       try {
-        if (!user?.id) return;
+        const members = await companyService.getCompanyMembers();
         
-        const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/auth/users/${user.id}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch team members');
-        }
-        
-        const data = await response.json();
-        setTeamMembers(data.map((member: any) => ({
+        setTeamMembers(members.map((member: any) => ({
           ...member,
           phone: member.phone || '+1 (555) 123-4567', // Fallback if phone not provided
           address: member.address || 'No address provided',
@@ -337,32 +334,56 @@ const TeamPage: React.FC = () => {
     };
 
     fetchTeamMembers();
-  }, [user?.id]);
+  }, []);
+
+  // Fetch pending join requests for admins
+  useEffect(() => {
+    const fetchJoinRequests = async () => {
+      if (!user || user.role !== 'admin') return;
+      
+      try {
+        const requests = await companyService.getPendingJoinRequests() || [];
+        
+        // Map JoinRequest to WorkerApplication format
+        const applications: any[] = requests.map((req: JoinRequest) => ({
+          id: req.id,
+          name: req.user?.name || 'Unknown User',
+          email: req.user?.email || '',
+          phone: '',
+          role: 'worker', // Default role for join request
+          avatar: req.user?.avatar || `https://ui-avatars.com/api/?name=${(req.user?.name || 'User').replace(' ', '+')}&background=random`,
+          skills: '',
+          message: 'Request to join company',
+          status: req.status,
+          dateApplied: req.created_at
+        }));
+        
+        setWorkerApplications(applications);
+      } catch (err) {
+        console.error('Failed to fetch join requests:', err);
+      }
+    };
+
+    if (user?.role === 'admin') {
+      fetchJoinRequests();
+    }
+  }, [user]);
 
   // Handle project assignment
   const handleAssignProject = async (userId: string, projectId: string, role: string) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/projects/assign`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          creator_uid: user?.id,
-          project_id: projectId,
-          user_id: userId,
-          role: role
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to assign project');
-      }
+      await projectService.assignMemberToProject(projectId, userId, role, user?.id);
 
       // Refresh team members data after assignment
-      const updatedResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/auth/users/${user?.id}`);
-      const updatedData = await updatedResponse.json();
-      setTeamMembers(updatedData);
+      const members = await companyService.getCompanyMembers();
+      
+      setTeamMembers(members.map((member: any) => ({
+        ...member,
+        phone: member.phone || '+1 (555) 123-4567', // Fallback if phone not provided
+        address: member.address || 'No address provided',
+        skills: member.skills || 'No skills specified',
+        assigned_projects: member.assigned_projects || []
+      })));
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to assign project');
@@ -404,9 +425,9 @@ const TeamPage: React.FC = () => {
     return teamMembers.filter(member => {
       // Text search
       const matchesSearch = 
-        member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        member.role.toLowerCase().includes(searchQuery.toLowerCase());
+        (member.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+        (member.email?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+        (member.role?.toLowerCase() || '').includes(searchQuery.toLowerCase());
       
       // Role filter
       const matchesRole = activeRoleFilter === 'all' || member.role === activeRoleFilter;
@@ -458,45 +479,57 @@ const TeamPage: React.FC = () => {
   const filteredMembers = getFilteredMembers();
   
   // Application handling functions
-  const handleApproveApplication = (application: any) => {
-    // Create a new team member from the application
-    const newMember = {
-      id: String(application.id),
-      name: application.name,
-      email: application.email,
-      phone: application.phone,
-      role: application.role,
-      avatar: application.avatar,
-      skills: application.skills,
-      address: '123 Main St, City',
-      assigned_projects: [],
-      joinDate: new Date().toISOString().split('T')[0],
-      status: 'active'
-    };
-    
-    // Add the new member to the team
-    setTeamMembers([...teamMembers, newMember]);
-    
-    // Remove the application from the list
-    setWorkerApplications(
-      workerApplications.filter(app => app.id !== application.id)
-    );
-    
-    // Close the applications modal if no more applications
-    if (workerApplications.length === 1) {
-      setShowApplications(false);
+  const handleApproveApplication = async (application: any) => {
+    try {
+      await companyService.approveJoinRequest(String(application.id));
+
+      // Create a new team member from the application
+      const newMember = {
+        id: String(application.id),
+        name: application.name,
+        email: application.email,
+        phone: application.phone,
+        role: application.role,
+        avatar: application.avatar,
+        skills: application.skills,
+        address: '123 Main St, City',
+        assigned_projects: [],
+        joinDate: new Date().toISOString().split('T')[0],
+        status: 'active'
+      };
+      
+      // Add the new member to the team
+      setTeamMembers([...teamMembers, newMember]);
+      
+      // Remove the application from the list
+      setWorkerApplications(
+        workerApplications.filter(app => app.id !== application.id)
+      );
+      
+      // Close the applications modal if no more applications
+      if (workerApplications.length === 1) {
+        setShowApplications(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to approve application');
     }
   };
   
-  const handleRejectApplication = (application: any) => {
-    // Remove the application from the list
-    setWorkerApplications(
-      workerApplications.filter(app => app.id !== application.id)
-    );
-    
-    // Close the applications modal if no more applications
-    if (workerApplications.length === 1) {
-      setShowApplications(false);
+  const handleRejectApplication = async (application: any) => {
+    try {
+      await companyService.rejectJoinRequest(String(application.id));
+
+      // Remove the application from the list
+      setWorkerApplications(
+        workerApplications.filter(app => app.id !== application.id)
+      );
+      
+      // Close the applications modal if no more applications
+      if (workerApplications.length === 1) {
+        setShowApplications(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject application');
     }
   };
 
@@ -562,16 +595,7 @@ const TeamPage: React.FC = () => {
     try {
       setIsDeletingMember(true);
       
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/auth/users/${memberId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete user');
-      }
+      await companyService.removeCompanyMember(memberId);
 
       // Update local state
       setTeamMembers(teamMembers.filter(member => member.id !== memberId));
@@ -604,21 +628,7 @@ const TeamPage: React.FC = () => {
     try {
       // Call the role update API if role has changed
       if (selectedMember.role !== newMemberData.role) {
-        const roleResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/auth/users/role`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            admin_uid: user.id,
-            user_id: selectedMember.id,
-            new_role: newMemberData.role
-          }),
-        });
-
-        if (!roleResponse.ok) {
-          throw new Error('Failed to update user role');
-        }
+        await roleService.updateUserRole(user.id, selectedMember.id, newMemberData.role);
       }
 
       // Update the local state with new data
@@ -854,9 +864,9 @@ const TeamPage: React.FC = () => {
                     glowing
                   >
                     {t('team.applications')}
-                    {workerApplications.filter(app => app.status === 'pending').length > 0 && (
+                    {(workerApplications?.filter(app => app.status === 'pending')?.length || 0) > 0 && (
                       <span className="absolute -top-2 -right-2 bg-error text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                        {workerApplications.filter(app => app.status === 'pending').length}
+                        {workerApplications?.filter(app => app.status === 'pending')?.length || 0}
                       </span>
                     )}
                   </Button>
@@ -1025,7 +1035,7 @@ const TeamPage: React.FC = () => {
           </div>
           <div>
             <h3 className="text-2xl font-display font-semibold">
-              {workerApplications.filter(app => app.status === 'pending').length}
+              {workerApplications?.filter(app => app.status === 'pending')?.length || 0}
             </h3>
             <p className="text-sm text-secondary-600 dark:text-secondary-400">Pending Applications</p>
           </div>

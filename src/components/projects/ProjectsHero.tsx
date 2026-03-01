@@ -10,6 +10,8 @@ interface ProjectsHeroProps {
   filterStatus: string;
   onFilterChange: (status: string) => void;
   isAdmin: boolean;
+  pendingRequestsCount?: number;
+  onShowRequests?: () => void;
 }
 
 export const ProjectsHero: React.FC<ProjectsHeroProps> = ({
@@ -18,7 +20,9 @@ export const ProjectsHero: React.FC<ProjectsHeroProps> = ({
   onSearchChange,
   filterStatus,
   onFilterChange,
-  isAdmin
+  isAdmin,
+  pendingRequestsCount = 0,
+  onShowRequests
 }) => {
   return (
     <div className="relative bg-portfolio-dark pt-32 pb-12 overflow-hidden border-b border-white/5">
@@ -98,27 +102,46 @@ export const ProjectsHero: React.FC<ProjectsHeroProps> = ({
                   <button
                     key={status}
                     onClick={() => onFilterChange(status)}
-                    className={`px-4 py-1 rounded-full text-sm border transition-all duration-300 ${
-                      filterStatus === status
-                        ? 'bg-white text-black border-white'
-                        : 'bg-transparent text-gray-500 border-gray-800 hover:border-gray-600 hover:text-white'
+                    className={`px-4 py-2 rounded-full text-sm transition-all ${
+                      filterStatus === status 
+                        ? 'bg-portfolio-orange text-black font-medium' 
+                        : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
                     }`}
                   >
-                    {status.toUpperCase()}
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Action Module */}
-            {isAdmin && (
-              <div className="flex-none p-6 flex items-center justify-center bg-portfolio-orange hover:bg-portfolio-orange-hover transition-colors cursor-pointer group" onClick={onCreateProject}>
-                <div className="flex items-center gap-3">
-                  <span className="text-black font-bold uppercase tracking-wider text-sm group-hover:scale-105 transition-transform">Create New</span>
-                  <RiAddLine className="text-black text-xl bg-white/20 rounded-full p-0.5" />
-                </div>
-              </div>
-            )}
+            {/* Actions Module */}
+            <div className="flex-1 p-6 flex items-center justify-end gap-4 bg-white/5 md:bg-transparent">
+              {isAdmin && onShowRequests && (
+                <Button 
+                  variant="outline" 
+                  onClick={onShowRequests}
+                  className="relative group border-white/20 hover:border-portfolio-orange/50"
+                >
+                  <span>Requests</span>
+                  {pendingRequestsCount > 0 && (
+                    <span className="ml-2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {pendingRequestsCount}
+                    </span>
+                  )}
+                </Button>
+              )}
+              
+              {isAdmin && (
+                <Button 
+                  variant="ai-gradient" 
+                  leftIcon={<RiAddLine />}
+                  onClick={onCreateProject}
+                  className="shadow-lg shadow-portfolio-orange/20"
+                >
+                  New Project
+                </Button>
+              )}
+            </div>
           </div>
         </motion.div>
       </div>

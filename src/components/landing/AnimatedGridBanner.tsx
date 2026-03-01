@@ -58,6 +58,7 @@ const AnimatedGridBanner: React.FC<AnimatedGridBannerProps> = ({
       {/* Spline 3D Background - Left aligned, 2x bigger, can overflow */}
       <div className="absolute top-0 left-0 w-[240%] h-[200%] z-0 overflow-visible" style={{ transform: 'translateX(-50%)' }}>
         <div className="w-full h-full"> 
+          {/* Spline viewer disabled because grid.splinecode is missing
           {React.createElement('spline-viewer', { 
             url: '/grid.splinecode', 
             style: { 
@@ -72,6 +73,7 @@ const AnimatedGridBanner: React.FC<AnimatedGridBannerProps> = ({
             'auto-rotate': false, 
             'camera-controls': true 
           })} 
+          */} 
         </div>
       </div>
       

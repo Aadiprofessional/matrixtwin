@@ -121,13 +121,19 @@ export const apiRequest = async <T = any>(
       console.error('API Error Response:', errorData);
       
       // If it's a 401 and the error mentions token, handle token expiration
-      if (response.status === 401 && errorData.message?.includes('Token')) {
+      if (response.status === 401 && (
+        errorData.message?.toLowerCase().includes('token') || 
+        errorData.error?.toLowerCase().includes('token')
+      )) {
         console.error('Token is invalid - triggering re-login');
         handleTokenExpiration();
       }
 
       // If it's a 404 and the error mentions user profile not found, handle it as an auth error
-      if (response.status === 404 && (errorData.message?.includes('User profile not found') || errorData.error?.includes('User profile not found'))) {
+      if (response.status === 404 && (
+        errorData.message?.includes('User profile not found') || 
+        errorData.error?.includes('User profile not found')
+      )) {
         console.error('User profile not found - triggering re-login');
         handleTokenExpiration();
       }
@@ -253,8 +259,9 @@ export const api = {
   getProjectsList: () =>
     apiRequest('/projects/list'),
 
-  getProjects: (creatorId: string) =>
-    apiRequest(`/projects/assigned?creator_uid=${creatorId}`),
+  // Deprecated: use getProjectsList instead. Kept for backward compatibility but redirected.
+  getProjects: (creatorId?: string) =>
+    apiRequest('/projects/list'),
 
   createProject: (data: any) =>
     apiRequest('/projects/create', {

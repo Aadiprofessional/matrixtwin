@@ -109,8 +109,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }));
         setProjects(transformedData);
       }
-    } catch (error) {
-      console.error('Error fetching projects:', error);
+    } catch (error: any) {
+      // Handle the case where a new admin hasn't been assigned to a company yet
+      if (error.message && error.message.includes('Admin user is not assigned to a company')) {
+        console.warn('User has no company assigned yet, setting projects to empty.');
+        setProjects([]);
+      } else {
+        console.error('Error fetching projects:', error);
+      }
     } finally {
       setLoading(false);
     }

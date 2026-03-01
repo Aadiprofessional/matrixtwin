@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
@@ -8,6 +8,7 @@ import { RiAddLine, RiCalendarTodoLine, RiFilterLine, RiSearchLine, RiArrowLeftL
 import { IconContext } from 'react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
+import { projectService } from '../services/projectService';
 
 // Define User interface
 interface User {
@@ -39,20 +40,10 @@ const PeopleSelectorModal: React.FC<{
   onClose: () => void;
   onSelect: (user: User) => void;
   title: string;
-}> = ({ isOpen, onClose, onSelect, title }) => {
+  users: User[];
+  loading?: boolean;
+}> = ({ isOpen, onClose, onSelect, title, users, loading }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Mock users data
-  const users: User[] = [
-    { id: '1', name: 'John Smith', role: 'Project Manager', avatar: 'JS' },
-    { id: '2', name: 'Maria Garcia', role: 'Engineer', avatar: 'MG' },
-    { id: '3', name: 'Alex Johnson', role: 'Site Manager', avatar: 'AJ' },
-    { id: '4', name: 'Sarah Williams', role: 'Construction Manager', avatar: 'SW' },
-    { id: '5', name: 'Robert Lee', role: 'Engineer', avatar: 'RL' },
-    { id: '6', name: 'Emma Wilson', role: 'Architect', avatar: 'EW' },
-    { id: '7', name: 'Michael Brown', role: 'Supervisor', avatar: 'MB' },
-    { id: '8', name: 'David Taylor', role: 'Contractor', avatar: 'DT' }
-  ];
   
   // Filter users based on search
   const filteredUsers = searchQuery 
@@ -151,6 +142,45 @@ const TaskPage: React.FC = () => {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showTaskDetails, setShowTaskDetails] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  
+  // Fetch users from API (using project members)
+  useEffect(() => {
+    const fetchUsers = async () => {
+      if (!selectedProject?.id) return;
+      
+      try {
+        setLoadingUsers(true);
+        // Use projectService to fetch project members
+        const members = await projectService.getProjectMembers(selectedProject.id);
+        
+        // Map ProjectMember to User interface
+        const mappedUsers: User[] = members.map(member => ({
+          id: member.user.id,
+          name: member.user.name,
+          role: member.role,
+          avatar: member.user.avatar
+        }));
+        
+        setUsers(mappedUsers);
+      } catch (error) {
+        console.error('Error fetching project members:', error);
+        // Fallback to current user if fetch fails
+        if (user) {
+          setUsers([{
+            id: user.id,
+            name: user.name || 'Current User',
+            role: user.role || 'admin'
+          }]);
+        }
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+    
+    fetchUsers();
+  }, [selectedProject, user]);
   
   // Add state for multi-step form
   const [formStep, setFormStep] = useState<number>(1);
@@ -1288,6 +1318,8 @@ const TaskPage: React.FC = () => {
             onClose={() => setShowPeopleSelector(false)}
             onSelect={handleUserSelection}
             title="Select Assignee"
+            users={users}
+            loading={loadingUsers}
           />
         )}
       </AnimatePresence>
