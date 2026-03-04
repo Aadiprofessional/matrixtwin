@@ -31,6 +31,7 @@ import {
   RiVolumeUpLine
 } from 'react-icons/ri';
 import { useProjects } from '../../contexts/ProjectContext';
+import { useFormCounts } from '../../contexts/FormCountsContext';
 
 // Logo component
 const Logo: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
@@ -74,9 +75,18 @@ interface NavItemProps {
   badgeCount?: number;
   mobile?: boolean;
   onClick?: () => void;
+  end?: boolean;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCount = 0, mobile, onClick }) => {
+interface SidebarItem {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+  badgeCount?: number;
+  end?: boolean;
+}
+
+const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCount = 0, mobile, onClick, end }) => {
   const location = useLocation();
   const auth = useAuth();
   const { t } = useTranslation();
@@ -115,6 +125,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCoun
   return (
     <NavLink
       to={getNavigationPath()}
+      end={end}
       onClick={handleItemClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -198,6 +209,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
   const { logout, user } = useAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { diaryCount, safetyCount, labourCount, cleansingCount, rfiCount, formsCount } = useFormCounts();
   
   // Always expanded on mobile
   useEffect(() => {
@@ -214,13 +226,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
   }, [collapsed, onCollapseChange, mobile]);
   
   // Primary nav items
-  const primaryNavItems = [
+  const primaryNavItems: SidebarItem[] = [
     { 
       to: '/dashboard', 
       icon: (
         <div><IconWrapper icon="RiDashboardLine" className="text-xl" /></div>
       ), 
-      label: 'nav.dashboard'
+      label: 'nav.dashboard',
+      end: true
     },
     { 
       to: '/digital-twins/viewer', 
@@ -247,47 +260,51 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
   ];
   
   // DWSS Modules
-  const dwssModules = [
+  const dwssModules: SidebarItem[] = [
     { 
       to: '/rfi', 
       icon: (
         <div><IconWrapper icon="RiFileList3Line" className="text-xl" /></div>
       ), 
       label: 'nav.forms',
-      badgeCount: 3
+      badgeCount: rfiCount
     },
     { 
       to: '/diary', 
       icon: (
         <div><IconWrapper icon="RiBookmarkLine" className="text-xl" /></div>
       ), 
-      label: 'diary.title'
+      label: 'diary.title',
+      badgeCount: diaryCount
     },
     { 
       to: '/safety', 
       icon: (
         <div><IconWrapper icon="RiShieldCheckLine" className="text-xl" /></div>
       ), 
-      label: 'safety.title'
+      label: 'safety.title',
+      badgeCount: safetyCount
     },
     { 
       to: '/labour', 
       icon: (
         <div><IconWrapper icon="RiGroupLine" className="text-xl" /></div>
       ), 
-      label: 'labour.title'
+      label: 'labour.title',
+      badgeCount: labourCount
     },
     { 
       to: '/cleansing', 
       icon: (
         <div><IconWrapper icon="RiBrushLine" className="text-xl" /></div>
       ), 
-      label: 'cleansing.title'
+      label: 'cleansing.title',
+      badgeCount: cleansingCount
     }
   ];
   
   // Management nav items
-  const managementItems = [
+  const managementItems: SidebarItem[] = [
     { 
       to: '/tasks', 
       icon: (
@@ -301,7 +318,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
       icon: (
         <div><IconWrapper icon="RiFileUserLine" className="text-xl" /></div>
       ), 
-      label: 'nav.customForms'
+      label: 'nav.customForms',
+      badgeCount: formsCount
     },
     { 
       to: '/team', 
@@ -428,6 +446,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
                       badgeCount={item.badgeCount}
                       mobile={mobile}
                       onClick={handleNavItemClick}
+                      end={item.end}
                     />
                   </motion.div>
                 ))}
@@ -456,6 +475,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
                       badgeCount={item.badgeCount}
                       mobile={mobile}
                       onClick={handleNavItemClick}
+                      end={item.end}
                     />
                   </motion.div>
                 ))}
@@ -484,6 +504,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
                       badgeCount={item.badgeCount}
                       mobile={mobile}
                       onClick={handleNavItemClick}
+                      end={item.end}
                     />
                   </motion.div>
                 ))}

@@ -40,6 +40,9 @@ import LanguageSelector from '../../components/LanguageSelector';
 import ModeToggle from '../../components/ModeToggle';
 import { notificationService, type Notification } from '../../services/notificationService';
 
+import { API_BASE_URL } from '../../utils/api';
+import { useLocation } from 'react-router-dom';
+
 interface NotificationProps {
   id: string;
   title: string;
@@ -242,16 +245,78 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
     exit: { opacity: 0, y: -10, scale: 0.95, transition: { duration: 0.2 } }
   };
   
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Handle search input change with debounce
+  useEffect(() => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (searchQuery.trim().length > 1) {
+      setIsSearching(true);
+      searchTimeoutRef.current = setTimeout(async () => {
+        try {
+          const projectParam = selectedProject?.id ? `&projectId=${selectedProject.id}` : '';
+          const userParam = user?.id ? `&userId=${user.id}` : '';
+          const headers = { 'Authorization': `Bearer ${localStorage.getItem('token')}` };
+          const response = await fetch(`${API_BASE_URL}/global-forms/search?query=${encodeURIComponent(searchQuery)}${projectParam}${userParam}`, { headers });
+          
+          if (response.ok) {
+            const data = await response.json();
+            // Handle both array and object response format
+            const results = Array.isArray(data) ? data : (data.results || []);
+            setSearchResults(results);
+          }
+        } catch (error) {
+          console.error('Error searching:', error);
+          setSearchResults([]);
+        } finally {
+          setIsSearching(false);
+        }
+      }, 500); // 500ms debounce
+    } else {
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, [searchQuery, selectedProject]);
+
+  const handleSearchSelect = (result: any) => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setIsSearchFocused(false);
+    setIsSearchExpanded(false);
+    
+    // Navigate to the specific form detail page
+    // The path structure matches what's used in SearchPage.tsx
+    // result.type should be 'diary', 'safety', etc.
+    // result.projectId and result.id are required
+    if (result.projectId && result.type && result.id) {
+      let type = result.type;
+      if (type === 'inspection' || type === 'survey') {
+        type = 'rfi';
+      }
+      navigate(`/dashboard/${result.projectId}/${type}?id=${result.id}`);
+    }
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
-    
-    // Replace with actual search functionality
-    navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
-    setSearchQuery('');
-    setIsSearchFocused(false);
-    if (window.innerWidth < 768) {
-      setIsSearchVisible(false);
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+      setSearchQuery('');
+      setSearchResults([]);
+      setIsSearchFocused(false);
+      if (window.innerWidth < 768) {
+        setIsSearchVisible(false);
+      }
     }
   };
   
@@ -383,6 +448,50 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                     <IconWrapper icon="RiArrowRightLine" />
                   </IconContext.Provider>
                 </motion.button>
+              )}
+              {/* Search Dropdown */}
+              {isSearchFocused && (searchQuery.trim().length > 1) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="absolute top-full left-0 right-0 mt-2 bg-portfolio-dark/95 backdrop-blur-md border border-white/10 rounded-xl shadow-xl overflow-hidden z-50 max-h-96 overflow-y-auto"
+                >
+                  {isSearching ? (
+                    <div className="p-4 text-center text-gray-400">
+                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-portfolio-orange mx-auto mb-2"></div>
+                      Searching...
+                    </div>
+                  ) : searchResults.length > 0 ? (
+                    <ul>
+                      {searchResults.map((result, index) => (
+                        <li 
+                          key={result.id || index}
+                          onClick={() => handleSearchSelect(result)}
+                          className="px-4 py-3 hover:bg-white/5 cursor-pointer border-b border-white/5 last:border-0 transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-white truncate mr-2">{result.title || result.name || 'Untitled Form'}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              result.status === 'completed' ? 'bg-green-500/20 text-green-400' : 
+                              result.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' : 
+                              'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {result.status || 'Unknown'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between mt-1 text-xs text-gray-500">
+                            <span className="capitalize">{result.type || 'Form'}</span>
+                            <span>{new Date(result.date || result.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="p-4 text-center text-gray-400">
+                      No results found
+                    </div>
+                  )}
+                </motion.div>
               )}
             </motion.form>
           )}
@@ -565,7 +674,14 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                           <div className="flex justify-between">
                             <div className="flex-1">
                               <div className="flex justify-between items-start">
-                                <span className="font-medium text-sm text-white">{notification.title}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-sm text-white">{notification.title}</span>
+                                  {notification.form_id && (
+                                    <span className="text-xs bg-dark-700 text-gray-300 px-1.5 py-0.5 rounded border border-dark-600">
+                                      #{notification.form_id.substring(0, 8)}
+                                    </span>
+                                  )}
+                                </div>
                                 <button 
                                   onClick={(e) => deleteNotification(notification.id, e)}
                                   className="text-gray-500 hover:text-white ml-2 opacity-50 hover:opacity-100"

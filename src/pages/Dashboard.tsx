@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,35 +13,22 @@ import {
   Tooltip,
   Legend,
   ArcElement,
+  Filler,
 } from 'chart.js';
-import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { Bar, Doughnut } from 'react-chartjs-2';
 import { 
   RiCalendarCheckLine,
   RiAlarmWarningLine,
   RiShieldCheckLine,
-  RiMore2Fill,
-  RiArrowRightLine,
-  RiTimeLine,
-  RiPieChartLine,
-  RiLineChartLine,
   RiBarChartLine,
-  RiRobot2Line,
-  RiBrainLine,
-  RiDashboardLine,
-  RiGroupLine,
-  RiBrushLine,
-  RiBuilding4Line,
-  RiFileList3Line
+  RiFileList3Line,
+  RiLoader4Line,
+  RiPieChartLine
 } from 'react-icons/ri';
-import { IconContext } from 'react-icons';
 
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useProjects } from '../contexts/ProjectContext';
-import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { PermissionGate } from '../components/common/PermissionGate';
-import { getUserInfo } from '../utils/userInfo';
 
 // Register ChartJS components
 ChartJS.register(
@@ -53,851 +40,406 @@ ChartJS.register(
   ArcElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 const Dashboard: React.FC = () => {
-  const { t } = useTranslation();
   const { user } = useAuth();
-  const { darkMode } = useTheme();
   const { selectedProject } = useProjects();
-  const [localSelectedProject, setLocalSelectedProject] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [projectData, setProjectData] = useState<any>(null);
-  const { projectId } = useParams();
-  
   
   useEffect(() => {
-    // console.log('Selected Project ID:', selectedProject?.id);
-  }, [selectedProject]);
-  
-  // Filter projects based on user role
-  const filteredProjects = React.useMemo(() => {
-    if (!user) return [];
-    
-    // Mock projects data with user assignments
-    const projectsWithAssignments = [
-      {
-        id: 1,
-        name: 'Project Alpha',
-        location: 'New York, NY',
-        client: 'ABC Corporation',
-        progress: 80,
-        status: 'active',
-        deadline: '2025-12-31',
-        workers: ['5'], // Worker ID assigned to this project
-        managers: ['2'] // Project Manager ID assigned to this project
-      },
-      {
-        id: 2,
-        name: 'Harbor Tower',
-        location: 'San Francisco, CA',
-        client: 'Harbor Development Inc.',
-        progress: 45,
-        status: 'active',
-        deadline: '2024-03-15',
-        workers: [],
-        managers: ['2']
-      },
-      {
-        id: 3,
-        name: 'Metro Station',
-        location: 'Chicago, IL',
-        client: 'City Transport Authority',
-        progress: 65,
-        status: 'active',
-        deadline: '2024-01-20',
-        workers: [],
-        managers: ['2']
-      },
-      {
-        id: 4,
-        name: 'Corporate HQ',
-        location: 'Dallas, TX',
-        client: 'XYZ Enterprises',
-        progress: 20,
-        status: 'planning',
-        deadline: '2024-06-30',
-        workers: [],
-        managers: []
-      },
-      {
-        id: 5,
-        name: 'Shopping Mall',
-        location: 'Miami, FL',
-        client: 'Retail Properties Group',
-        progress: 95,
-        status: 'completing',
-        deadline: '2025-11-15',
-        workers: [],
-        managers: []
-      }
-    ];
-    
-    let projectsList = [];
-    
-    // Admin and site inspectors can see all projects
-    if (user.role === 'admin' || user.role === 'siteInspector') {
-      projectsList = projectsWithAssignments;
-    }
-    // Project Managers see projects they manage
-    else if (user.role === 'projectManager') {
-      projectsList = projectsWithAssignments.filter(project => 
-        project.managers.includes(user.id)
-      );
-    }
-    // Contractors see all active projects they can bid on or are assigned to
-    else if (user.role === 'contractor') {
-      projectsList = projectsWithAssignments.filter(project => 
-        project.status === 'active' || project.status === 'planning'
-      );
-    }
-    // Workers only see projects they are assigned to
-    else if (user.role === 'worker') {
-      projectsList = projectsWithAssignments.filter(project => 
-        project.workers.includes(user.id)
-      );
-    }
-    else {
-      projectsList = projectsWithAssignments;
-    }
-    
-    // If a specific project is selected in the sidebar, only show that project
-    if (selectedProject) {
-      projectsList = projectsList.filter(project => 
-        project.id.toString() === selectedProject.id.toString()
-      );
-    }
-    
-    return projectsList;
-  }, [user, selectedProject]);
-  
-  // Set default selected project based on role
-  useEffect(() => {
-    if (filteredProjects.length > 0) {
-      // For workers, auto-select their only project
-      if (user?.role === 'worker' && filteredProjects.length === 1) {
-        setLocalSelectedProject(filteredProjects[0].name);
-      } else {
-        // For others, select the first project in the list
-        setLocalSelectedProject(filteredProjects[0].name);
-      }
-    }
-  }, [filteredProjects, user]);
-  
-  useEffect(() => {
-    const fetchProjectData = async () => {
-      if (selectedProject) {
-        try {
-          setLoading(true);
-          const userInfo = getUserInfo();
-          if (!userInfo) return;
-
-          const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/projects/${selectedProject.id}`, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            setProjectData(data);
-            setLocalSelectedProject(data.name);
-          }
-        } catch (error) {
-          console.error('Error fetching project:', error);
-        } finally {
-          setLoading(false);
+    document.title = 'Dashboard | MatrixTwin';
+    const fetchDashboardStats = async () => {
+      if (!selectedProject || !user) return;
+      
+      try {
+        setLoading(true);
+        const headers = { 'Authorization': `Bearer ${localStorage.getItem('token')}` };
+        const response = await fetch(`${process.env.REACT_APP_API_BASE_URL || 'https://server.matrixtwin.com'}/api/global-forms/dashboard?projectId=${selectedProject.id}&userId=${user.id}`, { headers });
+        if (response.ok) {
+          const data = await response.json();
+          setDashboardData(data);
         }
-      } else {
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+      } finally {
         setLoading(false);
       }
     };
+    fetchDashboardStats();
+  }, [selectedProject, user]);
+  
+  const { projectId } = useParams();
 
-    fetchProjectData();
-  }, [selectedProject]);
-
-  // If we have a projectId in the URL but no selected project yet, show loading
-  // This prevents the dashboard from rendering in a "generic" state while the project context is initializing
-  if (projectId && (!selectedProject || selectedProject.id !== projectId)) {
+  // Loading state
+  if ((projectId && (!selectedProject || selectedProject.id.toString() !== projectId)) || loading) {
     return (
-      <div className="flex items-center justify-center h-full min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-portfolio-orange"></div>
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-100px)]">
+        <div className="relative">
+          <div className="absolute inset-0 rounded-full blur-md bg-portfolio-orange/30 animate-pulse"></div>
+          <RiLoader4Line className="text-5xl text-portfolio-orange animate-spin relative z-10" />
+        </div>
+        <p className="mt-4 text-gray-400 font-mono text-sm tracking-widest uppercase">Loading Matrix Data...</p>
       </div>
     );
   }
-  
-  // Chart colors based on theme
-  const chartColors = {
-    primary: darkMode ? '#FF5722' : '#FF5722',
-    primaryTransparent: darkMode ? 'rgba(255, 87, 34, 0.2)' : 'rgba(255, 87, 34, 0.2)',
-    secondary: darkMode ? '#757575' : '#757575',
-    accent: darkMode ? '#ff9800' : '#ff9800',
-    success: darkMode ? '#05c27b' : '#05c27b',
-    warning: darkMode ? '#ffa500' : '#ffa500',
-    error: darkMode ? '#ff455d' : '#ff455d',
-    ai: {
-      blue: '#FF5722',
-      purple: '#ff9800',
-      teal: '#ffcc80',
-      pink: '#e65100',
-    },
-    gridColor: darkMode ? 'rgba(50, 56, 69, 0.2)' : 'rgba(209, 213, 219, 0.5)',
-    textColor: darkMode ? 'rgba(229, 231, 235, 1)' : 'rgba(26, 31, 44, 1)',
+
+  // Use the API data or a default structure matching the API
+  const stats = dashboardData || {
+    total_forms: 0,
+    pending_total: 0,
+    completed_total: 0,
+    by_type: {}
+  };
+
+  // Modern Orange/Black Theme Colors
+  const themeColors = {
+    primary: '#FF5722',      // Portfolio Orange
+    primaryGlow: 'rgba(255, 87, 34, 0.5)',
+    secondary: '#212121',    // Dark Grey
+    surface: '#111111',      // Card Background
+    background: '#0a0a0a',   // Main Background
+    text: '#ffffff',
+    textSecondary: '#9e9e9e',
+    grid: 'rgba(255, 255, 255, 0.05)',
+    success: '#00E676',      // Bright Green for contrast
+    warning: '#FFC400',      // Bright Amber
   };
   
-  // Project Progress Chart
-  const projectProgressData = {
-    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6'],
+  // Prepare data for charts
+  const types = Object.values(stats.by_type || {}) as any[];
+  const labels = types.map((t: any) => t.label || t.type);
+  const totalData = types.map((t: any) => t.total);
+  const pendingData = types.map((t: any) => t.pending);
+  const completedData = types.map((t: any) => t.completed);
+
+  // Bar Chart Data
+  const barChartData = {
+    labels,
     datasets: [
       {
-        label: 'Planned',
-        data: [10, 25, 40, 60, 75, 85],
-        borderColor: chartColors.secondary,
-        backgroundColor: 'transparent',
-        borderDashed: [5, 5],
-        borderWidth: 2,
+        label: 'Pending',
+        data: pendingData,
+        backgroundColor: 'rgba(255, 196, 0, 0.8)', // Warning Color
+        borderColor: 'rgba(255, 196, 0, 1)',
+        borderWidth: 1,
+        borderRadius: 2,
+        barPercentage: 0.6,
       },
       {
-        label: 'Actual',
-        data: [5, 20, 35, 50, 70, 80],
-        borderColor: chartColors.primary,
-        backgroundColor: `rgba(255, 87, 34, 0.15)`,
-        fill: true,
-        borderWidth: 2,
-        tension: 0.3,
+        label: 'Completed',
+        data: completedData,
+        backgroundColor: 'rgba(255, 87, 34, 0.8)', // Primary Orange
+        borderColor: '#FF5722',
+        borderWidth: 1,
+        borderRadius: 2,
+        barPercentage: 0.6,
       },
     ],
   };
-  
-  const projectProgressOptions = {
+
+  const barChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+        labels: { 
+          color: themeColors.textSecondary,
+          font: { family: 'Space Grotesk', size: 12 },
+          usePointStyle: true,
+          boxWidth: 8
+        }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(17, 17, 17, 0.9)',
+        titleColor: '#fff',
+        bodyColor: '#ccc',
+        borderColor: 'rgba(255, 87, 34, 0.3)',
+        borderWidth: 1,
+        padding: 10,
+        displayColors: true,
+      }
+    },
     scales: {
-      y: {
-        beginAtZero: true,
-        max: 100,
-        grid: {
-          color: chartColors.gridColor,
-        },
-        ticks: {
-          color: chartColors.textColor,
-        },
-        title: {
-          display: true,
-          text: 'Completion %',
-          color: chartColors.textColor,
-        },
-      },
       x: {
-        grid: {
-          color: chartColors.gridColor,
-        },
-        ticks: {
-          color: chartColors.textColor,
-        },
+        grid: { color: themeColors.grid, display: false },
+        ticks: { color: themeColors.textSecondary, font: { family: 'Space Grotesk' } }
       },
+      y: {
+        grid: { color: themeColors.grid, borderDash: [5, 5] },
+        ticks: { color: themeColors.textSecondary, font: { family: 'Space Grotesk' } },
+        beginAtZero: true
+      }
     },
-    plugins: {
-      legend: {
-        display: true,
-        labels: {
-          color: chartColors.textColor,
-        },
-      },
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
     },
   };
-  
-  // Task Status Chart
-  const taskStatusData = {
-    labels: ['Complete', 'In Progress', 'Not Started', 'Delayed'],
+
+  // Doughnut Chart Data
+  const doughnutData = {
+    labels,
     datasets: [
       {
-        data: [35, 25, 30, 10],
+        data: totalData,
         backgroundColor: [
-          chartColors.success,
-          chartColors.ai.blue,
-          chartColors.ai.purple,
-          chartColors.error,
+          '#FF5722', // Primary Orange
+          '#FF8A65', // Lighter Orange
+          '#E64A19', // Darker Orange
+          '#FFCCBC', // Very Light Orange
+          '#BF360C', // Very Dark Orange
+          '#FFAB91',
+          '#FBE9E7'
         ],
-        borderWidth: 0,
+        borderColor: themeColors.surface,
+        borderWidth: 2,
+        hoverOffset: 10
       },
     ],
   };
-  
-  const taskStatusOptions = {
+
+  const doughnutOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'right' as const,
-        labels: {
-          color: chartColors.textColor,
-        },
-      },
-    },
-  };
-  
-  // Sales In-progress Chart
-  const salesInProgressData = {
-    labels: ['Safety Inspection', 'Site Diary', '3rd Qtr', '4th Qtr'],
-    datasets: [
-      {
-        data: [40, 25, 20, 15],
-        backgroundColor: [
-          chartColors.ai.blue,
-          chartColors.success,
-          chartColors.ai.teal,
-          chartColors.ai.purple,
-        ],
-        borderWidth: 0,
-      },
-    ],
-  };
-
-  // Sales Completed Chart
-  const salesCompletedData = {
-    labels: ['Safety Inspection', 'Site Diary', '3rd Qtr', '4th Qtr'],
-    datasets: [
-      {
-        data: [45, 30, 15, 10],
-        backgroundColor: [
-          chartColors.ai.blue,
-          chartColors.success,
-          chartColors.ai.teal,
-          chartColors.ai.purple,
-        ],
-        borderWidth: 0,
-      },
-    ],
-  };
-
-  // Overall Sales Chart
-  const overallSalesData = {
-    labels: ['Safety Inspection', 'Site Diary', '3rd Qtr', '4th Qtr'],
-    datasets: [
-      {
-        data: [35, 25, 22, 18],
-        backgroundColor: [
-          chartColors.ai.blue,
-          chartColors.success,
-          chartColors.ai.teal,
-          chartColors.ai.purple,
-        ],
-        borderWidth: 0,
-      },
-    ],
-  };
-
-  const salesChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'right' as const,
-        labels: {
-          color: chartColors.textColor,
+        position: 'bottom' as const,
+        labels: { 
+          color: themeColors.textSecondary,
+          font: { family: 'Space Grotesk', size: 11 },
           boxWidth: 12,
-          padding: 10,
-          font: {
-            size: 11,
-          }
-        },
+          padding: 15
+        }
       },
     },
+    cutout: '75%',
   };
-  
-  // Daily Activity Chart
-  const activityData = {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    datasets: [
-      {
-        label: 'Form Submissions',
-        data: [15, 20, 18, 25, 22, 10, 5],
-        backgroundColor: chartColors.ai.blue,
-      },
-      {
-        label: 'Inspections',
-        data: [8, 12, 10, 17, 15, 5, 2],
-        backgroundColor: chartColors.ai.teal,
-      },
-    ],
-  };
-  
-  const activityOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      y: {
-        beginAtZero: true,
-        grid: {
-          color: chartColors.gridColor,
-        },
-        ticks: {
-          color: chartColors.textColor,
-        },
-      },
-      x: {
-        grid: {
-          color: chartColors.gridColor,
-        },
-        ticks: {
-          color: chartColors.textColor,
-        },
-      },
+
+  // Summary Cards Data
+  const summaryCards = [
+    {
+      title: 'TOTAL FORMS',
+      value: stats.total_forms,
+      icon: <RiFileList3Line />,
+      color: 'text-white',
+      bg: 'bg-gradient-to-br from-portfolio-orange to-orange-700',
+      border: 'border-portfolio-orange/50',
+      glow: 'shadow-ai-glow'
     },
-    plugins: {
-      legend: {
-        display: true,
-        labels: {
-          color: chartColors.textColor,
-        },
-      },
+    {
+      title: 'PENDING',
+      value: stats.pending_total,
+      icon: <RiAlarmWarningLine />,
+      color: 'text-warning',
+      bg: 'bg-dark-800',
+      border: 'border-warning/30',
+      glow: 'shadow-none'
     },
-  };
-  
-  // Mock data for the dashboard
-  const summaryData = [
-    { 
-      title: t('dashboard.pendingInspections'), 
-      value: 12, 
-      icon: <RiAlarmWarningLine />, 
-      color: 'text-warning bg-warning/10 border border-warning/20' 
-    },
-    { 
-      title: t('dashboard.dailyLogs'), 
-      value: 8, 
-      icon: <RiCalendarCheckLine />, 
-      color: 'text-ai-blue bg-ai-blue/10 border border-ai-blue/20' 
-    },
-    { 
-      title: t('dashboard.safetyScore'), 
-      value: '85%', 
-      icon: <RiShieldCheckLine />, 
-      color: 'text-success bg-success/10 border border-success/20' 
+    {
+      title: 'COMPLETED',
+      value: stats.completed_total,
+      icon: <RiShieldCheckLine />,
+      color: 'text-portfolio-orange',
+      bg: 'bg-dark-800',
+      border: 'border-portfolio-orange/30',
+      glow: 'shadow-none'
     }
   ];
 
-  // Recent activity based on user role
-  const getRecentActivity = () => {
-    if (user?.role === 'worker') {
-      return [
-        {
-          id: 1,
-          title: 'Completed Safety Training',
-          time: '2 hours ago',
-          type: 'safety'
-        },
-        {
-          id: 2,
-          title: 'Submitted Daily Attendance',
-          time: '5 hours ago',
-          type: 'labour'
-        },
-        {
-          id: 3,
-          title: 'Cleaning Schedule Updated',
-          time: '1 day ago',
-          type: 'cleansing'
-        }
-      ];
-    } else {
-      return [
-        {
-          id: 1,
-          title: 'New Safety Inspection Added',
-          time: '2 hours ago',
-          type: 'safety'
-        },
-        {
-          id: 2,
-          title: 'Worker Attendance Updated',
-          time: '3 hours ago',
-          type: 'labour'
-        },
-        {
-          id: 3,
-          title: 'Cleaning Schedule Updated',
-          time: '1 day ago',
-          type: 'cleansing'
-        },
-        {
-          id: 4,
-          title: 'Project Timeline Adjusted',
-          time: '2 days ago',
-          type: 'project'
-        }
-      ];
+  // Custom plugin to draw text in center of doughnut
+  const textCenter = {
+    id: 'textCenter',
+    beforeDatasetsDraw(chart: any) {
+      const { ctx } = chart;
+      const x = chart.getDatasetMeta(0).data[0]?.x;
+      const y = chart.getDatasetMeta(0).data[0]?.y;
+      
+      if (x === undefined || y === undefined) return;
+
+      ctx.save();
+      
+      // Draw Total Number
+      ctx.font = 'bold 30px "Space Grotesk", sans-serif';
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(stats.total_forms.toString(), x, y - 5);
+      
+      // Draw Label
+      ctx.font = '10px "Space Mono", monospace';
+      ctx.fillStyle = '#9ca3af'; // gray-400
+      ctx.fillText('TOTAL', x, y + 20);
+      
+      ctx.restore();
     }
   };
 
-  const recentActivity = getRecentActivity();
-  
-  // Activity type icons
-  const getActivityIcon = (type: string) => {
-    switch(type) {
-      case 'safety':
-        return <RiShieldCheckLine className="text-primary-500" />;
-      case 'labour':
-        return <RiGroupLine className="text-warning" />;
-      case 'cleansing':
-        return <RiBrushLine className="text-success" />;
-      case 'project':
-        return <RiBuilding4Line className="text-ai-blue" />;
-      default:
-        return <RiCalendarCheckLine className="text-secondary-500" />;
-    }
-  };
-  
-  // Return appropriate module cards based on user role
-  const getModuleCards = () => {
-    const modules = [
-      {
-        title: t('forms.title'),
-        description: t('dashboard.moduleDescriptions.forms', 'Create and manage forms for project documentation'),
-        icon: <RiFileList3Line />,
-        link: '/forms',
-        color: 'from-portfolio-orange to-orange-600',
-        permission: 'dashboard_access'
-      },
-      {
-        title: 'AI Assistant',
-        icon: <RiBrainLine />,
-        description: 'Ask AI about your projects and get intelligent insights',
-        link: '/ask-ai',
-        color: 'from-portfolio-orange to-orange-500',
-        permission: 'dashboard_access'
-      },
-      {
-        title: 'Safety Module',
-        icon: <RiShieldCheckLine />,
-        description: 'Conduct safety inspections and track compliance metrics',
-        link: '/safety',
-        color: 'from-orange-600 to-red-500',
-        permission: 'twin_admin'
-      },
-      {
-        title: 'Labour Module',
-        icon: <RiGroupLine />,
-        description: 'Track worker attendance and manage labour resources',
-        link: '/labour',
-        color: 'from-zinc-700 to-zinc-600',
-        permission: 'dashboard_access'
-      },
-      {
-        title: 'Cleansing Module',
-        icon: <RiBrushLine />,
-        description: 'Manage site cleanliness and waste management',
-        link: '/cleansing',
-        color: 'from-zinc-600 to-zinc-500',
-        permission: 'dashboard_access'
-      },
-      {
-        title: 'Predictive Analytics',
-        icon: <RiPieChartLine />,
-        description: 'Advanced analytics and predictive insights',
-        link: '/analytics',
-        color: 'from-orange-500 to-amber-500',
-        permission: 'predictive'
-      },
-      {
-        title: 'Alarm System',
-        icon: <RiAlarmWarningLine />,
-        description: 'Monitor and manage system alarms',
-        link: '/alarms',
-        color: 'from-red-500 to-red-600',
-        permission: 'alarm'
-      },
-      {
-        title: 'Maximo Integration',
-        icon: <RiBuilding4Line />,
-        description: 'Work order management and asset tracking',
-        link: '/maximo',
-        color: 'from-orange-500 to-yellow-500',
-        permission: 'maximo'
-      }
-    ];
-    
-    return modules;
-  };
-  
   return (
-    <div className="relative overflow-hidden pb-8 pt-6">
-      <div className="flex items-center justify-between mb-8">
+    <div className="min-h-screen bg-dark-950 p-6 md:p-8 pt-24 md:pt-4 space-y-8 text-white font-sans relative z-0">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6 relative z-10">
         <div>
-          <h1 className="text-2xl md:text-3xl font-display font-bold text-white">
-            Dashboard
+          <h1 className="text-3xl md:text-4xl font-display font-bold text-white tracking-tight">
+            {selectedProject?.name?.toUpperCase() || 'PROJECT'} <span className="text-portfolio-orange">DASHBOARD</span>
           </h1>
-          <p className="text-secondary-400 mt-1">
-            Overview of your project performance
+          <p className="text-gray-500 mt-1 font-mono text-xs uppercase tracking-widest">
+            Real-time Matrix Data Stream
           </p>
         </div>
-        <div className="text-sm text-secondary-500">
-          {new Date().toLocaleDateString()}
+        <div className="flex items-center space-x-2 bg-dark-900 px-4 py-2 rounded-lg border border-white/5">
+          <div className="w-2 h-2 rounded-full bg-portfolio-orange animate-pulse"></div>
+          <span className="text-sm font-mono text-gray-400">{new Date().toLocaleDateString()}</span>
         </div>
       </div>
-      
-      {/* Summary Stats */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-display font-semibold">{t('dashboard.projectSummary')}</h2>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {summaryData.map((item, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 * index, duration: 0.5 }}
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {summaryCards.map((card, index) => (
+          <motion.div
+            key={index}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.1, duration: 0.5 }}
+          >
+            <div 
+              className={`relative overflow-hidden rounded-2xl p-6 h-full border ${card.border} ${card.bg} ${card.glow} transition-all duration-300 hover:-translate-y-1 hover:shadow-lg`}
             >
-              <Card variant="ai" className="p-4">
-                <div className="flex items-start">
-                  <div className={`p-3 rounded-lg ${item.color} mr-4`}>
-                    <div className="text-xl">{item.icon}</div>
+              {/* Background decorative elements */}
+              <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                <div className="text-8xl transform rotate-12">{card.icon}</div>
+              </div>
+              
+              <div className="relative z-10 flex flex-col justify-between h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`p-3 rounded-lg bg-black/20 backdrop-blur-sm ${card.color}`}>
+                    <div className="text-2xl">{card.icon}</div>
                   </div>
-                  <div>
-                    <div className="text-3xl font-display font-bold">{item.value}</div>
-                    <div className="text-sm text-secondary-600 dark:text-secondary-400">{item.title}</div>
-                  </div>
+                  {index === 0 && (
+                    <span className="px-2 py-1 rounded text-[10px] font-bold bg-white/20 text-white uppercase tracking-wider">
+                      Live
+                    </span>
+                  )}
                 </div>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-      
-      {/* Chart Sections */}
-      <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <PermissionGate permission="dashboard_access">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <Card variant="ai" className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-display font-semibold flex items-center">
-                  <IconContext.Provider value={{ className: "mr-2 text-ai-blue" }}>
-                    <RiLineChartLine />
-                  </IconContext.Provider>
-                  <span>{t('dashboard.projectProgress')}</span>
-                </h3>
-                <Button variant="ghost" size="sm" rightIcon={
-                  <IconContext.Provider value={{}}>
-                    <RiArrowRightLine />
-                  </IconContext.Provider>
-                }>
-                  {t('dashboard.viewAll')}
-                </Button>
-              </div>
-              <div className="h-[300px]">
-                <Line data={projectProgressData} options={projectProgressOptions} />
-              </div>
-            </Card>
-          </motion.div>
-        </PermissionGate>
-        
-        <PermissionGate permission="dashboard_access">
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-          >
-            <Card variant="ai" className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-display font-semibold flex items-center">
-                  <IconContext.Provider value={{ className: "mr-2 text-ai-blue" }}>
-                    <RiBarChartLine />
-                  </IconContext.Provider>
-                  <span>{t('dashboard.weeklyActivity')}</span>
-                </h3>
-                <Button variant="ghost" size="sm" rightIcon={
-                  <IconContext.Provider value={{}}>
-                    <RiArrowRightLine />
-                  </IconContext.Provider>
-                }>
-                  {t('dashboard.viewAll')}
-                </Button>
-              </div>
-              <div className="h-[300px]">
-                <Bar data={activityData} options={activityOptions} />
-              </div>
-            </Card>
-          </motion.div>
-        </PermissionGate>
-      </div>
-      
-      {/* Sales Charts Row */}
-      <PermissionGate permission="dashboard_export">
-        <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-          >
-            <Card variant="ai" className="p-4 h-full">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-display font-semibold flex items-center">
-                  <IconContext.Provider value={{ className: "mr-2 text-ai-blue" }}>
-                    <RiPieChartLine />
-                  </IconContext.Provider>
-                  <span>Sales In-progress</span>
-                </h3>
-              </div>
-              <div className="h-[200px] flex items-center justify-center">
-                <Doughnut data={salesInProgressData} options={salesChartOptions} />
-              </div>
-            </Card>
-          </motion.div>
-          
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            <Card variant="ai" className="p-4 h-full">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-display font-semibold flex items-center">
-                  <IconContext.Provider value={{ className: "mr-2 text-success" }}>
-                    <RiPieChartLine />
-                  </IconContext.Provider>
-                  <span>Sales Completed</span>
-                </h3>
-              </div>
-              <div className="h-[200px] flex items-center justify-center">
-                <Doughnut data={salesCompletedData} options={salesChartOptions} />
-              </div>
-            </Card>
-          </motion.div>
-          
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
-            <Card variant="ai" className="p-4 h-full">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-display font-semibold flex items-center">
-                  <IconContext.Provider value={{ className: "mr-2 text-ai-teal" }}>
-                    <RiPieChartLine />
-                  </IconContext.Provider>
-                  <span>Overall Sales</span>
-                </h3>
-              </div>
-              <div className="h-[200px] flex items-center justify-center">
-                <Doughnut data={overallSalesData} options={salesChartOptions} />
-              </div>
-            </Card>
-          </motion.div>
-        </div>
-      </PermissionGate>
-      
-      {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Task Status */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-        >
-          <Card variant="ai" className="p-4 h-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-display font-semibold flex items-center">
-                <IconContext.Provider value={{ className: "mr-2 text-ai-blue" }}>
-                  <RiPieChartLine />
-                </IconContext.Provider>
-                <span>{t('dashboard.taskStatus')}</span>
-              </h3>
-            </div>
-            <div className="h-[200px] flex items-center justify-center">
-              <Doughnut data={taskStatusData} options={taskStatusOptions} />
-            </div>
-          </Card>
-        </motion.div>
-        
-        {/* Recent Activity */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="lg:col-span-2"
-        >
-          <Card variant="ai" className="p-4 h-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-display font-semibold flex items-center">
-                <IconContext.Provider value={{ className: "mr-2 text-ai-blue" }}>
-                  <RiTimeLine />
-                </IconContext.Provider>
-                <span>{t('dashboard.recentActivity')}</span>
-              </h3>
-              <Button variant="ghost" size="sm" rightIcon={
-                <IconContext.Provider value={{}}>
-                  <RiArrowRightLine />
-                </IconContext.Provider>
-              }>
-                {t('dashboard.viewAll')}
-              </Button>
-            </div>
-            
-            <div className="space-y-3">
-              {recentActivity.map((activity) => (
-                <div 
-                  key={activity.id}
-                  className="p-3 rounded-lg bg-secondary-50/50 dark:bg-dark-800/50 border border-secondary-100 dark:border-dark-700 flex items-center justify-between"
-                >
-                  <div>
-                    <span className="font-medium text-secondary-900 dark:text-white">{activity.title}</span>
-                    <div className="text-xs text-secondary-500 dark:text-secondary-500">
-                      {activity.time}
-                    </div>
-                  </div>
-                  <button className="text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-300">
-                    <IconContext.Provider value={{}}>
-                      {getActivityIcon(activity.type)}
-                    </IconContext.Provider>
-                  </button>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </motion.div>
-      </div>
-      
-      {/* Module Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {getModuleCards().map((module, index) => (
-          <PermissionGate key={index} permission={module.permission}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.7 + index * 0.1 }}
-              whileHover={{ y: -5 }}
-            >
-              <Card className="p-6 h-full flex flex-col justify-between">
                 <div>
-                  <div className={`w-12 h-12 mb-4 rounded-full bg-gradient-to-br ${module.color} flex items-center justify-center text-white`}>
-                    <IconContext.Provider value={{ className: "text-xl" }}>
-                      {module.icon}
-                    </IconContext.Provider>
-                  </div>
-                  <h3 className="text-lg font-display font-semibold mb-2">{module.title}</h3>
-                  <p className="text-secondary-600 dark:text-secondary-400 text-sm mb-4">
-                    {module.description}
-                  </p>
+                  <p className="text-xs font-mono font-medium text-white/60 tracking-widest mb-1">{card.title}</p>
+                  <p className="text-4xl font-display font-bold text-white">{card.value}</p>
                 </div>
-                <Link to={module.link}>
-                  <Button variant="outline" size="sm" rightIcon={<RiArrowRightLine />}>
-                    {t('dashboard.access')}
-                  </Button>
-                </Link>
-              </Card>
-            </motion.div>
-          </PermissionGate>
+              </div>
+            </div>
+          </motion.div>
         ))}
       </div>
+
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Bar Chart */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.3 }}
+          className="lg:col-span-2"
+        >
+          <div className="bg-dark-900/50 backdrop-blur-md rounded-2xl p-6 border border-white/5 h-[400px] shadow-xl relative overflow-hidden group">
+            {/* Corner Accents */}
+            <div className="absolute top-0 left-0 w-20 h-20 border-l-2 border-t-2 border-portfolio-orange/30 rounded-tl-2xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
+            <div className="absolute bottom-0 right-0 w-20 h-20 border-r-2 border-b-2 border-portfolio-orange/30 rounded-br-2xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
+            
+            <h3 className="text-lg font-display font-bold text-white mb-6 flex items-center">
+              <RiBarChartLine className="mr-2 text-portfolio-orange" /> 
+              FORM STATUS ANALYTICS
+            </h3>
+            <div className="h-[300px] w-full">
+              <Bar data={barChartData} options={barChartOptions} />
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Doughnut Chart */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4 }}
+          className="lg:col-span-1"
+        >
+          <div className="bg-dark-900/50 backdrop-blur-md rounded-2xl p-6 border border-white/5 h-[400px] shadow-xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-20 h-20 border-r-2 border-t-2 border-portfolio-orange/30 rounded-tr-2xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
+            <div className="absolute bottom-0 left-0 w-20 h-20 border-l-2 border-b-2 border-portfolio-orange/30 rounded-bl-2xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
+
+            <h3 className="text-lg font-display font-bold text-white mb-6 flex items-center">
+              <RiPieChartLine className="mr-2 text-portfolio-orange" /> 
+              DISTRIBUTION
+            </h3>
+            <div className="h-[280px] w-full flex items-center justify-center relative">
+              <Doughnut data={doughnutData} options={doughnutOptions} plugins={[textCenter]} />
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Detailed Grid Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+      >
+        <div className="bg-dark-900/30 rounded-2xl p-1 border border-white/5">
+          <div className="p-5 border-b border-white/5 mb-4">
+             <h3 className="text-lg font-display font-bold text-white flex items-center">
+              <RiFileList3Line className="mr-2 text-portfolio-orange" /> 
+              DETAILED BREAKDOWN
+            </h3>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4 pt-0">
+            {types.map((type: any, index: number) => (
+              <div 
+                key={index} 
+                className="group bg-dark-800 hover:bg-dark-800/80 rounded-xl p-5 border border-white/5 hover:border-portfolio-orange/30 transition-all duration-300 relative overflow-hidden"
+              >
+                <div className="absolute top-0 left-0 w-1 h-full bg-portfolio-orange opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                
+                <h4 className="font-display font-bold text-white mb-4 text-lg border-b border-white/5 pb-2">
+                  {type.label}
+                </h4>
+                
+                <div className="space-y-3 font-mono text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Total</span>
+                    <span className="font-bold text-white bg-white/10 px-2 py-0.5 rounded">{type.total}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Pending</span>
+                    <span className="font-bold text-warning">{type.pending}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Completed</span>
+                    <span className="font-bold text-portfolio-orange">{type.completed}</span>
+                  </div>
+                </div>
+                
+                {/* Visual Indicator */}
+                <div className="mt-4 h-1 w-full bg-dark-950 rounded-full overflow-hidden flex">
+                   <div 
+                     style={{ width: `${type.total > 0 ? (type.completed / type.total) * 100 : 0}%` }} 
+                     className="bg-portfolio-orange h-full shadow-[0_0_10px_rgba(255,87,34,0.5)]"
+                   />
+                   <div 
+                     style={{ width: `${type.total > 0 ? (type.pending / type.total) * 100 : 0}%` }} 
+                     className="bg-warning h-full opacity-70"
+                   />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 };
 
-export default Dashboard; 
+export default Dashboard;

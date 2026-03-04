@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -170,6 +171,7 @@ const DiaryPage: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewEntry, setShowNewEntry] = useState(false);
   const [selectedDiaryEntry, setSelectedDiaryEntry] = useState<DiaryEntry | null>(null);
@@ -202,6 +204,20 @@ const DiaryPage: React.FC = () => {
       fetchUsers();
     }
   }, [user?.id, selectedProject?.id]);
+
+  // Handle URL query parameters for direct navigation
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    if (id && diaryEntries.length > 0) {
+      const entry = diaryEntries.find(e => e.id === id);
+      if (entry) {
+        setSelectedDiaryEntry(entry);
+        setShowDetails(true);
+        // Also show form view if needed, but standard view is details modal
+      }
+    }
+  }, [location.search, diaryEntries]);
 
   // Fetch diary entries from API with project filtering
   const fetchDiaryEntries = async () => {

@@ -17,7 +17,7 @@ interface WorkflowEmailData {
 }
 
 class EmailService {
-  private readonly API_BASE_URL = 'https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api';
+  private readonly API_BASE_URL = 'https://server.matrixtwin.com/api';
 
   async sendEmail(notification: EmailNotification): Promise<boolean> {
     try {

@@ -17,7 +17,17 @@ interface ExcelGridProps {
   onMergedCellsChange?: (mergedCells: Map<string, MergeInfo>) => void;
   selectedCell?: { row: number; col: number } | null;
   isDragging?: boolean;
+  readOnly?: boolean;
+  hideHeaders?: boolean;
   children?: React.ReactNode;
+  
+  // Optional props for restoring grid state
+  rows?: GridRow[];
+  columns?: GridColumn[];
+  cells?: GridCell[][];
+  mergedCells?: Map<string, MergeInfo>;
+  totalWidth?: number;
+  totalHeight?: number;
 }
 
 interface GridCell {
@@ -210,12 +220,18 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
   onMergedCellsChange,
   selectedCell,
   isDragging = false,
-  children
+  readOnly = false,
+  hideHeaders = false,
+  children,
+  rows: propRows,
+  columns: propColumns,
+  cells: propCells,
+  mergedCells: propMergedCells
 }) => {
   const gridRef = useRef<HTMLDivElement>(null);
-  const [rows, setRows] = useState<GridRow[]>([]);
-  const [columns, setColumns] = useState<GridColumn[]>([]);
-  const [cells, setCells] = useState<GridCell[][]>([]);
+  const [rows, setRows] = useState<GridRow[]>(propRows || []);
+  const [columns, setColumns] = useState<GridColumn[]>(propColumns || []);
+  const [cells, setCells] = useState<GridCell[][]>(propCells || []);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeType, setResizeType] = useState<'row' | 'col' | null>(null);
   const [resizeIndex, setResizeIndex] = useState<number>(-1);
@@ -227,15 +243,24 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
   const [selectionStart, setSelectionStart] = useState<{ row: number; col: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [clipboard, setClipboard] = useState<{ data: GridCell[][]; operation: 'copy' | 'cut' } | null>(null);
-  const [mergedCells, setMergedCells] = useState<Map<string, MergeInfo>>(new Map());
+  const [mergedCells, setMergedCells] = useState<Map<string, MergeInfo>>(propMergedCells || new Map());
   const [history, setHistory] = useState<HistoryAction[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [cellData, setCellData] = useState<Map<string, { value: string; style: CellStyle }>>(new Map());
 
   // Initialize grid
   useEffect(() => {
-    initializeGrid();
-  }, [width, height]);
+    if (propRows && propColumns && propCells) {
+      setRows(propRows);
+      setColumns(propColumns);
+      setCells(propCells);
+      if (propMergedCells) {
+        setMergedCells(propMergedCells);
+      }
+    } else {
+      initializeGrid();
+    }
+  }, [width, height, propRows, propColumns, propCells, propMergedCells]);
 
   // Notify parent when merged cells change
   const onMergedCellsChangeRef = useRef(onMergedCellsChange);

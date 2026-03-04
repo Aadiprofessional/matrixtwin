@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLocation } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { RiAddLine, RiBrushLine, RiCheckboxCircleLine, RiCloseCircleLine, RiCalendarCheckLine, RiTaskLine, RiEyeLine, RiMapPinLine, RiFilterLine, RiUploadCloud2Line, RiArrowLeftRightLine, RiPercentLine, RiCheckLine, RiArrowRightLine, RiArrowLeftLine, RiListCheck, RiLayoutGridLine, RiFilter3Line, RiCloseLine, RiLoader4Line, RiFlowChart, RiSettings4Line, RiUserLine, RiSearchLine, RiArrowDownLine, RiDropLine, RiNotificationLine, RiErrorWarningLine, RiFileWarningLine, RiAlertLine, RiMapPin2Line, RiCalendarLine, RiTeamLine, RiFileTextLine, RiDownload2Line, RiPrinterLine, RiDeleteBinLine } from 'react-icons/ri';
@@ -231,12 +232,26 @@ const CleansingPage: React.FC = () => {
   const [assignees, setAssignees] = useState<string[]>([]);
 
   // Fetch cleansing entries on component mount and when project changes
+  const location = useLocation();
   useEffect(() => {
     if (user?.id) {
       fetchCleansingEntries();
       fetchUsers();
     }
   }, [user?.id, selectedProject?.id]);
+
+  // Handle URL query parameters to open specific form
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    if (id && cleansingEntries.length > 0) {
+      const entry = cleansingEntries.find(e => e.id === id);
+      if (entry) {
+        setSelectedCleansingEntry(entry);
+        setShowDetails(true);
+      }
+    }
+  }, [location.search, cleansingEntries]);
 
   // Calculate metrics from cleansing entries
   const getMetrics = () => {
@@ -430,7 +445,7 @@ const CleansingPage: React.FC = () => {
         projectId: selectedProject?.id
       });
 
-      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/cleansing/create', {
+      const response = await fetch('https://server.matrixtwin.com/api/cleansing/create', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

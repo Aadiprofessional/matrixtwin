@@ -176,14 +176,32 @@ class NotificationService {
     }
 
     // Navigate to the appropriate page
-    if (notification.action_url) {
+    if (notification.form_type) {
+      // Map inspection and survey to rfi page as they are handled there
+      let formType = notification.form_type;
+      if (formType === 'inspection' || formType === 'survey') {
+        formType = 'rfi';
+      }
+
+      // Determine base path based on project_id presence
+      const basePath = notification.project_id 
+        ? `/dashboard/${notification.project_id}/${formType}` 
+        : `/${formType}`;
+
+      if (notification.form_id) {
+        navigate(`${basePath}?id=${notification.form_id}`);
+      } else {
+        navigate(basePath);
+      }
+    } else if (notification.action_url) {
       navigate(notification.action_url);
-    } else if (notification.form_type) {
-      // Fallback to form type page
-      navigate(`/${notification.form_type}`);
     } else {
       // Default to dashboard
-      navigate('/dashboard');
+      if (notification.project_id) {
+        navigate(`/dashboard/${notification.project_id}`);
+      } else {
+        navigate('/dashboard');
+      }
     }
   }
 }

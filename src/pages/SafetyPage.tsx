@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
@@ -190,6 +191,7 @@ interface SafetyIncident {
 
 const SafetyPage: React.FC = () => {
   const { t } = useTranslation();
+  const location = useLocation();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
   const [searchQuery, setSearchQuery] = useState('');
@@ -276,6 +278,19 @@ const SafetyPage: React.FC = () => {
       fetchUsers();
     }
   }, [user?.id, selectedProject?.id]);
+
+  // Handle URL query parameters for direct navigation
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    if (id && safetyEntries.length > 0) {
+      const entry = safetyEntries.find(e => e.id === id);
+      if (entry) {
+        setSelectedSafetyEntry(entry);
+        setShowDetails(true);
+      }
+    }
+  }, [location.search, safetyEntries]);
 
   // Fetch safety entries from API with project filtering
   const fetchSafetyEntries = async () => {

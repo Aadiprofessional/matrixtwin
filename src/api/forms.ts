@@ -55,6 +55,7 @@ export const getForms = async (uid: string, project_id: string, form_type: strin
   const response = await axios.get(
     `${API_BASE_URL}/api/forms/getforms?uid=${uid}&project_id=${project_id}&form_type=${form_type}`
   );
+  console.log('getForms API response:', response.data);
   return response.data as FormResponse[];
 };
 

@@ -50,6 +50,7 @@ import VoiceCallPage from './pages/VoiceCallPage';
 import AskAIPage from './pages/AskAIPage';
 import HomePage from './pages/HomePage';
 import CompanyPage from './pages/CompanyPage';
+import SearchPage from './pages/SearchPage';
 
 
 // Protected route wrapper
@@ -189,6 +190,17 @@ const AppRoutes: React.FC = () => {
           }
         />
         
+        <Route
+          path="/search"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <SearchPage />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
         {/* Project Scoped Routes */}
         <Route path="/dashboard/:projectId/tasks" element={<ProtectedRoute><Layout><TaskPage /></Layout></ProtectedRoute>} />
         <Route path="/dashboard/:projectId/team" element={<ProtectedRoute requiredRoles={['admin', 'projectManager', 'contractor']}><Layout><TeamPage /></Layout></ProtectedRoute>} />

@@ -4,6 +4,7 @@ import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { Dialog } from '../components/ui/Dialog';
 import FormCreationFlow from '../components/forms/FormCreationFlow';
 import { SiteDiaryFormTemplate } from '../components/forms/SiteDiaryFormTemplate';
 import { SafetyInspectionChecklistTemplate } from '../components/forms/SafetyInspectionChecklistTemplate';
@@ -13,7 +14,8 @@ import { InspectionCheckFormTemplate } from '../components/forms/InspectionCheck
 import { SurveyCheckFormTemplate } from '../components/forms/SurveyCheckFormTemplate';
 import { PdfToFormImporter, ExtractedTable } from '../components/forms/PdfToFormImporter';
 import { PdfWithOverlay } from '../components/forms/PdfWithOverlay';
-import ExcelGrid from '../components/forms/ExcelGrid';
+import ExcelGridComponent from '../components/forms/ExcelGrid';
+import { processAndScanDocument } from '../services/scanService';
 import { 
   RiAddLine, 
   RiSearchLine, 
@@ -46,9 +48,11 @@ import {
   RiArrowDownLine, 
   RiDeleteBin6Line, 
   RiDragMove2Line, 
-  RiArrowGoBackLine, 
+  RiArrowGoBackLine,
+  RiFileListLine, 
   RiArrowGoForwardLine, 
   RiCloseLine,
+  RiLoader4Line,
   RiRobotLine,
   RiUploadLine,
   RiFileEditLine,
@@ -68,102 +72,32 @@ import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { aiService } from '../services/aiService';
 
-interface FormField {
-  id: string;
-  type: string;
-  label: string;
-  settings: Record<string, any>;
-  width?: number;
-  height?: number;
-  x?: number;
-  y?: number;
-  zIndex?: number;
-  gridRow?: number;
-  gridCol?: number;
-  cellId?: string; // New: Reference to the cell this field is in
-  gridPosition?: { row: number; col: number }; // Excel-like grid position
-}
-
-// New Excel-like Grid System Interfaces
-interface MergeInfo {
-  startRow: number;
-  endRow: number;
-  startCol: number;
-  endCol: number;
-  isMaster: boolean;
-}
-
-interface GridCell {
-  id: string;
-  row: number;
-  col: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  fieldId?: string; // ID of the form field in this cell
-  isEmpty: boolean;
-  mergeInfo?: MergeInfo; // Information about merged cells
-}
-
-interface GridRow {
-  id: string;
-  index: number;
-  height: number;
-  y: number;
-  isResizing?: boolean;
-}
-
-interface GridColumn {
-  id: string;
-  index: number;
-  width: number;
-  x: number;
-  isResizing?: boolean;
-}
-
-interface ExcelGrid {
-  rows: GridRow[];
-  columns: GridColumn[];
-  cells: GridCell[][];
-  totalWidth: number;
-  totalHeight: number;
-  mergedCells?: Map<string, MergeInfo>;
-}
-
-// Grid configuration constants
-const EXCEL_GRID_CONFIG = {
-  DEFAULT_ROWS: 10,
-  DEFAULT_COLS: 6,
-  MIN_ROW_HEIGHT: 30,
-  MIN_COL_WIDTH: 80,
-  DEFAULT_ROW_HEIGHT: 50,
-  DEFAULT_COL_WIDTH: 120,
-  RESIZE_HANDLE_SIZE: 8,
-  GRID_BORDER_WIDTH: 1,
-  HEADER_HEIGHT: 25,
-  HEADER_WIDTH: 40
-} as const;
-
-// Grid cell constants for widget operations
-const GRID_CELL_WIDTH = 120;
-const GRID_CELL_HEIGHT = 50;
-
-interface FormPage {
-  id: string;
-  fields: FormField[];
-  grid: ExcelGrid;
-  dimensions: {
-    width: number;
-    height: number;
-    orientation: 'portrait' | 'landscape';
-    size: 'A4' | 'A3' | 'A5';
-  };
-  pdfPageIndex?: number; // Page index in the source PDF (1-based)
-}
+import { 
+  FormPage, 
+  FormField, 
+  MergeInfo, 
+  GridCell, 
+  GridRow, 
+  GridColumn, 
+  ExcelGrid as ExcelGridType, 
+  EXCEL_GRID_CONFIG, 
+  GRID_CELL_WIDTH, 
+  GRID_CELL_HEIGHT 
+} from '../types/formTypes';
+import { FormRenderer } from '../components/forms/FormRenderer';
 
 // Excel Grid Utility Functions
-const createInitialGrid = (rows: number = EXCEL_GRID_CONFIG.DEFAULT_ROWS, cols: number = EXCEL_GRID_CONFIG.DEFAULT_COLS): ExcelGrid => {
+const getColumnLetter = (index: number): string => {
+  let result = '';
+  let num = index;
+  while (num >= 0) {
+    result = String.fromCharCode(65 + (num % 26)) + result;
+    num = Math.floor(num / 26) - 1;
+  }
+  return result;
+};
+
+const createInitialGrid = (rows: number = EXCEL_GRID_CONFIG.DEFAULT_ROWS, cols: number = EXCEL_GRID_CONFIG.DEFAULT_COLS): ExcelGridType => {
   const gridRows: GridRow[] = [];
   const gridColumns: GridColumn[] = [];
   const cells: GridCell[][] = [];
@@ -175,7 +109,8 @@ const createInitialGrid = (rows: number = EXCEL_GRID_CONFIG.DEFAULT_ROWS, cols: 
       id: `col-${col}`,
       index: col,
       width: EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH,
-      x: currentX
+      x: currentX,
+      letter: getColumnLetter(col)
     });
     currentX += EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
   }
@@ -204,7 +139,9 @@ const createInitialGrid = (rows: number = EXCEL_GRID_CONFIG.DEFAULT_ROWS, cols: 
         y: gridRows[row].y,
         width: gridColumns[col].width,
         height: gridRows[row].height,
-        isEmpty: true
+        isEmpty: true,
+        selected: false,
+        hasContent: false
       };
     }
   }
@@ -218,7 +155,7 @@ const createInitialGrid = (rows: number = EXCEL_GRID_CONFIG.DEFAULT_ROWS, cols: 
   };
 };
 
-const updateGridAfterResize = (grid: ExcelGrid): ExcelGrid => {
+const updateGridAfterResize = (grid: ExcelGridType): ExcelGridType => {
   const updatedCells: GridCell[][] = [];
   
   // Recalculate cell positions and dimensions
@@ -244,7 +181,7 @@ const updateGridAfterResize = (grid: ExcelGrid): ExcelGrid => {
   };
 };
 
-const findAvailableGridCell = (grid: ExcelGrid): { row: number; col: number; x: number; y: number } | null => {
+const findAvailableGridCell = (grid: ExcelGridType): { row: number; col: number; x: number; y: number } | null => {
   for (let row = 0; row < grid.rows.length; row++) {
     for (let col = 0; col < grid.columns.length; col++) {
       if (grid.cells[row][col].isEmpty) {
@@ -256,7 +193,7 @@ const findAvailableGridCell = (grid: ExcelGrid): { row: number; col: number; x: 
   return null;
 };
 
-const getGridCellFromPosition = (x: number, y: number, grid: ExcelGrid): { row: number; col: number } | null => {
+const getGridCellFromPosition = (x: number, y: number, grid: ExcelGridType): { row: number; col: number } | null => {
   for (let row = 0; row < grid.rows.length; row++) {
     for (let col = 0; col < grid.columns.length; col++) {
       const cell = grid.cells[row][col];
@@ -270,7 +207,7 @@ const getGridCellFromPosition = (x: number, y: number, grid: ExcelGrid): { row: 
 };
 
 // Helper function to find merged cell information for a given cell
-const findMergedCellInfo = (row: number, col: number, grid: ExcelGrid): MergeInfo | null => {
+const findMergedCellInfo = (row: number, col: number, grid: ExcelGridType): MergeInfo | null => {
   // First check if the cell has mergeInfo directly
   const cell = grid.cells[row]?.[col];
   if (cell?.mergeInfo) {
@@ -291,7 +228,7 @@ const findMergedCellInfo = (row: number, col: number, grid: ExcelGrid): MergeInf
   return null;
 };
 
-const snapToGridCell = (row: number, col: number, grid: ExcelGrid): { x: number; y: number; width: number; height: number } => {
+const snapToGridCell = (row: number, col: number, grid: ExcelGridType): { x: number; y: number; width: number; height: number } => {
   // Add null checks for grid and its properties
   if (!grid || !grid.cells || !grid.cells[row] || !grid.cells[row][col]) {
     // Return default position if grid or cell is not available
@@ -347,7 +284,7 @@ const snapToGridCell = (row: number, col: number, grid: ExcelGrid): { x: number;
   };
 };
 
-const addRowToGrid = (grid: ExcelGrid, insertIndex?: number): ExcelGrid => {
+const addRowToGrid = (grid: ExcelGridType, insertIndex?: number): ExcelGridType => {
   const newRowIndex = insertIndex ?? grid.rows.length;
   const newRowY = newRowIndex === 0 ? EXCEL_GRID_CONFIG.HEADER_HEIGHT : 
                   newRowIndex >= grid.rows.length ? 
@@ -384,7 +321,9 @@ const addRowToGrid = (grid: ExcelGrid, insertIndex?: number): ExcelGrid => {
       y: newRow.y,
       width: grid.columns[col].width,
       height: newRow.height,
-      isEmpty: true
+      isEmpty: true,
+      selected: false,
+      hasContent: false
     });
   }
   
@@ -406,7 +345,7 @@ const addRowToGrid = (grid: ExcelGrid, insertIndex?: number): ExcelGrid => {
   });
 };
 
-const addColumnToGrid = (grid: ExcelGrid, insertIndex?: number): ExcelGrid => {
+const addColumnToGrid = (grid: ExcelGridType, insertIndex?: number): ExcelGridType => {
   const newColIndex = insertIndex ?? grid.columns.length;
   const newColX = newColIndex === 0 ? EXCEL_GRID_CONFIG.HEADER_WIDTH : 
                   newColIndex >= grid.columns.length ? 
@@ -417,7 +356,8 @@ const addColumnToGrid = (grid: ExcelGrid, insertIndex?: number): ExcelGrid => {
     id: `col-${Date.now()}`,
     index: newColIndex,
     width: EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH,
-    x: newColX
+    x: newColX,
+    letter: getColumnLetter(newColIndex)
   };
   
   // Insert the new column
@@ -440,7 +380,9 @@ const addColumnToGrid = (grid: ExcelGrid, insertIndex?: number): ExcelGrid => {
       y: grid.rows[rowIndex].y,
       width: newColumn.width,
       height: grid.rows[rowIndex].height,
-      isEmpty: true
+      isEmpty: true,
+      selected: false,
+      hasContent: false
     };
     
     const updatedRow = [...row];
@@ -463,7 +405,7 @@ const addColumnToGrid = (grid: ExcelGrid, insertIndex?: number): ExcelGrid => {
   });
 };
 
-const findCellByFieldId = (grid: ExcelGrid, fieldId: string): GridCell | null => {
+const findCellByFieldId = (grid: ExcelGridType, fieldId: string): GridCell | null => {
   // Add null checks for grid and its properties
   if (!grid || !grid.cells || !grid.rows || !grid.columns) {
     return null;
@@ -483,7 +425,7 @@ const findCellByFieldId = (grid: ExcelGrid, fieldId: string): GridCell | null =>
   return null;
 };
 
-const resizeGridRow = (grid: ExcelGrid, rowIndex: number, newHeight: number): ExcelGrid => {
+const resizeGridRow = (grid: ExcelGridType, rowIndex: number, newHeight: number): ExcelGridType => {
   const minHeight = EXCEL_GRID_CONFIG.MIN_ROW_HEIGHT;
   const constrainedHeight = Math.max(minHeight, newHeight);
   
@@ -507,7 +449,7 @@ const resizeGridRow = (grid: ExcelGrid, rowIndex: number, newHeight: number): Ex
   });
 };
 
-const resizeGridColumn = (grid: ExcelGrid, colIndex: number, newWidth: number): ExcelGrid => {
+const resizeGridColumn = (grid: ExcelGridType, colIndex: number, newWidth: number): ExcelGridType => {
   const minWidth = EXCEL_GRID_CONFIG.MIN_COL_WIDTH;
   const constrainedWidth = Math.max(minWidth, newWidth);
   
@@ -642,7 +584,7 @@ const validateFieldDimensions = (field: any, documentAnalysis: any): { isValid: 
 };
 
 // Recalculate form field dimensions based on grid cell changes
-const recalculateFieldDimensions = (field: FormField, grid: ExcelGrid): FormField => {
+const recalculateFieldDimensions = (field: FormField, grid: ExcelGridType): FormField => {
   // Add null checks for field and grid
   if (!field || !field.id || !grid) {
     return field;
@@ -669,7 +611,7 @@ const recalculateFieldDimensions = (field: FormField, grid: ExcelGrid): FormFiel
 };
 
 // Update all form fields in a page based on current grid state
-const updateAllFieldDimensions = (page: FormPage, updatedGrid: ExcelGrid): FormPage => {
+const updateAllFieldDimensions = (page: FormPage, updatedGrid: ExcelGridType): FormPage => {
   // Add null checks for page and fields
   if (!page || !page.fields || !Array.isArray(page.fields)) {
     return page;
@@ -2564,6 +2506,303 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   // Zoom functionality
   const [zoomLevel, setZoomLevel] = useState(1);
   const [rightPanelTab, setRightPanelTab] = useState<'settings' | 'pdf'>('settings');
+  const { user } = useAuth();
+  
+  const [isScanning, setIsScanning] = useState(false);
+  const scanFileRef = useRef<HTMLInputElement>(null);
+
+  const handleScanFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!user) {
+      alert('Please login first');
+      return;
+    }
+
+    try {
+      setIsScanning(true);
+      const result = await processAndScanDocument(file, user.id);
+      
+      if (result.success) {
+        console.log('Scan success:', result.data);
+        
+        // Helper to convert column letter to index (A=0, B=1, etc.)
+        const colToIndex = (col: string): number => {
+          if (!col) return 0;
+          let index = 0;
+          const cleanCol = col.toUpperCase().replace(/[^A-Z]/g, '');
+          for (let i = 0; i < cleanCol.length; i++) {
+            index = index * 26 + cleanCol.charCodeAt(i) - 64;
+          }
+          return Math.max(0, index - 1);
+        };
+
+        try {
+          // Parse the output JSON string from webhook response
+          // Handle case where output might be nested or direct
+          let outputData = result.data.output || result.data;
+          
+          if (typeof outputData === 'string') {
+             // Clean up the string first
+             let cleanedOutput = outputData;
+             
+             // Remove markdown code blocks if present
+             const codeBlockMatch = cleanedOutput.match(/```(?:json)?\s*([\s\S]*?)```/);
+             if (codeBlockMatch) {
+               cleanedOutput = codeBlockMatch[1];
+             }
+             
+             // Trim whitespace
+             cleanedOutput = cleanedOutput.trim();
+             
+             // Try to find the JSON object/array if there's surrounding text
+             const firstBrace = cleanedOutput.indexOf('{');
+             const firstBracket = cleanedOutput.indexOf('[');
+             
+             let startIdx = -1;
+             if (firstBrace !== -1 && firstBracket !== -1) {
+               startIdx = Math.min(firstBrace, firstBracket);
+             } else if (firstBrace !== -1) {
+               startIdx = firstBrace;
+             } else if (firstBracket !== -1) {
+               startIdx = firstBracket;
+             }
+             
+             if (startIdx !== -1) {
+               // Start from the first brace/bracket
+               cleanedOutput = cleanedOutput.substring(startIdx);
+             }
+
+             // Attempt 1: Direct Parse
+             try {
+               outputData = JSON.parse(cleanedOutput);
+             } catch (e) {
+               console.warn('First parse attempt failed, trying to repair JSON...');
+               
+               // Attempt 2: Repair truncated JSON
+               try {
+                  // Simple repair logic
+                  let repaired = cleanedOutput;
+                  
+                  // 1. Remove trailing comma/garbage at the end if strict parse failed
+                  // Often truncation happens in the middle of a string or property
+                  
+                  // Helper to close open structures
+                  const repairTruncatedJSON = (jsonStr: string): string => {
+                    let str = jsonStr;
+                    const stack: string[] = [];
+                    let inString = false;
+                    let isEscaped = false;
+                    
+                    for (let i = 0; i < str.length; i++) {
+                      const char = str[i];
+                      
+                      if (inString) {
+                        if (char === '\\' && !isEscaped) {
+                          isEscaped = true;
+                        } else if (char === '"' && !isEscaped) {
+                          inString = false;
+                        } else {
+                          isEscaped = false;
+                        }
+                      } else {
+                        if (char === '"') {
+                          inString = true;
+                        } else if (char === '{') {
+                          stack.push('}');
+                        } else if (char === '[') {
+                          stack.push(']');
+                        } else if (char === '}' || char === ']') {
+                          if (stack.length > 0 && stack[stack.length - 1] === char) {
+                            stack.pop();
+                          }
+                        }
+                      }
+                    }
+                    
+                    // If we ended inside a string, close it
+                    if (inString) {
+                      str += '"';
+                    }
+                    
+                    // Append missing closers in reverse order
+                    while (stack.length > 0) {
+                      str += stack.pop();
+                    }
+                    
+                    return str;
+                  };
+
+                  const repairedJSON = repairTruncatedJSON(repaired);
+                  outputData = JSON.parse(repairedJSON);
+                  console.log('Successfully repaired and parsed JSON');
+               } catch (repairError) {
+                  console.error('Failed to repair JSON:', repairError);
+                  // Attempt 3: Try to find the last valid closing brace/bracket from original string
+                  // (The previous logic that was removed)
+                  if (startIdx !== -1) {
+                     const isArray = cleanedOutput[0] === '[';
+                     const endChar = isArray ? ']' : '}';
+                     const lastIdx = cleanedOutput.lastIndexOf(endChar);
+                     if (lastIdx !== -1) {
+                        try {
+                           outputData = JSON.parse(cleanedOutput.substring(0, lastIdx + 1));
+                           console.log('Parsed by trimming to last closer');
+                        } catch (trimError) {
+                           // Give up
+                        }
+                     }
+                  }
+               }
+             }
+          }
+          
+          // If outputData is still a string after parsing attempts (e.g. double encoded), try again
+          if (typeof outputData === 'string') {
+             try {
+               outputData = JSON.parse(outputData);
+             } catch (e) {
+               // Ignore second failure
+             }
+          }
+
+          // Normalize to pages structure
+          let pagesData: any[] = [];
+          
+          if (outputData && Array.isArray(outputData.pages)) {
+             pagesData = outputData.pages;
+          } else if (Array.isArray(outputData)) {
+             // Assume it's a list of widgets for a single page
+             pagesData = [{ widgets: outputData }];
+          } else if (outputData && Array.isArray(outputData.widgets)) {
+             // Single page object with widgets
+             pagesData = [outputData];
+          } else if (outputData && typeof outputData === 'object') {
+             // Maybe it's a single widget? Or unexpected structure.
+             // Check if it has keys that look like a widget (id, type, position)
+             if (outputData.type && outputData.position) {
+                pagesData = [{ widgets: [outputData] }];
+             } else if (Object.keys(outputData).length > 0) {
+                // Heuristic: If it has keys but no obvious structure, treat values as potential widgets if array
+                const possibleArrays = Object.values(outputData).filter(val => Array.isArray(val));
+                if (possibleArrays.length === 1) {
+                  pagesData = [{ widgets: possibleArrays[0] }];
+                }
+             }
+          }
+
+          if (pagesData.length > 0) {
+            const newPages: FormPage[] = pagesData.map((pageData: any, pageIndex: number) => {
+              // Calculate grid dimensions based on widgets
+              const maxRow = pageData.widgets?.reduce((max: number, w: any) => Math.max(max, (w.position?.row || 0) + (w.position?.row_span || 1)), 20) || 20;
+              const maxCol = pageData.widgets?.reduce((max: number, w: any) => Math.max(max, colToIndex(w.position?.col || 'A') + (w.position?.col_span || 1)), 10) || 10;
+              
+              // Create a new grid for this page
+              const grid = createInitialGrid(maxRow + 5, maxCol + 2); // Add some padding
+              
+              const fields: FormField[] = (pageData.widgets || []).map((widget: any) => {
+                const colIndex = colToIndex(widget.position?.col || 'A');
+                const rowIndex = (widget.position?.row || 1) - 1; // 1-based to 0-based
+                
+                // Map widget type to internal type
+                let type = 'text'; // Default
+                if (widget.type === 'label') type = 'label';
+                if (widget.type === 'text_field') type = 'text';
+                if (widget.type === 'textarea') type = 'textarea';
+                if (widget.type === 'input_box') type = 'number';
+                if (widget.type === 'date') type = 'date';
+                if (widget.type === 'checkbox') type = 'checkbox';
+                if (widget.type === 'multiple_choice') type = 'multipleChoice';
+                if (widget.type === 'dropdown') type = 'dropdown';
+                if (widget.type === 'interval_data') type = 'intervalData';
+                if (widget.type === 'image') type = 'image';
+                if (widget.type === 'attachment') type = 'attachment';
+                if (widget.type === 'annotation') type = 'sketch';
+                if (widget.type === 'signature') type = 'signature';
+                if (widget.type === 'table') type = 'layoutTable';
+                
+                // Calculate dimensions
+                const width = (widget.position?.col_span || 1) * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
+                const height = (widget.position?.row_span || 1) * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT;
+                const x = EXCEL_GRID_CONFIG.HEADER_WIDTH + (colIndex * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH);
+                const y = EXCEL_GRID_CONFIG.HEADER_HEIGHT + (rowIndex * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT);
+                
+                const settings: any = {
+                  required: widget.required,
+                  placeholder: widget.placeholder,
+                  defaultValue: widget.value,
+                  options: widget.options || []
+                };
+
+                // Special handling for specific types
+                if (type === 'layoutTable') {
+                  settings.data = widget.value;
+                  if (widget.headers) settings.headers = widget.headers;
+                }
+                
+                // Add unique ID to avoid collisions
+                const fieldId = widget.id || `field-${crypto.randomUUID()}`;
+
+                return {
+                  id: fieldId,
+                  type,
+                  label: widget.label || 'Label',
+                  settings,
+                  width,
+                  height,
+                  x,
+                  y,
+                  zIndex: 1,
+                  gridPosition: { row: rowIndex, col: colIndex }
+                };
+              });
+
+              return {
+                id: `page-${crypto.randomUUID()}`,
+                fields,
+                grid,
+                dimensions: {
+                  width: 595, // A4 Portrait default
+                  height: Math.max(842, grid.totalHeight + 50),
+                  orientation: 'portrait',
+                  size: 'A4'
+                },
+                pdfPageIndex: pageIndex
+              };
+            });
+            
+            // Update form pages
+            if (newPages.length > 0) {
+              setFormPages(newPages);
+              alert('Form generated successfully from AI scan!');
+            } else {
+              alert('Scan complete but no pages generated.');
+            }
+          } else {
+             console.warn('Invalid output format:', outputData);
+             alert('Document scanned but received invalid format from AI. Check console.');
+          }
+        } catch (parseError) {
+          console.error('Error parsing scan result:', parseError);
+          alert('Document scanned but failed to parse AI response.');
+        }
+
+      } else {
+        console.error('Scan failed:', result.error);
+        alert(`Scan failed: ${result.error}`);
+      }
+    } catch (error: any) {
+      console.error('Scan error:', error);
+      alert(`Scan error: ${error.message}`);
+    } finally {
+      setIsScanning(false);
+      // Reset input
+      if (scanFileRef.current) {
+        scanFileRef.current.value = '';
+      }
+    }
+  };
 
   // Switch to PDF tab when a PDF is imported
   useEffect(() => {
@@ -3130,7 +3369,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           y: insertRow * GRID_CELL_HEIGHT,
           width: updatedGrid.columns[colIndex].width,
           height: GRID_CELL_HEIGHT,
-          isEmpty: true
+          isEmpty: true,
+          selected: false,
+          hasContent: false
         }));
         updatedGrid.cells.splice(insertRow, 0, newRowCells);
         
@@ -3154,7 +3395,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             updatedGrid.cells[field.gridRow][field.gridCol] = {
               ...updatedGrid.cells[field.gridRow][field.gridCol],
               fieldId: field.id,
-              isEmpty: false
+              isEmpty: false,
+              selected: false,
+              hasContent: true
             };
           }
         });
@@ -3195,7 +3438,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           y: insertRow * GRID_CELL_HEIGHT,
           width: updatedGrid.columns[colIndex].width,
           height: GRID_CELL_HEIGHT,
-          isEmpty: true
+          isEmpty: true,
+          selected: false,
+          hasContent: false
         }));
         updatedGrid.cells.splice(insertRow, 0, newRowCells);
         
@@ -3219,7 +3464,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             updatedGrid.cells[field.gridRow][field.gridCol] = {
               ...updatedGrid.cells[field.gridRow][field.gridCol],
               fieldId: field.id,
-              isEmpty: false
+              isEmpty: false,
+              selected: false,
+              hasContent: true
             };
           }
         });
@@ -3271,7 +3518,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               updatedGrid.cells[rowIndex][colIndex] = {
                 ...cell,
                 fieldId: field.id,
-                isEmpty: false
+                isEmpty: false,
+                selected: false,
+                hasContent: true
               };
             } else {
               updatedGrid.cells[rowIndex][colIndex] = {
@@ -3283,7 +3532,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 y: rowIndex * GRID_CELL_HEIGHT,
                 width: updatedGrid.columns[colIndex].width,
                 height: GRID_CELL_HEIGHT,
-                isEmpty: true
+                isEmpty: true,
+                selected: false,
+                hasContent: false
               };
             }
           });
@@ -3698,7 +3949,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
         };
         
         // Use AI-generated grid if available, otherwise create initial grid
-        let pageGrid: ExcelGrid;
+        let pageGrid: ExcelGridType;
         if (page.grid) {
           // Use the AI-generated grid structure and convert to ExcelGrid format
           const cellWidth = page.grid.cellWidth;
@@ -3717,7 +3968,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             id: `col-${index + 1}`,
             index: index + 1,
             width: cellWidth,
-            x: index * cellWidth
+            x: index * cellWidth,
+            letter: getColumnLetter(index)
           }));
           
           // Create cells array
@@ -3735,9 +3987,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 height: cellHeight,
                 isEmpty: !aiCell?.fieldId,
                 fieldId: aiCell?.fieldId || null,
-                content: aiCell?.content || '',
-                isHeader: aiCell?.isHeader || false,
-                style: aiCell?.style || {}
+                value: aiCell?.content || '',
+                style: aiCell?.style || {},
+                selected: false,
+                hasContent: !!aiCell?.content
               };
             })
           );
@@ -4055,6 +4308,15 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     const requiredMark = field.settings.required ? <span className="text-red-500 ml-1">*</span> : null;
     
     switch (field.type) {
+      case 'label':
+        return (
+          <div className="p-2 h-full flex items-center">
+            <div className="font-bold text-base text-gray-900 w-full break-words">
+              {field.label}
+            </div>
+          </div>
+        );
+
       case 'text':
         return (
           <div className={`p-2 h-full ${field.settings.titleLayout === 'vertical' ? 'flex flex-col gap-1' : 'flex items-center gap-2'}`}>
@@ -4064,7 +4326,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </div>
             )}
             <div className={`bg-gray-50 border border-gray-300 rounded p-2 text-sm ${field.settings.titleLayout === 'vertical' ? 'w-full flex-grow' : 'flex-grow'}`}>
-              <span className="text-gray-500">{field.settings.placeholder || 'Enter text...'}</span>
+              {field.settings.defaultValue ? (
+                <span className="text-gray-900">{field.settings.defaultValue}</span>
+              ) : (
+                <span className="text-gray-500">{field.settings.placeholder || 'Enter text...'}</span>
+              )}
             </div>
           </div>
         );
@@ -4078,7 +4344,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </div>
             )}
             <div className={`bg-gray-50 border border-gray-300 rounded p-2 text-sm ${field.settings.titleLayout === 'vertical' ? 'w-full flex-grow' : 'flex-grow'}`}>
-              <span className="text-gray-500">{field.settings.placeholder || '0'}</span>
+              {field.settings.defaultValue ? (
+                <span className="text-gray-900">{field.settings.defaultValue}</span>
+              ) : (
+                <span className="text-gray-500">{field.settings.placeholder || '0'}</span>
+              )}
             </div>
           </div>
         );
@@ -4092,8 +4362,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </div>
             )}
             <div className="bg-gray-50 border border-gray-300 rounded p-2 text-sm flex-grow">
-              <div className="text-gray-500 leading-relaxed h-full">
-                {field.settings.placeholder || 'Enter multiple lines of text...'}
+              <div className={`${field.settings.defaultValue ? 'text-gray-900' : 'text-gray-500'} leading-relaxed h-full`}>
+                {field.settings.defaultValue || field.settings.placeholder || 'Enter multiple lines of text...'}
               </div>
             </div>
           </div>
@@ -4110,7 +4380,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             <div className="flex-grow flex items-center">
               <div className="bg-gray-50 border border-gray-300 rounded p-2 text-sm w-full">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-500">Select date</span>
+                  <span className={field.settings.defaultValue ? "text-gray-900" : "text-gray-500"}>
+                    {field.settings.defaultValue || 'Select date'}
+                  </span>
                   <RiCalendarLine className="text-gray-400 text-xs" />
                 </div>
               </div>
@@ -4129,13 +4401,13 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             <div className="flex-grow flex items-center">
               <div className="bg-gray-50 border border-gray-300 rounded p-2 text-sm w-full">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-500">
-                    {field.settings.options && field.settings.options.length > 0 ? 
-                      field.settings.options[0] : 'Select option'}
+                  <span className={field.settings.defaultValue ? "text-gray-900" : "text-gray-500"}>
+                    {field.settings.defaultValue || (field.settings.options && field.settings.options.length > 0 ? 
+                      field.settings.options[0] : 'Select option')}
                   </span>
                   <RiListOrdered className="text-gray-400 text-xs" />
                 </div>
-                {field.settings.options && field.settings.options.length > 1 && (
+                {field.settings.options && field.settings.options.length > 1 && !field.settings.defaultValue && (
                   <div className="text-xs text-gray-400 mt-1">
                     +{field.settings.options.length - 1} more options
                   </div>
@@ -4156,12 +4428,18 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             <div className="flex-grow overflow-y-auto">
               <div className="space-y-1">
                 {field.settings.options && field.settings.options.length > 0 ? (
-                  field.settings.options.slice(0, Math.min(field.settings.options.length, 4)).map((option: string, i: number) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="w-3 h-3 border border-gray-400 rounded bg-white flex-shrink-0"></div>
-                      <div className="text-sm text-gray-800">{option}</div>
-                    </div>
-                  ))
+                  field.settings.options.slice(0, Math.min(field.settings.options.length, 4)).map((option: string, i: number) => {
+                    const isChecked = field.settings.defaultValue === option || 
+                                     (Array.isArray(field.settings.defaultValue) && field.settings.defaultValue.includes(option));
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <div className={`w-3 h-3 border border-gray-400 rounded flex-shrink-0 flex items-center justify-center ${isChecked ? 'bg-blue-500 border-blue-500' : 'bg-white'}`}>
+                          {isChecked && <div className="w-2 h-2 bg-white rounded-sm" />}
+                        </div>
+                        <div className="text-sm text-gray-800">{option}</div>
+                      </div>
+                    );
+                  })
                 ) : (
                   field.settings.options.slice(0, 2).map((option: string, i: number) => (
                     <div key={i} className="flex items-center gap-2">
@@ -4191,12 +4469,17 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             <div className="flex-grow overflow-y-auto">
               <div className="space-y-1">
                 {field.settings.options && field.settings.options.length > 0 ? (
-                  field.settings.options.slice(0, Math.min(field.settings.options.length, 4)).map((option: string, i: number) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full border border-gray-400 bg-white flex-shrink-0"></div>
-                      <div className="text-sm text-gray-800">{option}</div>
-                    </div>
-                  ))
+                  field.settings.options.slice(0, Math.min(field.settings.options.length, 4)).map((option: string, i: number) => {
+                    const isSelected = field.settings.defaultValue === option;
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full border border-gray-400 flex-shrink-0 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'bg-white'}`}>
+                          {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        </div>
+                        <div className="text-sm text-gray-800">{option}</div>
+                      </div>
+                    );
+                  })
                 ) : (
                   field.settings.options.slice(0, 2).map((option: string, i: number) => (
                     <div key={i} className="flex items-center gap-2">
@@ -4223,9 +4506,19 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 {field.label}{requiredMark}
               </div>
             )}
-            <div className="flex-grow border border-dashed border-gray-400 rounded p-3 bg-gray-50 flex flex-col items-center justify-center text-gray-500 text-xs">
-              <RiImageLine className="text-lg mb-1" />
-              <div>Upload image</div>
+            <div className="flex-grow border border-dashed border-gray-400 rounded p-3 bg-gray-50 flex flex-col items-center justify-center text-gray-500 text-xs overflow-hidden">
+              {field.settings.defaultValue ? (
+                <img 
+                  src={field.settings.defaultValue} 
+                  alt={field.label} 
+                  className="max-w-full max-h-full object-contain" 
+                />
+              ) : (
+                <>
+                  <RiImageLine className="text-lg mb-1" />
+                  <div>Upload image</div>
+                </>
+              )}
             </div>
           </div>
         );
@@ -4238,9 +4531,22 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 {field.label}{requiredMark}
               </div>
             )}
-            <div className="border border-dashed border-gray-400 rounded p-3 bg-gray-50 flex flex-col items-center justify-center text-gray-500 text-xs">
-              <RiAttachmentLine className="text-lg mb-1" />
-              <div>Upload files</div>
+            <div className="border border-dashed border-gray-400 rounded p-3 bg-gray-50 flex flex-col items-center justify-center text-gray-500 text-xs overflow-hidden">
+              {field.settings.defaultValue ? (
+                <div className="flex items-center gap-2 text-blue-600 underline cursor-pointer w-full justify-center">
+                  <RiAttachmentLine className="text-lg flex-shrink-0" />
+                  <span className="truncate max-w-[80%]">
+                    {typeof field.settings.defaultValue === 'string' 
+                      ? field.settings.defaultValue.split('/').pop() 
+                      : 'Attached File'}
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <RiAttachmentLine className="text-lg mb-1" />
+                  <div>Upload files</div>
+                </>
+              )}
             </div>
           </div>
         );
@@ -4253,8 +4559,16 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 {field.label}{requiredMark}
               </div>
             )}
-            <div className="border border-gray-300 rounded p-2 bg-gray-50 h-12 flex items-center justify-center text-gray-500 text-xs">
-              Sign here
+            <div className="border border-gray-300 rounded p-2 bg-gray-50 h-12 flex items-center justify-center text-gray-500 text-xs overflow-hidden">
+              {field.settings.defaultValue ? (
+                <img 
+                  src={field.settings.defaultValue} 
+                  alt="Signature" 
+                  className="max-h-full max-w-full object-contain" 
+                />
+              ) : (
+                "Sign here"
+              )}
             </div>
           </div>
         );
@@ -4395,6 +4709,13 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 <RiSignalWifiLine className="text-gray-400" />
                 <span className="text-gray-500">Interval data collection</span>
               </div>
+              {field.settings.defaultValue && (
+                <div className="mt-2 p-1 bg-white border border-gray-200 rounded text-gray-800 font-mono overflow-hidden text-ellipsis whitespace-nowrap">
+                  {typeof field.settings.defaultValue === 'object' 
+                    ? JSON.stringify(field.settings.defaultValue) 
+                    : field.settings.defaultValue}
+                </div>
+              )}
             </div>
           </div>
         );
@@ -4712,26 +5033,23 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               </div>
               
               {/* AI Form Generator Button */}
+              <input 
+                type="file" 
+                ref={scanFileRef} 
+                style={{ display: 'none' }} 
+                accept=".pdf,.docx" 
+                onChange={handleScanFile} 
+              />
               <Button 
                 variant="ai" 
                 size="sm" 
-                onClick={() => setShowAIGenerator(true)}
+                onClick={() => scanFileRef.current?.click()}
                 title="Generate form from image/PDF using AI"
-                leftIcon={<RiRobotLine />}
+                leftIcon={isScanning ? <RiLoader4Line className="animate-spin" /> : <RiRobotLine />}
                 glowing
+                disabled={isScanning}
               >
-                AI Generate
-              </Button>
-              
-              <Button 
-                variant="ai-secondary" 
-                size="sm" 
-                onClick={onImportPdf}
-                title="Import tables from PDF"
-                leftIcon={<RiFilePdfLine />}
-                className="ml-2"
-              >
-                Import PDF
+                {isScanning ? 'Scanning...' : 'AI Generate'}
               </Button>
               
               {/* Zoom Controls */}
@@ -4935,7 +5253,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       onDragLeave={handleDragLeave}
                     >
                       {/* Excel Grid Canvas */}
-                      <ExcelGrid
+                      <ExcelGridComponent
                         width={pageWidth}
                         height={pageHeight}
                         selectedCell={selectedCell}
@@ -5356,7 +5674,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                             )}
                           </div>
                         )}
-                      </ExcelGrid>
+                      </ExcelGridComponent>
                     </div>
                   </div>
                 );
@@ -6539,6 +6857,7 @@ const FormsPage: React.FC = () => {
   
   const [formName, setFormName] = useState('New Form');
   const [formDescription, setFormDescription] = useState('');
+  const [formId, setFormId] = useState<string | null>(null);
   
   // Add back the formPages state that was removed
   const [formPages, setFormPages] = useState<FormPage[]>([{ 
@@ -6610,76 +6929,218 @@ const FormsPage: React.FC = () => {
   }, []); // Empty dependency array - run only once on mount
   
   // Add formsList state
-  const [formsList, setFormsList] = useState([
-    {
-      id: '1',
-      name: 'Site Inspection Form',
-      description: 'Form for site safety inspections',
-      form_structure: { pages: [{ 
-        id: 'page_1', 
-        fields: [], 
-        dimensions: { 
-          width: 595, 
-          height: 842, 
-          orientation: 'portrait' as const, 
-          size: 'A4' as const 
-        } 
-      }] },
-      created_at: new Date().toISOString(),
-      fieldsCount: 12
-    },
-    {
-      id: '2',
-      name: 'Incident Report',
-      description: 'Document safety incidents on site',
-      form_structure: { pages: [
-        { 
-          id: 'page_1', 
-          fields: [], 
-          dimensions: { 
-            width: 595, 
-            height: 842, 
-            orientation: 'portrait' as const, 
-            size: 'A4' as const 
-          } 
-        }, 
-        { 
-          id: 'page_2', 
-          fields: [], 
-          dimensions: { 
-            width: 595, 
-            height: 842, 
-            orientation: 'portrait' as const, 
-            size: 'A4' as const 
-          } 
+  const [formsList, setFormsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch forms from API
+  const fetchForms = useCallback(async () => {
+    if (!selectedProject?.id) return;
+    
+    try {
+      setLoading(true);
+      const response = await fetch(`https://server.matrixtwin.com/api/custom-forms/templates?projectId=${selectedProject.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
-      ] },
-      created_at: new Date().toISOString(),
-      fieldsCount: 18
-    },
-    {
-      id: '3',
-      name: 'Equipment Checklist',
-      description: 'Verify equipment status before use',
-      form_structure: { pages: [{ 
-        id: 'page_1', 
-        fields: [], 
-        dimensions: { 
-          width: 595, 
-          height: 842, 
-          orientation: 'portrait' as const, 
-          size: 'A4' as const 
-        } 
-      }] },
-      created_at: new Date().toISOString(),
-      fieldsCount: 8
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Map API data to local structure if needed
+        const mappedForms = data.map((form: any) => {
+          // Check if form structure is JSON string or object
+          let structure = form.form_structure || form.formStructure;
+          if (typeof structure === 'string') {
+            try {
+              structure = JSON.parse(structure);
+            } catch (e) {
+              console.error('Error parsing form structure', e);
+              structure = { pages: [] };
+            }
+          }
+          
+          // Ensure structure is an object and has pages array
+          if (!structure || typeof structure !== 'object') {
+            structure = { pages: [] };
+          }
+          
+          // Handle nested pages structure { pages: { pages: [...] } }
+          if (!Array.isArray(structure.pages) && structure.pages && typeof structure.pages === 'object' && Array.isArray(structure.pages.pages)) {
+            structure.pages = structure.pages.pages;
+          }
+          
+          if (!Array.isArray(structure.pages)) {
+            console.warn('Form structure pages is not an array:', structure);
+            structure.pages = [];
+          }
+
+          return {
+            ...form,
+            form_structure: structure,
+            fieldsCount: structure.pages.reduce((count: number, page: any) => count + (page.fields?.length || 0), 0)
+          };
+        });
+        setFormsList(mappedForms);
+      } else {
+        console.error('Failed to fetch forms');
+      }
+    } catch (error) {
+      console.error('Error fetching forms:', error);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  }, [selectedProject?.id]);
+
+  useEffect(() => {
+    fetchForms();
+  }, [fetchForms]);
+
+  const handleDeleteForm = async (formId: string) => {
+    if (!window.confirm(t('common.confirmDelete', 'Are you sure you want to delete this form?'))) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://server.matrixtwin.com/api/custom-forms/templates/${formId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        setFormsList(prev => prev.filter(f => f.id !== formId));
+      } else {
+        console.error('Failed to delete form');
+        alert('Failed to delete form');
+      }
+    } catch (error) {
+      console.error('Error deleting form:', error);
+      alert('Error deleting form');
+    }
+  };
+  
+  // Process flow state
+  const [formProcessNodes, setFormProcessNodes] = useState<any[]>([]); // Using any[] for now to avoid interface duplication
+
+  const handleEditForm = (form: any) => {
+    setFormId(form.id);
+    setFormName(form.name);
+    setFormDescription(form.description);
+    
+    // Handle process nodes
+    let nodes = form.process_nodes || form.processNodes;
+    if (typeof nodes === 'string') {
+      try {
+        nodes = JSON.parse(nodes);
+      } catch (e) {
+        console.error('Error parsing process nodes', e);
+        nodes = [];
+      }
+    }
+    setFormProcessNodes(nodes || []);
+
+    // Ensure pages have grids
+    let rawPages: any[] = [];
+    
+    // robust extraction of pages from various potential backend structures
+    if (form.form_structure) {
+      if (Array.isArray(form.form_structure.pages)) {
+        rawPages = form.form_structure.pages;
+      } else if (form.form_structure.pages && Array.isArray(form.form_structure.pages.pages)) {
+        // Handle nested pages structure { pages: { pages: [...] } }
+        rawPages = form.form_structure.pages.pages;
+      } else if (form.form_structure.form_structure && Array.isArray(form.form_structure.form_structure.pages)) {
+         // Handle potential double nesting of form_structure
+         rawPages = form.form_structure.form_structure.pages;
+      }
+    }
+
+    const pages = (rawPages.length > 0 ? rawPages : []).map((page: any) => ({
+      ...page,
+      grid: page.grid || createInitialGrid()
+    }));
+    setFormPages(pages);
+    setShowEditForm(true);
+  };
+
+  const handleFormRendererSave = (data: any) => {
+    // Update process nodes with selected executor/cc
+    const updatedNodes = [...formProcessNodes];
+    const nodeIndex = updatedNodes.findIndex(n => n.type === 'node');
+    
+    if (nodeIndex !== -1) {
+      updatedNodes[nodeIndex] = {
+        ...updatedNodes[nodeIndex],
+        executorId: data.executorId,
+        executor: data.executorName,
+        ccRecipients: data.ccRecipients // Full objects
+      };
+    }
+    
+    // Construct updated form object
+    const updatedForm = {
+        id: formId,
+        name: formName,
+        description: formDescription,
+        form_structure: { pages: formPages },
+        process_nodes: updatedNodes,
+        processNodes: updatedNodes
+    };
+    
+    // Update local state
+    setFormsList(prev => prev.map(f => f.id === formId ? { ...f, ...updatedForm } : f));
+    
+    // Save to backend
+    if (selectedProject?.id) {
+      fetch(`https://server.matrixtwin.com/api/custom-forms/templates/${formId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ...updatedForm,
+          projectId: selectedProject.id
+        })
+      }).catch(err => console.error('Error saving form to backend:', err));
+    }
+    
+    setShowEditForm(false);
+  };
+
+  const handleCreateForm = () => {
+    setFormId(null);
+    setFormName('New Form');
+    setFormDescription('');
+    setFormProcessNodes([]);
+    setFormPages([{ 
+      id: 'page_1', 
+      fields: [], 
+      dimensions: { 
+        width: 595, 
+        height: 842, 
+        orientation: 'portrait' as const, 
+        size: 'A4' as const 
+      },
+      grid: createInitialGrid()
+    }]);
+    setFormFlowOpen(true);
+  };
+
+  const [selectedForm, setSelectedForm] = useState<any>(null);
+  const [viewDetailsOpen, setViewDetailsOpen] = useState(false);
+
+  const handleViewDetails = (form: any) => {
+    setSelectedForm(form);
+    setViewDetailsOpen(true);
+  };
   
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
   // PDF Importer State
   const [showPdfImporter, setShowPdfImporter] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [extractedTables, setExtractedTables] = useState<ExtractedTable[]>([]);
 
@@ -7108,42 +7569,11 @@ const FormsPage: React.FC = () => {
     }
   };
   
-  // Handle form creation flow completion
-  const handleSaveForm = (formData: any) => {
-    // Handle form save logic
-    const newForm = {
-      id: (formsList.length + 1).toString(),
-      name: formData.templateName || 'New Form',
-      description: formData.formDescription || '',
-      form_structure: { pages: formData.formPages || [{ 
-        id: 'page_1', 
-        fields: [], 
-        dimensions: { 
-          width: 595, 
-          height: 842, 
-          orientation: 'portrait' as const, 
-          size: 'A4' as const 
-        } 
-      }] },
-      created_at: new Date().toISOString(),
-      fieldsCount: formData.formPages?.reduce((count: number, page: any) => count + page.fields.length, 0) || 0
-    };
-    setFormsList([...formsList, newForm]);
-  };
-  
-  const handleCreateForm = () => {
-    if (formName.trim() === '') return;
-    
-    handleSaveForm({
-      templateName: formName,
-      formDescription,
-      formPages
-    });
-  };
   
   // Fix for Create Form button
   const handleStartNewForm = () => {
     // Reset form state for a new form
+    setFormId(null);
     setFormName('');
     setFormDescription('');
     setFormPages([{ 
@@ -7385,7 +7815,7 @@ const FormsPage: React.FC = () => {
           <Button
             variant="ai"
             leftIcon={<RiAddLine />}
-            onClick={() => setFormFlowOpen(true)}
+            onClick={handleCreateForm}
             animated
             pulseEffect
             glowing
@@ -7449,15 +7879,46 @@ const FormsPage: React.FC = () => {
                 </div>
               </div>
               
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-500">
+              <div className="flex flex-col mt-4 gap-4">
+                <div className="text-sm text-gray-500 flex items-center">
                   <span>{form.fieldsCount} fields</span>
                   <span className="mx-2">•</span>
                   <span>{form.form_structure?.pages?.length || 0} pages</span>
                 </div>
-                <Button variant="ghost" size="sm">
-                  Open
-                </Button>
+                
+                <div className="flex justify-end space-x-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleEditForm(form)}
+                    leftIcon={<RiFileEditLine />}
+                    className="hover:bg-portfolio-orange/5 dark:hover:bg-portfolio-orange/10"
+                  >
+                    Edit Form
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewDetails(form)}
+                    rightIcon={<RiArrowRightLine />}
+                    className="hover:bg-primary-50 dark:hover:bg-primary-900/20"
+                  >
+                    {t('common.viewDetails', 'View Details')}
+                  </Button>
+                  
+                  {user?.role === 'admin' && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleDeleteForm(form.id)}
+                      leftIcon={<RiDeleteBinLine />}
+                      className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
               </div>
             </Card>
           ))}
@@ -7469,6 +7930,55 @@ const FormsPage: React.FC = () => {
         onClose={() => setShowPdfImporter(false)} 
         onImport={handlePdfImport} 
       />
+
+      {/* Form Renderer Modal for Editing */}
+      <AnimatePresence>
+        {showEditForm && (
+          <div className="fixed inset-0 bg-dark-900 z-50 overflow-hidden flex flex-col">
+             {/* Custom Header with Editable Title */}
+             <div className="bg-dark-800 border-b border-dark-700 p-4 flex justify-between items-center">
+                <div className="flex items-center gap-4 flex-1">
+                   <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-portfolio-orange to-red-500 flex items-center justify-center">
+                      <RiFileEditLine className="text-white text-xl" />
+                   </div>
+                   <div className="flex-1">
+                     <Input 
+                       value={formName}
+                       onChange={(e) => setFormName(e.target.value)}
+                       className="bg-transparent border-none text-xl font-bold text-white focus:ring-0 p-0 h-auto"
+                       placeholder="Form Name"
+                     />
+                     <Input
+                        value={formDescription}
+                        onChange={(e) => setFormDescription(e.target.value)}
+                        className="bg-transparent border-none text-sm text-gray-400 focus:ring-0 p-0 h-auto mt-1"
+                        placeholder="Form Description"
+                     />
+                   </div>
+                </div>
+                <Button variant="ghost" onClick={() => setShowEditForm(false)}>
+                  <RiCloseLine className="text-xl" />
+                </Button>
+             </div>
+             
+             <div className="flex-1 overflow-auto p-4">
+                <FormRenderer
+                  formTemplate={{
+                    id: formId || 'temp',
+                    name: formName,
+                    description: formDescription,
+                    formStructure: { pages: formPages },
+                    processNodes: formProcessNodes
+                  }}
+                  initialData={{}} 
+                  onSave={handleFormRendererSave}
+                  onClose={() => setShowEditForm(false)}
+                  readOnly={false}
+                />
+             </div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* FormCreationFlow Modal */}
       <AnimatePresence>
@@ -7483,17 +7993,18 @@ const FormsPage: React.FC = () => {
             >
               <FormCreationFlow 
                 onClose={() => setFormFlowOpen(false)}
-                onSave={(formData) => {
-                  // Handle form save logic
-                  const newForm = {
-                    id: (formsList.length + 1).toString(),
-                    name: formData.templateName || 'New Form',
-                    description: formData.formDescription || '',
-                    form_structure: { pages: formData.formPages || [{ id: 'page_1', fields: [] }] },
-                    created_at: new Date().toISOString(),
-                    fieldsCount: formData.formPages?.reduce((count: number, page: any) => count + page.fields.length, 0) || 0
-                  };
-                  setFormsList([...formsList, newForm]);
+                initialStep={formId ? 2 : 1}
+                isEditMode={!!formId}
+                currentFormPages={formPages}
+          initialValues={{
+            id: formId ?? undefined,
+            name: formName,
+            description: formDescription,
+            processNodes: formId ? formProcessNodes : undefined
+          }}
+          onSave={(formData) => {
+                  // Refresh forms list from backend
+                  fetchForms();
                   setFormFlowOpen(false);
                 }}
                 existingForms={formsList}
@@ -7612,6 +8123,105 @@ const FormsPage: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* View Details Modal */}
+      <Dialog
+        isOpen={viewDetailsOpen}
+        onClose={() => setViewDetailsOpen(false)}
+        title={t('common.viewDetails', 'Form Details')}
+        size="lg"
+      >
+        {selectedForm && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Form Name</h3>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">{selectedForm.name}</p>
+              </div>
+              
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Created At</h3>
+                <p className="text-lg text-gray-900 dark:text-white">
+                  {new Date(selectedForm.created_at || selectedForm.createdAt).toLocaleDateString()}
+                </p>
+              </div>
+
+              <div className="col-span-1 md:col-span-2">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Description</h3>
+                <p className="text-base text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                  {selectedForm.description || 'No description provided.'}
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Structure</h3>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center text-gray-700 dark:text-gray-300">
+                    <RiFileTextLine className="mr-2 text-portfolio-orange" />
+                    <span>{selectedForm.form_structure?.pages?.length || 0} Pages</span>
+                  </div>
+                  <div className="flex items-center text-gray-700 dark:text-gray-300">
+                    <RiLayoutLine className="mr-2 text-portfolio-orange" />
+                    <span>{selectedForm.fieldsCount || 0} Fields</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Process Flow Preview */}
+            {(selectedForm.process_nodes || selectedForm.processNodes) && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Workflow Process</h3>
+                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto">
+                  <div className="flex items-center space-x-2 min-w-max">
+                    {(() => {
+                      let nodes = selectedForm.process_nodes || selectedForm.processNodes;
+                      if (typeof nodes === 'string') {
+                        try { nodes = JSON.parse(nodes); } catch (e) { nodes = []; }
+                      }
+                      return (nodes || []).map((node: any, index: number) => (
+                        <React.Fragment key={index}>
+                          <div className={`flex flex-col items-center p-3 rounded-lg border ${
+                            node.type === 'start' ? 'bg-green-50 border-green-200 text-green-700' :
+                            node.type === 'end' ? 'bg-red-50 border-red-200 text-red-700' :
+                            'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200'
+                          } min-w-[120px]`}>
+                            <span className="text-xs font-semibold uppercase tracking-wider mb-1">{node.type}</span>
+                            <span className="text-sm font-medium text-center">{node.name}</span>
+                            {node.executor && <span className="text-xs text-gray-500 mt-1">Executor: {node.executor}</span>}
+                          </div>
+                          {index < (nodes || []).length - 1 && (
+                            <RiArrowRightLine className="text-gray-400 text-xl flex-shrink-0" />
+                          )}
+                        </React.Fragment>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button
+                variant="outline"
+                onClick={() => setViewDetailsOpen(false)}
+              >
+                Close
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setViewDetailsOpen(false);
+                  handleEditForm(selectedForm);
+                }}
+                leftIcon={<RiFileEditLine />}
+              >
+                Edit Form
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
 
       {/* Templates modal */}
       {/* Your templates modal JSX */}

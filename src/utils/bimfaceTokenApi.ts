@@ -15,7 +15,7 @@ export interface FreshTokenResponse {
  */
 export const getFreshViewToken = async (fileId: string | number): Promise<FreshTokenResponse> => {
   try {
-    const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/bimface/getfreshviewtoken/${fileId}`);
+    const response = await fetch(`https://server.matrixtwin.com/api/bimface/getfreshviewtoken/${fileId}`);
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);

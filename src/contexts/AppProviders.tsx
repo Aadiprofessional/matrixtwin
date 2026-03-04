@@ -4,6 +4,7 @@ import { ThemeProvider } from './ThemeContext';
 import { ProjectProvider } from './ProjectContext';
 import { AIChatProvider } from './AIChatContext';
 import { PermissionsProvider } from './PermissionsContext';
+import { FormCountsProvider } from './FormCountsContext';
 
 interface AppProvidersProps {
   children: React.ReactNode;
@@ -15,9 +16,11 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
       <ThemeProvider>
         <PermissionsProvider>
           <ProjectProvider>
-            <AIChatProvider>
-              {children}
-            </AIChatProvider>
+            <FormCountsProvider>
+              <AIChatProvider>
+                {children}
+              </AIChatProvider>
+            </FormCountsProvider>
           </ProjectProvider>
         </PermissionsProvider>
       </ThemeProvider>

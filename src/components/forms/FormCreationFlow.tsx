@@ -190,6 +190,15 @@ interface FormCreationFlowProps {
   onSurveyCheckSelect?: () => void;
   onAddPage?: () => void;
   onPreview?: () => void;
+  currentFormPages?: any[];
+  initialValues?: {
+    id?: string;
+    name?: string;
+    description?: string;
+    processNodes?: ProcessNode[];
+  };
+  initialStep?: number;
+  isEditMode?: boolean;
 }
 
 const FormCreationFlow: React.FC<FormCreationFlowProps> = ({ 
@@ -198,30 +207,29 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
   existingForms,
   formEditor,
   onTemplateSelect,
-  onSiteDiarySelect,
-  onSafetyInspectionSelect,
-  onDailyCleaningInspectionSelect,
-  onMonthlyReturnSelect,
-  onInspectionCheckSelect,
-  onSurveyCheckSelect,
+
   onAddPage,
-  onPreview
+  onPreview,
+  currentFormPages,
+  initialValues,
+  initialStep = 1,
+  isEditMode = false
 }) => {
   const { user } = useAuth();
   const { selectedProject } = useProjects();
   
   // State for tracking current step
-  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [currentStep, setCurrentStep] = useState<number>(initialStep);
   
   // Template step state
-  const [templateName, setTemplateName] = useState<string>('');
+  const [templateName, setTemplateName] = useState<string>(initialValues?.name || '');
   const [useExistingForm, setUseExistingForm] = useState<boolean>(false);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
   
   // Form step state (will be populated if using existing form)
   const [formPages, setFormPages] = useState<any[]>([{ id: '1', fields: [] }]);
   const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
-  const [formDescription, setFormDescription] = useState<string>('');
+  const [formDescription, setFormDescription] = useState<string>(initialValues?.description || '');
   
   // API state
   const [users, setUsers] = useState<User[]>([]);
@@ -236,12 +244,30 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
   const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
   
   // Process step state
-  const [processNodes, setProcessNodes] = useState<ProcessNode[]>([
+  const [processNodes, setProcessNodes] = useState<ProcessNode[]>(initialValues?.processNodes || [
     { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
     { id: 'node1', type: 'node', name: 'Review & Approval', executor: '', executorId: '', editAccess: true, ccRecipients: [], settings: {} },
     { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
   ]);
+
+  // Update state when initialValues change
+  useEffect(() => {
+    if (initialValues) {
+      if (initialValues.name) setTemplateName(initialValues.name);
+      if (initialValues.description) setFormDescription(initialValues.description);
+      if (initialValues.processNodes) setProcessNodes(initialValues.processNodes);
+    }
+  }, [initialValues]);
   const [selectedNode, setSelectedNode] = useState<ProcessNode | null>(processNodes[1]);
+
+  // Sync selectedCcs with selectedNode
+  useEffect(() => {
+    if (selectedNode) {
+      setSelectedCcs(selectedNode.ccRecipients || []);
+    } else {
+      setSelectedCcs([]);
+    }
+  }, [selectedNode]);
 
   // Fetch users on component mount
   useEffect(() => {
@@ -285,7 +311,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
     
     try {
       setLoadingTemplates(true);
-      const response = await fetch(`https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/custom-forms/templates?projectId=${selectedProject.id}`, {
+      const response = await fetch(`https://server.matrixtwin.com/api/custom-forms/templates?projectId=${selectedProject.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -293,6 +319,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
       
       if (response.ok) {
         const templates = await response.json();
+        console.log('fetchCustomFormTemplates response:', templates);
         setCustomFormTemplates(templates || []);
       }
     } catch (error) {
@@ -469,15 +496,23 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
       const templateData = {
         name: templateName,
         description: formDescription,
-        formStructure: formPages,
+        formStructure: {
+          pages: currentFormPages || formPages
+        },
         processNodes: processNodesForBackend,
         projectId: selectedProject.id
       };
 
-      console.log('Creating custom form template:', templateData);
+      console.log('Saving custom form template:', templateData);
 
-      const response = await fetch('https://buildsphere-api-buildsp-service-thtkwwhsrf.cn-hangzhou.fcapp.run/api/custom-forms/templates/create', {
-        method: 'POST',
+      const url = initialValues?.id 
+        ? `https://server.matrixtwin.com/api/custom-forms/templates/${initialValues.id}`
+        : 'https://server.matrixtwin.com/api/custom-forms/templates/create';
+      
+      const method = initialValues?.id ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
@@ -487,23 +522,24 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Custom form template created successfully:', result);
+        console.log(`Custom form template ${initialValues?.id ? 'updated' : 'created'} successfully:`, result);
         
         // Call the onSave callback with the form data
         const formData = {
+          id: initialValues?.id || result.id,
           templateName,
           formDescription,
-          formPages,
+          formPages: currentFormPages || formPages,
           processNodes: processNodesForBackend
         };
         onSave(formData);
         
-        alert('Custom form template created successfully!');
+        alert(`Custom form template ${initialValues?.id ? 'updated' : 'created'} successfully!`);
         onClose();
       } else {
         const error = await response.json();
-        console.error('Failed to create custom form template:', error);
-        alert(`Failed to create custom form template: ${error.error || 'Unknown error'}`);
+        console.error(`Failed to ${initialValues?.id ? 'update' : 'create'} custom form template:`, error);
+        alert(`Failed to ${initialValues?.id ? 'update' : 'create'} custom form template: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error creating custom form template:', error);
@@ -700,16 +736,16 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
             Process Configuration
           </h2>
           <p className="text-gray-400">
-            Define the workflow process for this form.
+            Configure the workflow process for this form before saving.
           </p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           {/* Left panel - Flow chart */}
           <div className="md:col-span-5">
-            <div className="bg-dark-800/70 rounded-lg border border-dark-700/50 p-4">
+            <div className="bg-dark-800/70 rounded-lg border border-dark-700/50 p-4 h-full">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="font-medium">Process Flow</h3>
+                <h3 className="font-medium text-white">Process Flow</h3>
                 <Button 
                   variant="ai-secondary" 
                   size="sm"
@@ -730,196 +766,194 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
           
           {/* Right panel - Node settings */}
           <div className="md:col-span-7">
-            <div className="bg-dark-800/70 rounded-lg border border-dark-700/50 p-4">
-              <h3 className="font-medium mb-4">Process Settings</h3>
+            <div className="bg-dark-800/70 rounded-lg border border-dark-700/50 p-4 h-full">
+              <h3 className="font-medium text-white mb-4">Process Settings</h3>
               
-              <div className="border-b border-dark-700/50 mb-4">
-                <div className="flex space-x-4 mb-1">
-                  <button 
-                    className={`py-2 px-3 border-b-2 text-sm font-medium ${
-                      true ? 'border-ai-blue text-white' : 'border-transparent text-gray-400 hover:text-gray-300'
-                    }`}
-                  >
-                    Basic settings
-                  </button>
-                  <button 
-                    className={`py-2 px-3 border-b-2 text-sm font-medium ${
-                      false ? 'border-ai-blue text-white' : 'border-transparent text-gray-400 hover:text-gray-300'
-                    }`}
-                  >
-                    Field settings
-                  </button>
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                <Input
-                  label="Node name"
-                  value={selectedNode?.name || ''}
-                  onChange={(e) => {
-                    if (selectedNode) {
+              {selectedNode ? (
+                <div className="space-y-4">
+                  <Input
+                    label="Node name"
+                    value={selectedNode.name || ''}
+                    onChange={(e) => {
                       const updatedNode = { ...selectedNode, name: e.target.value };
                       const updatedNodes = processNodes.map(node => 
                         node.id === selectedNode.id ? updatedNode : node
                       );
                       setProcessNodes(updatedNodes);
                       setSelectedNode(updatedNode);
-                    }
-                  }}
-                  className="input-ai bg-dark-800/50 border-ai-blue/30 text-white"
-                />
-                
-                {selectedNode?.type === 'node' && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">
-                        Executor
-                      </label>
-                      <div className="flex items-center space-x-2">
-                        <div className="flex-grow bg-dark-700/40 border border-dark-600/50 rounded p-2 text-gray-400">
-                          {selectedNode.executor || 'Select executor'}
-                        </div>
-                        <Button variant="ai-secondary" size="sm" onClick={() => openPeopleSelector('executor')}>
-                          Add
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">
-                        Cc
-                      </label>
-                      <div className="flex flex-col space-y-2">
+                    }}
+                    className="bg-dark-700/50 border-dark-600/50"
+                  />
+                  
+                  {selectedNode.type === 'node' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Executor
+                        </label>
                         <div className="flex items-center space-x-2">
-                          <div className="flex-grow bg-dark-700/40 border border-dark-600/50 rounded p-2 text-gray-400 min-h-[40px]">
-                            {selectedCcs.length > 0 ? (
-                              <div className="flex flex-wrap gap-2">
-                                {selectedCcs.map(cc => (
-                                  <div 
-                                    key={cc.id} 
-                                    className="bg-dark-600 px-2 py-1 rounded-md flex items-center"
-                                  >
-                                    <span className="text-sm mr-1">{cc.name}</span>
-                                    <button
-                                      type="button"
-                                      className="text-gray-400 hover:text-gray-200 ml-1"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        removeUserFromCc(cc.id);
-                                      }}
-                                    >
-                                      ×
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <span>No CCs selected</span>
-                            )}
+                          <div className="flex-grow bg-dark-700/50 border border-dark-600/50 rounded p-3 text-gray-300">
+                            {selectedNode.executor || 'Select executor'}
                           </div>
-                          <Button 
-                            variant="ai-secondary" 
-                            size="sm" 
-                            onClick={() => openPeopleSelector('cc')}
-                          >
-                            Add
+                          <Button variant="outline" size="sm" onClick={() => openPeopleSelector('executor')}>
+                            Select
                           </Button>
                         </div>
-                        
-                        {selectedCcs.length > 0 && (
-                          <div className="text-xs text-gray-400 flex items-center">
-                            <RiTeamLine className="mr-1" />
-                            {selectedCcs.length} {selectedCcs.length === 1 ? 'person' : 'people'} added
-                          </div>
-                        )}
                       </div>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">
-                        Execution types
-                      </label>
-                      <select className="w-full bg-dark-700/40 border border-dark-600/50 rounded p-2 text-white">
-                        <option value="standard">Standard</option>
-                        <option value="parallel">Parallel</option>
-                        <option value="sequential">Sequential</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-1">
-                        Adoption condition
-                      </label>
-                      <select className="w-full bg-dark-700/40 border border-dark-600/50 rounded p-2 text-white">
-                        <option value="none">None</option>
-                        <option value="approval">Approval required</option>
-                        <option value="review">Review required</option>
-                      </select>
-                    </div>
-                  </>
-                )}
-                
-                <div className="pt-2">
-                  <p className="text-sm font-medium text-gray-400 mb-2">Edit settings</p>
-                  
-                  <div className="space-y-2">
-                    <label className="flex items-center space-x-2">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedNode?.editAccess !== false} 
-                        onChange={(e) => {
-                          if (selectedNode) {
-                            const updatedNode = { ...selectedNode, editAccess: e.target.checked };
-                            const updatedNodes = processNodes.map(node => 
-                              node.id === selectedNode.id ? updatedNode : node
-                            );
-                            setProcessNodes(updatedNodes);
-                            setSelectedNode(updatedNode);
-                          }
-                        }}
-                        className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
-                      />
-                      <span className="text-sm">Allow creator</span>
-                    </label>
-                    
-                    <label className="flex items-center space-x-2">
-                      <input 
-                        type="checkbox" 
-                        checked={false} 
-                        onChange={() => {}}
-                        className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
-                      />
-                      <span className="text-sm">Allow stakeholder (creator, executor, Cc)</span>
-                    </label>
-                  </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          CC Recipients
+                        </label>
+                        <div className="flex flex-col space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <div className="flex-grow bg-dark-700/50 border border-dark-600/50 rounded p-3 min-h-[50px]">
+                              {selectedNode.ccRecipients && selectedNode.ccRecipients.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {selectedNode.ccRecipients.map(cc => (
+                                    <div 
+                                      key={cc.id} 
+                                      className="bg-ai-blue/20 text-ai-blue px-3 py-1 rounded-full flex items-center text-sm"
+                                    >
+                                      <span className="mr-2">{cc.name}</span>
+                                      <button
+                                        type="button"
+                                        className="text-ai-blue hover:text-white transition-colors"
+                                        onClick={() => removeUserFromCc(cc.id)}
+                                      >
+                                        <RiCloseLine />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-gray-500">No CCs selected</span>
+                              )}
+                            </div>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => openPeopleSelector('cc')}
+                            >
+                              Add CC
+                            </Button>
+                          </div>
+                          
+                          {selectedNode.ccRecipients && selectedNode.ccRecipients.length > 0 && (
+                            <div className="text-xs text-gray-500 flex items-center">
+                              <RiTeamLine className="mr-1" />
+                              {selectedNode.ccRecipients.length} {selectedNode.ccRecipients.length === 1 ? 'person' : 'people'} will be notified
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Edit Access
+                        </label>
+                        <div className="flex items-center space-x-3">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedNode.editAccess !== false}
+                              onChange={(e) => {
+                                const updatedNode = { ...selectedNode, editAccess: e.target.checked };
+                                const updatedNodes = processNodes.map(node => 
+                                  node.id === selectedNode.id ? updatedNode : node
+                                );
+                                setProcessNodes(updatedNodes);
+                                setSelectedNode(updatedNode);
+                              }}
+                              className="mr-2 rounded border-dark-600 bg-dark-700 text-ai-blue focus:ring-ai-blue"
+                            />
+                            <span className="text-sm text-gray-300">
+                              Allow editing when this node is active
+                            </span>
+                          </label>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          When enabled, both executor and CC recipients can edit the form when this node is active
+                        </p>
+                      </div>
+
+                      {/* Expire Time Configuration */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Task Expiration
+                        </label>
+                        <div className="space-y-3">
+                          <div className="flex items-center space-x-2">
+                            <select 
+                              value={selectedNode.expireTime === 'unlimited' || !selectedNode.expireTime ? 'unlimited' : 'custom'}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                const updatedNode = { 
+                                  ...selectedNode, 
+                                  expireTime: value === 'unlimited' ? 'unlimited' : '',
+                                  expireDuration: value === 'unlimited' ? null : (selectedNode.expireDuration || 24)
+                                };
+                                const updatedNodes = processNodes.map(node => 
+                                  node.id === selectedNode.id ? updatedNode : node
+                                );
+                                setProcessNodes(updatedNodes);
+                                setSelectedNode(updatedNode);
+                              }}
+                              className="flex-1 bg-dark-700/50 border border-dark-600/50 rounded p-2 text-white focus:border-ai-blue/50 focus:ring-1 focus:ring-ai-blue/30 outline-none"
+                            >
+                              <option value="unlimited">Unlimited</option>
+                              <option value="custom">Custom Date & Time</option>
+                            </select>
+                          </div>
+                          
+                          {(selectedNode.expireTime !== 'unlimited' && selectedNode.expireTime !== undefined) && (
+                            <div className="space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  type="datetime-local"
+                                  value={selectedNode.expireTime && selectedNode.expireTime !== 'unlimited' ? 
+                                    (selectedNode.expireTime.includes('T') ? selectedNode.expireTime.slice(0, 16) : '') : ''}
+                                  onChange={(e) => {
+                                    const updatedNode = { 
+                                      ...selectedNode, 
+                                      expireTime: e.target.value ? new Date(e.target.value).toISOString() : '',
+                                      expireDuration: null
+                                    };
+                                    const updatedNodes = processNodes.map(node => 
+                                      node.id === selectedNode.id ? updatedNode : node
+                                    );
+                                    setProcessNodes(updatedNodes);
+                                    setSelectedNode(updatedNode);
+                                  }}
+                                  min={new Date().toISOString().slice(0, 16)}
+                                  className="flex-1 bg-dark-700/50 border border-dark-600/50 rounded p-2 text-white focus:border-ai-blue/50 focus:ring-1 focus:ring-ai-blue/30 outline-none"
+                                />
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                Select the date and time when this task should expire
+                              </p>
+                            </div>
+                          )}
+                          
+                          <p className="text-xs text-gray-500">
+                            {selectedNode.expireTime === 'unlimited' 
+                              ? 'This task will not expire automatically.'
+                              : selectedNode.expireTime && selectedNode.expireTime !== 'unlimited'
+                                ? `This task will expire on ${new Date(selectedNode.expireTime).toLocaleString()}`
+                                : 'Select a custom expiration date and time above.'
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
-                
-                <div className="pt-2">
-                  <p className="text-sm font-medium text-gray-400 mb-2">Notification Settings</p>
-                  
-                  <div className="space-y-2">
-                    <label className="flex items-center space-x-2">
-                      <input 
-                        type="checkbox" 
-                        checked={true} 
-                        onChange={() => {}}
-                        className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
-                      />
-                      <span className="text-sm">Send email notification</span>
-                    </label>
-                    
-                    <label className="flex items-center space-x-2">
-                      <input 
-                        type="checkbox" 
-                        checked={true} 
-                        onChange={() => {}}
-                        className="rounded-sm bg-dark-700 border-dark-600 text-ai-blue focus:ring-ai-blue"
-                      />
-                      <span className="text-sm">Send in-app notification</span>
-                    </label>
-                  </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <RiFlowChart className="text-4xl mx-auto mb-2 opacity-50" />
+                  <p>Select a node to configure its settings</p>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>

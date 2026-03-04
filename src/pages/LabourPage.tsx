@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLocation } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -188,6 +189,7 @@ const PeopleSelectorModal: React.FC<{
 
 const LabourPage: React.FC = () => {
   const { t } = useTranslation();
+  const location = useLocation();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
   const [showNewReturn, setShowNewReturn] = useState(false);
@@ -769,6 +771,18 @@ const LabourPage: React.FC = () => {
       </span>
     );
   };
+
+  // Handle URL query parameters to open specific form
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    if (id && labourEntries.length > 0) {
+      const entry = labourEntries.find(e => e.id === id);
+      if (entry) {
+        handleViewDetails(entry);
+      }
+    }
+  }, [location.search, labourEntries]);
 
   return (
     <div className="max-w-7xl mx-auto pb-12">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -226,6 +227,20 @@ const RfiPage: React.FC = () => {
       fetchUsers();
     }
   }, [selectedProject]);
+
+  // Handle URL query parameters to open specific form
+  const location = useLocation();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    if (id && rfiItems.length > 0) {
+      const item = rfiItems.find(i => i.id === id);
+      if (item) {
+        setSelectedRfi(item);
+        setShowRfiDetails(true);
+      }
+    }
+  }, [location.search, rfiItems]);
 
   const fetchUsers = async () => {
     try {
