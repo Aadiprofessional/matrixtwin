@@ -187,6 +187,7 @@ const RfiPage: React.FC = () => {
   const { selectedProject } = useProjects();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [formTypeFilter, setFormTypeFilter] = useState<'all' | 'inspection' | 'survey'>('all');
   const [selectedRfi, setSelectedRfi] = useState<RfiItem | null>(null);
   const [showRfiDetails, setShowRfiDetails] = useState(false);
   const [showResponseForm, setShowResponseForm] = useState(false);
@@ -442,6 +443,9 @@ const RfiPage: React.FC = () => {
     // Status filter
     if (statusFilter !== 'all' && rfi.status !== statusFilter) return false;
     
+    // Form Type filter
+    if (formTypeFilter !== 'all' && rfi.form_type !== formTypeFilter) return false;
+    
     // Search query filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -454,6 +458,50 @@ const RfiPage: React.FC = () => {
     
     return true;
   });
+
+  const getWorkflowStatusBadge = (rfi: RfiItem) => {
+    const statusColors = {
+      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
+      answered: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+      closed: 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400',
+      rejected: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
+      completed: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+      permanently_rejected: 'bg-red-200 text-red-900 dark:bg-red-900/40 dark:text-red-300'
+    };
+    
+    // Get current node completion info
+    const currentNode = rfi.rfi_workflow_nodes?.find(
+      (node: any) => node.node_order === rfi.current_node_index
+    );
+    
+    let statusText = rfi.status.charAt(0).toUpperCase() + rfi.status.slice(1);
+    let completionInfo = '';
+    
+    if (rfi.status === 'permanently_rejected') {
+      statusText = 'Permanently Rejected';
+    } else if (currentNode && rfi.status === 'pending') {
+      const completionCount = currentNode.completion_count || 0;
+      const maxCompletions = currentNode.max_completions || 2;
+      completionInfo = ` (${completionCount}/${maxCompletions})`;
+      
+      if (completionCount >= maxCompletions && !currentNode.can_re_edit) {
+        statusText = 'Limit Reached';
+      }
+    }
+
+    return (
+      <div className="flex flex-col items-start">
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[rfi.status as keyof typeof statusColors] || statusColors.pending}`}>
+          {statusText}
+        </span>
+        {completionInfo && (
+          <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Completions{completionInfo}
+          </span>
+        )}
+      </div>
+    );
+  };
 
   // Priority styles
   const priorityStyles = {
@@ -711,14 +759,121 @@ const RfiPage: React.FC = () => {
     }
   };
 
+  // Handle inspection form update
+  const handleUpdateInspection = async (formData: any) => {
+    if (!selectedRfi || !user?.id) return;
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/inspection/${selectedRfi.id}/update`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          formData: formData,
+          action: 'update',
+          userId: user.id
+        })
+      });
+
+      if (response.ok) {
+        setInspectionTemplateVisible(false);
+        loadRfis();
+        alert('Inspection updated successfully!');
+      } else {
+        const error = await response.json();
+        alert(`Failed to update inspection: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error updating inspection:', error);
+      alert('Failed to update inspection. Please try again.');
+    }
+  };
+
+  // Handle survey form update
+  const handleUpdateSurvey = async (formData: any) => {
+    if (!selectedRfi || !user?.id) return;
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/survey/${selectedRfi.id}/update`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          formData: formData,
+          action: 'update',
+          userId: user.id
+        })
+      });
+
+      if (response.ok) {
+        setSurveyTemplateVisible(false);
+        loadRfis();
+        alert('Survey updated successfully!');
+      } else {
+        const error = await response.json();
+        alert(`Failed to update survey: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error updating survey:', error);
+      alert('Failed to update survey. Please try again.');
+    }
+  };
+
+  // Delete RFI (admin only)
+  const handleDeleteRfi = async (rfi: RfiItem) => {
+    if (!user?.id || user.role !== 'admin') {
+      alert('Only admins can delete RFIs.');
+      return;
+    }
+
+    const confirmDelete = window.confirm(`Are you sure you want to delete this RFI: ${rfi.title}? This action cannot be undone.`);
+    if (!confirmDelete) return;
+
+    try {
+      const endpoint = rfi.form_type === 'survey' 
+        ? `${API_BASE_URL}/survey/${rfi.id}`
+        : `${API_BASE_URL}/inspection/${rfi.id}`;
+
+      const response = await fetch(endpoint, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        loadRfis();
+        alert('RFI deleted successfully!');
+      } else {
+        const error = await response.json();
+        alert(`Failed to delete RFI: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting RFI:', error);
+      alert('Failed to delete RFI. Please try again.');
+    }
+  };
+
   // Handle inspection form submission
   const handleInspectionFormSubmit = (data: any) => {
-    handleFormSubmit(data, 'inspection');
+    if (selectedRfi) {
+      handleUpdateInspection(data);
+    } else {
+      handleFormSubmit(data, 'inspection');
+    }
   };
 
   // Handle survey form submission
   const handleSurveyFormSubmit = (data: any) => {
-    handleFormSubmit(data, 'survey');
+    if (selectedRfi) {
+      handleUpdateSurvey(data);
+    } else {
+      handleFormSubmit(data, 'survey');
+    }
   };
   
   const handleUserSelection = async (selectedUserIds: string[]) => {
@@ -766,11 +921,15 @@ const RfiPage: React.FC = () => {
       // Get form type from pending data
       const formType = pendingFormData.formType || 'inspection';
       
+      // Generate RISC number if missing
+      const generatedRiscNo = pendingFormData.riscNo || `RISC-${Math.floor(100000 + Math.random() * 900000)}`;
+
       // Map form data to match API expectations
       const mappedFormData = {
         ...pendingFormData,
         project: selectedProject?.name || 'Unknown Project',
-        projectId: selectedProject?.id
+        projectId: selectedProject?.id,
+        riscNo: generatedRiscNo
       };
 
       // Remove inspectionTime field for survey forms as it doesn't exist in survey_entries table
@@ -784,7 +943,7 @@ const RfiPage: React.FC = () => {
         
         // Ensure required fields have default values
         mappedFormData.contractNo = mappedFormData.contractNo || 'N/A';
-        mappedFormData.riscNo = mappedFormData.riscNo || 'N/A';
+        // mappedFormData.riscNo is already set above
         mappedFormData.revision = mappedFormData.revision || 'Rev-1';
         mappedFormData.supervisor = mappedFormData.supervisor || 'N/A';
         mappedFormData.attention = mappedFormData.attention || 'N/A';
@@ -807,6 +966,8 @@ const RfiPage: React.FC = () => {
         createdBy: user.id,
         projectId: selectedProject?.id,
         formType,
+        formId: generatedRiscNo,
+        name: generatedRiscNo,
         endpoint: formType === 'survey' 
           ? `${API_BASE_URL}/survey/create`
           : `${API_BASE_URL}/inspection/create`
@@ -845,7 +1006,9 @@ const RfiPage: React.FC = () => {
           formData: mappedFormData,
           processNodes: processNodesForBackend,
           createdBy: user.id,
-          projectId: selectedProject?.id
+          projectId: selectedProject?.id,
+          formId: generatedRiscNo,
+          name: generatedRiscNo
         })
       });
 
@@ -895,6 +1058,133 @@ const RfiPage: React.FC = () => {
     }
   };
   
+  // Handle workflow actions (approve/reject/back to previous)
+  const handleWorkflowAction = async (action: 'approve' | 'reject' | 'back') => {
+    if (!selectedRfi || !user?.id) return;
+
+    let comment = '';
+    if (action === 'reject' || action === 'back') {
+      const promptResult = prompt(`Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`);
+      if (promptResult === null || promptResult.trim() === '') {
+        alert(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
+        return;
+      }
+      comment = promptResult.trim();
+    }
+
+    try {
+      const endpoint = selectedRfi.form_type === 'survey' 
+        ? `${API_BASE_URL}/survey/${selectedRfi.id}/update`
+        : `${API_BASE_URL}/inspection/${selectedRfi.id}/update`;
+
+      const response = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: action,
+          comment: comment,
+          userId: user.id
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.permanently_rejected) {
+          alert('Entry has been permanently rejected - no more edits are allowed as all nodes have reached their completion limit.');
+        } else {
+          alert(`Entry ${action}d successfully! Notifications have been sent.`);
+        }
+        
+        await loadRfis();
+        setShowRfiDetails(false);
+      } else {
+        const error = await response.json();
+        if (error.error?.includes('completion limit')) {
+          alert(`Cannot ${action}: ${error.error}\n${error.details || ''}`);
+        } else if (error.error?.includes('No previous node available')) {
+          alert(`Cannot send back: ${error.error}\n${error.details || ''}`);
+        } else {
+          alert(`Failed to ${action} entry: ${error.error}`);
+        }
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing entry:`, error);
+      alert(`Failed to ${action} entry. Please try again.`);
+    }
+  };
+
+  // Check permissions
+  const canUserEditEntry = (entry: RfiItem) => {
+    if (!user?.id) return false;
+    if (entry.status === 'permanently_rejected' || entry.status === 'closed') return false;
+    
+    if (user.role === 'admin' && (entry.status === 'pending' || entry.status === 'rejected')) return true;
+    
+    const currentNode = entry.rfi_workflow_nodes?.find(
+      (node: any) => node.node_order === entry.current_node_index
+    );
+    
+    if (currentNode && currentNode.executor_id === user.id && entry.status === 'rejected') return true;
+    
+    return false;
+  };
+
+  const canUserUpdateForm = (entry: RfiItem) => {
+    if (!user?.id) return false;
+    if (entry.status === 'permanently_rejected' || entry.status === 'closed') return false;
+    
+    if (user.role === 'admin' && entry.created_by === user.id) return true;
+
+    const currentNode = entry.rfi_workflow_nodes?.find(
+      (node: any) => node.node_order === entry.current_node_index
+    );
+    
+    if (currentNode && currentNode.executor_id === user.id) {
+      if (entry.status === 'rejected') return true;
+      const completionCount = currentNode.completion_count || 0;
+      const maxCompletions = currentNode.max_completions || 2;
+      const canReEdit = currentNode.can_re_edit !== false;
+      return canReEdit && completionCount < maxCompletions;
+    }
+    
+    const isAssigned = entry.rfi_assignments?.some(
+      (assignment: any) => assignment.user_id === user.id && 
+                   assignment.node_id === currentNode?.node_id
+    );
+    
+    if (isAssigned && entry.status === 'rejected') return true;
+    
+    return isAssigned;
+  };
+
+  const canUserApproveEntry = (entry: RfiItem) => {
+    if (!user?.id) return false;
+    if (entry.status === 'permanently_rejected' || entry.status === 'completed' || entry.status === 'closed') return false;
+    if (user.role === 'admin') return true;
+    
+    const currentNode = entry.rfi_workflow_nodes?.find(
+      (node: any) => node.node_order === entry.current_node_index
+    );
+    
+    if (currentNode && currentNode.executor_id === user.id) {
+      if (entry.status === 'rejected') return true;
+      const completionCount = currentNode.completion_count || 0;
+      const maxCompletions = currentNode.max_completions || 2;
+      const canReEdit = currentNode.can_re_edit !== false;
+      return canReEdit && completionCount < maxCompletions;
+    }
+    return false;
+  };
+
+  const canUserViewEntry = (entry: RfiItem) => {
+    // Basic view permission - everyone in project can view usually, or restrict
+    return true; 
+  };
+
   // Cancel process flow and go back to form
   const handleCancelProcessFlow = () => {
     setShowProcessFlow(false);
@@ -902,6 +1192,7 @@ const RfiPage: React.FC = () => {
     setPendingFormData(null);
     setGeneratedPdf(null);
   };
+
 
   return (
     <div className="max-w-7xl mx-auto pb-12">
@@ -936,7 +1227,7 @@ const RfiPage: React.FC = () => {
                 transition={{ duration: 0.5 }}
               >
                 <h1 className="text-3xl md:text-4xl font-display font-bold text-white flex items-center">
-                  <RiIcons.RiFileTextLine className="mr-3 text-purple-300" />
+                  <RiIcons.RiBellLine className="mr-3 text-purple-300" />
                   Requests for Information
                 </h1>
                 <p className="text-purple-200 mt-2 max-w-2xl">
@@ -954,7 +1245,10 @@ const RfiPage: React.FC = () => {
               <Button 
                 variant="futuristic" 
                 leftIcon={<RiIcons.RiAddLine />}
-                onClick={() => setShowFormSelector(true)}
+                onClick={() => {
+                  setSelectedRfi(null);
+                  setShowFormSelector(true);
+                }}
                 animated
                 pulseEffect
                 glowing
@@ -1035,71 +1329,34 @@ const RfiPage: React.FC = () => {
                 />
               </div>
               
-              {/* Data Type Filter Buttons */}
-              <div className="flex gap-2 flex-wrap">
-                <Button 
-                  variant="ai-gradient" 
-                  size="sm"
-                  onClick={loadRfis}
-                  leftIcon={<RiIcons.RiRefreshLine />}
+              <div className="flex gap-4">
+                <select
+                  value={formTypeFilter}
+                  onChange={(e) => setFormTypeFilter(e.target.value as any)}
+                  className="input-ai py-2 px-4 rounded-lg bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-700"
                 >
-                  All Data
-                </Button>
-                <Button 
-                  variant="ai" 
-                  size="sm"
-                  onClick={loadInspectionsOnly}
-                  leftIcon={<RiIcons.RiCheckboxLine />}
+                  <option value="all">All Forms</option>
+                  <option value="inspection">Inspections</option>
+                  <option value="survey">Surveys</option>
+                </select>
+
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="input-ai py-2 px-4 rounded-lg bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-700"
                 >
-                  Inspections Only
-                </Button>
-                <Button 
-                  variant="ai-secondary" 
-                  size="sm"
-                  onClick={loadSurveysOnly}
-                  leftIcon={<RiIcons.RiRulerLine />}
-                >
-                  Surveys Only
-                </Button>
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="answered">Answered</option>
+                  <option value="closed">Closed</option>
+                </select>
               </div>
-            </div>
-            
-            {/* Status Filter Buttons */}
-            <div className="flex gap-2 flex-wrap">
-              <Button 
-                variant={statusFilter === 'all' ? 'ai' : 'ai-secondary'} 
-                size="sm"
-                onClick={() => setStatusFilter('all')}
-              >
-                All Status
-              </Button>
-              <Button 
-                variant={statusFilter === 'pending' ? 'ai' : 'ai-secondary'} 
-                size="sm"
-                onClick={() => setStatusFilter('pending')}
-              >
-                Pending
-              </Button>
-              <Button 
-                variant={statusFilter === 'answered' ? 'ai' : 'ai-secondary'} 
-                size="sm"
-                onClick={() => setStatusFilter('answered')}
-              >
-                Answered
-              </Button>
-              <Button 
-                variant={statusFilter === 'closed' ? 'ai' : 'ai-secondary'} 
-                size="sm"
-                onClick={() => setStatusFilter('closed')}
-              >
-                Closed
-              </Button>
             </div>
           </div>
         </Card>
       </motion.div>
       
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {loading ? (
           <motion.div
             initial={{ opacity: 0 }}
@@ -1121,43 +1378,87 @@ const RfiPage: React.FC = () => {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <Card
-                variant="ai"
-                className="p-0 overflow-hidden hover:shadow-ai-glow transition-shadow duration-300"
-                hover
-                onClick={() => {
-                  setSelectedRfi(rfi);
-                  setShowRfiDetails(true);
-                }}
+              <Card 
+                className="p-0 overflow-hidden hover:shadow-xl transition-all duration-300 border border-secondary-100 dark:border-dark-700"
               >
-                <div className="flex flex-col md:flex-row">
-                  <div className="md:w-1 w-full h-1 md:h-auto" style={{
-                    backgroundColor: rfi.status === 'pending' ? '#3f87ff' : 
-                                   rfi.status === 'answered' ? '#10b981' : '#6b7280'
-                  }} />
-                  <div className="p-4 flex-1">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
-                      <h3 className="text-lg font-semibold">{rfi.title}</h3>
-                      <div className="flex items-center gap-2 mt-1 sm:mt-0">
-                        <span className={`px-2 py-1 text-xs rounded-full ${statusStyles[rfi.status].bg} ${statusStyles[rfi.status].text} border ${statusStyles[rfi.status].border}`}>
-                          {rfi.status.charAt(0).toUpperCase() + rfi.status.slice(1)}
-                        </span>
-                        <span className={`text-xs font-medium ${priorityStyles[rfi.priority]}`}>
-                          {rfi.priority.charAt(0).toUpperCase() + rfi.priority.slice(1)}
-                        </span>
-                      </div>
+                <div className="bg-gradient-to-r from-primary-50 to-primary-100 dark:from-primary-900/20 dark:to-primary-800/20 p-4">
+                  <div className="flex justify-between mb-2">
+                    <div className="flex items-center">
+                      <RiIcons.RiCalendarLine className="text-primary-600 dark:text-primary-400 mr-2" />
+                      <span className="font-medium text-primary-900 dark:text-primary-300">
+                        {new Date(rfi.submittedDate).toLocaleDateString()}
+                      </span>
                     </div>
-                    <p className="text-secondary-600 dark:text-secondary-400 text-sm mb-3 line-clamp-2">
+                    <div className="flex items-center space-x-2">
+                      {getWorkflowStatusBadge(rfi)}
+                    </div>
+                  </div>
+                  
+                  <h3 className="font-display font-semibold text-lg text-secondary-900 dark:text-white mb-1">
+                    {rfi.title}
+                  </h3>
+                  
+                  <div className="flex items-center text-sm text-secondary-600 dark:text-secondary-400">
+                    <RiIcons.RiUserLine className="mr-1" />
+                    <span className="ml-1">From: {rfi.submittedBy}</span>
+                  </div>
+                </div>
+                
+                <div className="p-4">
+                  <div className="mb-4">
+                    <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-2">
+                      Description:
+                    </h4>
+                    <p className="text-secondary-600 dark:text-secondary-400 line-clamp-2">
                       {rfi.description}
                     </p>
-                    <div className="flex flex-col sm:flex-row justify-between text-xs text-gray-500">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                        <span>From: {rfi.submittedBy}</span>
-                        {rfi.assignedTo && <span>To: {rfi.assignedTo}</span>}
-                      </div>
-                      <div className="mt-1 sm:mt-0">
-                        Submitted: {new Date(rfi.submittedDate).toLocaleDateString()}
-                      </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
+                        Type:
+                      </h4>
+                      <p className="text-secondary-600 dark:text-secondary-400 text-sm line-clamp-1">
+                        {rfi.form_type ? rfi.form_type.charAt(0).toUpperCase() + rfi.form_type.slice(1) : 'RFI'}
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
+                        Assigned To:
+                      </h4>
+                      <p className="text-secondary-600 dark:text-secondary-400 text-sm line-clamp-1">
+                        {rfi.assignedTo || 'Unassigned'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end mt-4">
+                    <div className="flex space-x-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          setSelectedRfi(rfi);
+                          setShowRfiDetails(true);
+                        }}
+                        rightIcon={<RiIcons.RiArrowRightLine />}
+                        className="hover:bg-primary-50 dark:hover:bg-primary-900/20"
+                      >
+                        View Details
+                      </Button>
+                      {/* Admin delete button */}
+                      {user?.role === 'admin' && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleDeleteRfi(rfi)}
+                          leftIcon={<RiIcons.RiDeleteBinLine />}
+                          className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1176,7 +1477,10 @@ const RfiPage: React.FC = () => {
             <p className="text-gray-500 mb-6">Try adjusting your search criteria or create a new RFI</p>
             <Button 
               variant="ai-gradient" 
-              onClick={() => setShowFormSelector(true)}
+              onClick={() => {
+                setSelectedRfi(null);
+                setShowFormSelector(true);
+              }}
               leftIcon={<div><RiIcons.RiAddLine /></div>}
             >
               Create RFI
@@ -1258,8 +1562,12 @@ const RfiPage: React.FC = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <InspectionCheckFormTemplate
-                onClose={() => setInspectionTemplateVisible(false)}
+                onClose={() => {
+                  setInspectionTemplateVisible(false);
+                  setSelectedRfi(null);
+                }}
                 onSave={handleInspectionFormSubmit}
+                initialData={selectedRfi?.form_data}
               />
             </motion.div>
           </div>
@@ -1282,103 +1590,286 @@ const RfiPage: React.FC = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <SurveyCheckFormTemplate
-                onClose={() => setSurveyTemplateVisible(false)}
+                onClose={() => {
+                  setSurveyTemplateVisible(false);
+                  setSelectedRfi(null);
+                }}
                 onSave={handleSurveyFormSubmit}
+                initialData={selectedRfi?.form_data}
               />
             </motion.div>
           </div>
         )}
       </AnimatePresence>
       
-      {/* RFI Details Modal */}
-      <AnimatePresence>
-        {showRfiDetails && selectedRfi && (
-          <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-            onClick={() => setShowRfiDetails(false)}
-          >
-            <motion.div
-              className="bg-dark-950 rounded-xl shadow-ai-glow border border-ai-blue/20 max-w-3xl w-full"
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-4 border-b border-dark-800 flex justify-between items-center">
-                <div className="flex items-center">
-                  <span className={`w-3 h-3 rounded-full mr-2 ${
-                    selectedRfi.status === 'pending' ? 'bg-ai-blue' : 
-                    selectedRfi.status === 'answered' ? 'bg-success' : 'bg-secondary-500'
-                  }`}></span>
-                  <h2 className="text-xl font-display font-semibold text-white">RFI Details</h2>
+      {/* RFI Details Dialog */}
+      <Dialog
+        isOpen={showRfiDetails}
+        onClose={() => setShowRfiDetails(false)}
+        title="RFI Details"
+      >
+        {selectedRfi && (
+          <div className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center bg-primary-50 dark:bg-primary-900/20 p-3 rounded-lg">
+              <div className="text-lg font-bold text-primary-900 dark:text-primary-300 flex items-center">
+                <RiIcons.RiCalendarCheckLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                {new Date(selectedRfi.submittedDate).toLocaleDateString()}
+              </div>
+              <div className="flex items-center space-x-2">
+                 {getWorkflowStatusBadge(selectedRfi)}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <RiIcons.RiUserLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Submitted By</span>
                 </div>
-                <button 
-                  onClick={() => setShowRfiDetails(false)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <div><RiIcons.RiCloseLine className="text-xl" /></div>
-                </button>
+                <div className="font-medium">{selectedRfi.submittedBy}</div>
               </div>
               
-              <div className="p-6">
-                <h3 className="text-xl font-semibold mb-4">{selectedRfi.title}</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  <div>
-                    <p className="text-sm text-gray-500">Submitted By</p>
-                    <p>{selectedRfi.submittedBy}</p>
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <div className="mr-2 text-primary-600 dark:text-primary-400">
+                    <RiIcons.RiFlagLine />
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Submission Date</p>
-                    <p>{new Date(selectedRfi.submittedDate).toLocaleDateString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Status</p>
-                    <p className={statusStyles[selectedRfi.status].text}>
-                      {selectedRfi.status.charAt(0).toUpperCase() + selectedRfi.status.slice(1)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Priority</p>
-                    <p className={priorityStyles[selectedRfi.priority]}>
-                      {selectedRfi.priority.charAt(0).toUpperCase() + selectedRfi.priority.slice(1)}
-                    </p>
-                  </div>
-                  {selectedRfi.assignedTo && (
-                    <div>
-                      <p className="text-sm text-gray-500">Assigned To</p>
-                      <p>{selectedRfi.assignedTo}</p>
-                    </div>
-                  )}
-                  {selectedRfi.responseDate && (
-                    <div>
-                      <p className="text-sm text-gray-500">Response Date</p>
-                      <p>{new Date(selectedRfi.responseDate).toLocaleDateString()}</p>
-                    </div>
-                  )}
+                  <span className="text-sm font-medium uppercase tracking-wide">Priority</span>
+                </div>
+                <div className={`font-medium ${priorityStyles[selectedRfi.priority]}`}>
+                    {selectedRfi.priority.charAt(0).toUpperCase() + selectedRfi.priority.slice(1)}
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                <RiIcons.RiFileTextLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <span className="text-sm font-medium uppercase tracking-wide">Description</span>
+              </div>
+              <div className="whitespace-pre-line">{selectedRfi.description}</div>
+            </div>
+            
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                <RiIcons.RiUserFollowLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <span className="text-sm font-medium uppercase tracking-wide">Assigned To</span>
+              </div>
+              <div>{selectedRfi.assignedTo || 'Unassigned'}</div>
+            </div>
+            
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                <RiIcons.RiChat3Line className="mr-2 text-primary-600 dark:text-primary-400" />
+                <span className="text-sm font-medium uppercase tracking-wide">Response</span>
+              </div>
+              <div>{selectedRfi.response || 'No response yet'}</div>
+            </div>
+            
+            {/* Workflow Status Section */}
+            {selectedRfi.rfi_workflow_nodes && selectedRfi.rfi_workflow_nodes.length > 0 && (
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
+                  <RiIcons.RiFlowChart className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
                 </div>
                 
-                <div className="mb-6">
-                  <p className="text-sm text-gray-500 mb-2">Description</p>
-                  <Card variant="ai" className="p-4">
-                    <p className="whitespace-pre-line">{selectedRfi.description}</p>
-                  </Card>
+                <div className="space-y-3">
+                  {selectedRfi.rfi_workflow_nodes
+                    .sort((a: any, b: any) => a.node_order - b.node_order)
+                    .map((node: any) => (
+                      <div key={node.id} className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-dark-700 rounded-lg">
+                        <div className="flex items-center">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                            node.status === 'completed' ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400' :
+                            node.status === 'pending' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                            node.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400' :
+                            'bg-gray-100 text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'
+                          }`}>
+                            {node.status === 'completed' ? <RiIcons.RiCheckLine /> :
+                             node.status === 'pending' ? <RiIcons.RiTimeLine /> :
+                             node.status === 'rejected' ? <RiIcons.RiCloseLine /> :
+                             <RiIcons.RiMoreLine />}
+                          </div>
+                          <div>
+                            <div className="font-medium text-secondary-900 dark:text-white">{node.node_name}</div>
+                            {node.executor_name && (
+                              <div className="text-sm text-secondary-600 dark:text-secondary-400">
+                                Assigned to: {node.executor_name}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                          node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                          node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                          'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+                        }`}>
+                          {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Comments Section */}
+            {selectedRfi.rfi_comments && selectedRfi.rfi_comments.length > 0 && (
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
+                  <RiIcons.RiChat3Line className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
                 </div>
                 
-                {selectedRfi.response && (
-                  <div className="mb-6">
-                    <p className="text-sm text-gray-500 mb-2">Response</p>
-                    <Card variant="ai" className="p-4">
-                      <p className="whitespace-pre-line">{selectedRfi.response}</p>
-                    </Card>
-                  </div>
-                )}
-                
-                <div className="flex justify-end gap-3 mt-8">
-                  {selectedRfi.status === 'pending' && (
+                <div className="space-y-3">
+                  {selectedRfi.rfi_comments
+                    .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                    .map((comment: any) => (
+                      <div key={comment.id} className="p-3 bg-secondary-50 dark:bg-dark-700 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-medium text-secondary-900 dark:text-white">{comment.user_name}</div>
+                          <div className="flex items-center space-x-2">
+                            {comment.action && (
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                              comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                              'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-400'
+                            }`}>
+                                {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
+                              </span>
+                            )}
+                            <span className="text-xs text-secondary-500 dark:text-secondary-400">
+                              {new Date(comment.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-secondary-700 dark:text-secondary-300">{comment.comment}</div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="pt-6 mt-6 border-t border-white/10">
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
+                {/* Left side: Utility actions */}
+                <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
+                   <Button 
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<RiIcons.RiDownload2Line />}
+                    className="text-secondary-400 hover:text-white hover:bg-white/5"
+                  >
+                    Export
+                  </Button>
+                  <Button 
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<RiIcons.RiPrinterLine />}
+                    className="text-secondary-400 hover:text-white hover:bg-white/5"
+                  >
+                    Print
+                  </Button>
+                  
+                  {/* Admin delete button */}
+                  {user?.role === 'admin' && (
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={<RiIcons.RiDeleteBinLine />}
+                      onClick={() => {
+                        setShowRfiDetails(false);
+                        handleDeleteRfi(selectedRfi);
+                      }}
+                      className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+
+                {/* Right side: Workflow actions */}
+                <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-end">
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowRfiDetails(false)}
+                    className="border-white/10 hover:bg-white/5"
+                  >
+                    Close
+                  </Button>
+
+                  {/* View/Edit Form Button */}
+                  {(canUserEditEntry(selectedRfi) || canUserUpdateForm(selectedRfi) || canUserViewEntry(selectedRfi)) && (
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      leftIcon={canUserUpdateForm(selectedRfi) ? <RiIcons.RiEditLine /> : <RiIcons.RiFileListLine />}
+                      onClick={() => {
+                        setShowRfiDetails(false);
+                         if (selectedRfi.form_type === 'inspection') {
+                            setInspectionTemplateVisible(true);
+                          } else if (selectedRfi.form_type === 'survey') {
+                            setSurveyTemplateVisible(true);
+                          } else {
+                            // Fallback for generic RFI
+                             setShowFormSelector(true);
+                          }
+                      }}
+                      className="hover:bg-white/5"
+                    >
+                      {canUserUpdateForm(selectedRfi) ? 'Edit Form' : 'View Form'}
+                    </Button>
+                  )}
+
+                  {/* Workflow Action Buttons */}
+                  {(selectedRfi.status === 'pending' || selectedRfi.status === 'rejected') && (
                     <>
-                      <Button 
+                      {/* Send Back (if applicable) */}
+                      {canUserApproveEntry(selectedRfi) && (selectedRfi.current_node_index || 0) > 0 && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<RiIcons.RiArrowLeftLine />}
+                          onClick={() => handleWorkflowAction('back')}
+                          className="text-orange-500 border-orange-500/30 hover:bg-orange-500/10 hover:border-orange-500"
+                        >
+                          Send Back
+                        </Button>
+                      )}
+                      
+                      {/* Reject */}
+                      {canUserApproveEntry(selectedRfi) && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<RiIcons.RiCloseLine />}
+                          onClick={() => handleWorkflowAction('reject')}
+                          className="text-red-500 border-red-500/30 hover:bg-red-500/10 hover:border-red-500"
+                        >
+                          Reject
+                        </Button>
+                      )}
+
+                      {/* Approve/Complete */}
+                      {canUserApproveEntry(selectedRfi) && (
+                        <Button 
+                          variant="primary"
+                          size="sm"
+                          leftIcon={<RiIcons.RiCheckLine />}
+                          onClick={() => handleWorkflowAction('approve')}
+                          className="bg-portfolio-orange hover:bg-portfolio-orange/80 text-white border-none shadow-lg shadow-portfolio-orange/20"
+                        >
+                          {(selectedRfi.current_node_index === 1) ? 'Complete' : 'Approve'}
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  
+                  {/* Keep old Respond button for fallback if workflow not active */}
+                  {selectedRfi.status === 'pending' && !selectedRfi.rfi_workflow_nodes?.length && (
+                     <Button 
                         variant="ai-secondary"
                         onClick={() => {
                           setShowResponseForm(true);
@@ -1387,42 +1878,13 @@ const RfiPage: React.FC = () => {
                       >
                         Respond
                       </Button>
-                      <Button 
-                        variant="outline"
-                        className="border-error/30 text-error hover:bg-error/10"
-                        onClick={() => {
-                          closeRfi(selectedRfi.id);
-                        }}
-                      >
-                        Close RFI
-                      </Button>
-                    </>
                   )}
-                  
-                  {selectedRfi.status === 'answered' && (
-                    <Button 
-                      variant="outline"
-                      className="border-secondary-500/30 text-secondary-500 hover:bg-secondary-500/10"
-                      onClick={() => {
-                        closeRfi(selectedRfi.id);
-                      }}
-                    >
-                      Close RFI
-                    </Button>
-                  )}
-                  
-                  <Button 
-                    variant="ai"
-                    onClick={() => setShowRfiDetails(false)}
-                  >
-                    Close
-                  </Button>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
-      </AnimatePresence>
+      </Dialog>
       
       {/* RFI Response Form Modal */}
       <AnimatePresence>

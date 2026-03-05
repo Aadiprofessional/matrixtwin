@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,6 +12,7 @@ import { projectService } from '../services/projectService';
 import * as RiIcons from 'react-icons/ri';
 import { SiteDiaryFormTemplate } from '../components/forms/SiteDiaryFormTemplate';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
+import { PeopleSelectorModal } from '../components/ui/PeopleSelectorModal';
 
 // Add interfaces for process flow
 interface ProcessNode {
@@ -59,114 +60,6 @@ interface DiaryEntry {
   updated_at?: string;
 }
 
-// People selector modal component
-const PeopleSelectorModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onSelect: (user: User) => void;
-  title: string;
-  users: User[];
-  loading: boolean;
-}> = ({ isOpen, onClose, onSelect, title, users, loading }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Filter users based on search
-  const filteredUsers = searchQuery 
-    ? users.filter(user => 
-        user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : users;
-  
-  if (!isOpen) return null;
-  
-  return (
-    <div 
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-      onClick={onClose}
-    >
-      <motion.div
-        className="w-full max-w-md max-h-[80vh] bg-white/80 dark:bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-xl overflow-hidden"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-4 border-b border-secondary-200 dark:border-dark-700 flex justify-between items-center">
-          <h3 className="text-lg font-semibold flex items-center text-secondary-900 dark:text-white">
-            <RiIcons.RiUserLine className="mr-2" />
-            {title}
-          </h3>
-          <button 
-            className="text-secondary-400 hover:text-secondary-600 dark:text-gray-400 dark:hover:text-gray-200"
-            onClick={onClose}
-          >
-            <RiIcons.RiCloseLine className="text-xl" />
-          </button>
-        </div>
-        
-        <div className="p-4 border-b border-secondary-200 dark:border-dark-700">
-          <div className="relative">
-            <RiIcons.RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-secondary-400" />
-            <input
-              type="text"
-              placeholder="Search by name, role, or email..."
-              className="w-full pl-10 pr-4 py-2 border border-secondary-300 dark:border-dark-600 rounded-md bg-white dark:bg-dark-700 text-secondary-900 dark:text-white"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
-        
-        <div className="overflow-y-auto max-h-[400px] p-2">
-          {loading ? (
-            <div className="p-4 text-center text-secondary-600 dark:text-secondary-400">
-              <RiIcons.RiLoader4Line className="animate-spin text-2xl mx-auto mb-2" />
-              Loading users...
-            </div>
-          ) : filteredUsers.length > 0 ? (
-            <div className="grid grid-cols-1 gap-2">
-              {filteredUsers.map(user => (
-                <div 
-                  key={user.id}
-                  className="p-3 hover:bg-secondary-50 dark:hover:bg-dark-700 rounded-md cursor-pointer transition-colors flex items-center"
-                  onClick={() => {
-                    onSelect(user);
-                    onClose();
-                  }}
-                >
-                  {user.avatar ? (
-                    <img 
-                      src={user.avatar} 
-                      alt={user.name}
-                      className="w-10 h-10 rounded-full mr-3"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-portfolio-orange/10 text-portfolio-orange border border-portfolio-orange/20 flex items-center justify-center font-medium mr-3">
-                      {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                    </div>
-                  )}
-                  <div className="flex-grow">
-                    <div className="font-medium text-secondary-900 dark:text-white">{user.name}</div>
-                    <div className="text-sm text-secondary-600 dark:text-secondary-400">{user.role}</div>
-                    <div className="text-xs text-secondary-500 dark:text-secondary-500">{user.email}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-4 text-center text-secondary-600 dark:text-secondary-400">
-              No users found matching "{searchQuery}"
-            </div>
-          )}
-        </div>
-      </motion.div>
-    </div>
-  );
-};
-
 const DiaryPage: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -190,37 +83,14 @@ const DiaryPage: React.FC = () => {
     { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
   ]);
   const [selectedNode, setSelectedNode] = useState<ProcessNode | null>(null);
-  const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
   const [showPeopleSelector, setShowPeopleSelector] = useState(false);
   const [peopleSelectorType, setPeopleSelectorType] = useState<'executor' | 'cc'>('executor');
   
   // Diary entries from API
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
 
-  // Fetch diary entries on component mount and when project changes
-  useEffect(() => {
-    if (user?.id) {
-      fetchDiaryEntries();
-      fetchUsers();
-    }
-  }, [user?.id, selectedProject?.id]);
-
-  // Handle URL query parameters for direct navigation
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const id = params.get('id');
-    if (id && diaryEntries.length > 0) {
-      const entry = diaryEntries.find(e => e.id === id);
-      if (entry) {
-        setSelectedDiaryEntry(entry);
-        setShowDetails(true);
-        // Also show form view if needed, but standard view is details modal
-      }
-    }
-  }, [location.search, diaryEntries]);
-
   // Fetch diary entries from API with project filtering
-  const fetchDiaryEntries = async () => {
+  const fetchDiaryEntries = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -243,10 +113,10 @@ const DiaryPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, selectedProject?.id]);
 
   // Fetch users from API (using project members)
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     if (!selectedProject?.id) return;
     
     try {
@@ -278,7 +148,29 @@ const DiaryPage: React.FC = () => {
     } finally {
       setLoadingUsers(false);
     }
-  };
+  }, [selectedProject?.id, user]);
+
+  // Fetch diary entries on component mount and when project changes
+  useEffect(() => {
+    if (user?.id) {
+      fetchDiaryEntries();
+      fetchUsers();
+    }
+  }, [user?.id, selectedProject?.id, fetchDiaryEntries, fetchUsers]);
+
+  // Handle URL query parameters for direct navigation
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    if (id && diaryEntries.length > 0) {
+      const entry = diaryEntries.find(e => e.id === id);
+      if (entry) {
+        setSelectedDiaryEntry(entry);
+        setShowDetails(true);
+        // Also show form view if needed, but standard view is details modal
+      }
+    }
+  }, [location.search, diaryEntries]);
   
   // Filtered entries based on search
   const filteredEntries = diaryEntries.filter(entry => 
@@ -380,10 +272,12 @@ const DiaryPage: React.FC = () => {
         formData: pendingFormData,
         processNodes: processNodesForBackend,
         createdBy: user.id,
-        projectId: selectedProject?.id
+        projectId: selectedProject?.id,
+        formId: pendingFormData.formNumber,
+        name: pendingFormData.formNumber
       });
 
-      const response = await fetch('https://server.matrixtwin.com/api/diary/create', {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/diary/create`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -393,7 +287,9 @@ const DiaryPage: React.FC = () => {
           formData: pendingFormData,
           processNodes: processNodesForBackend,
           createdBy: user.id,
-          projectId: selectedProject?.id
+          projectId: selectedProject?.id,
+          formId: pendingFormData.formNumber,
+          name: pendingFormData.formNumber
         })
       });
 
@@ -407,7 +303,6 @@ const DiaryPage: React.FC = () => {
         // Reset states
         setShowProcessFlow(false);
         setPendingFormData(null);
-        setSelectedCcs([]);
         setSelectedNode(null);
         
         // Reset process nodes to default
@@ -459,31 +354,6 @@ const DiaryPage: React.FC = () => {
       console.error('Error fetching entry details:', error);
       setSelectedDiaryEntry(entry);
       setShowDetails(true);
-    }
-  };
-
-  // View form data
-  const handleViewForm = async (entry: DiaryEntry) => {
-    try {
-      // Fetch full entry details including form data
-      const response = await fetch(`https://server.matrixtwin.com/api/diary/${entry.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const fullEntry = await response.json();
-        setSelectedDiaryEntry(fullEntry);
-        setShowFormView(true);
-      } else {
-        setSelectedDiaryEntry(entry);
-        setShowFormView(true);
-      }
-    } catch (error) {
-      console.error('Error fetching entry details:', error);
-      setSelectedDiaryEntry(entry);
-      setShowFormView(true);
     }
   };
 
@@ -1072,17 +942,6 @@ const DiaryPage: React.FC = () => {
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onClick={() => handleViewForm(entry)}
-                          leftIcon={<RiIcons.RiFileListLine />}
-                          className="hover:bg-portfolio-orange/5 dark:hover:bg-portfolio-orange/10"
-                        >
-                          {canUserUpdateForm(entry) ? 'Edit Form' : 'View Form'}
-                        </Button>
-                      )}
-                      {canUserViewEntry(entry) && (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
                           onClick={() => handleViewDetails(entry)}
                           rightIcon={<RiIcons.RiArrowRightLine />}
                           className="hover:bg-primary-50 dark:hover:bg-primary-900/20"
@@ -1385,6 +1244,20 @@ const DiaryPage: React.FC = () => {
                     {t('common.close')}
                   </Button>
 
+                  {/* View/Edit Form Button */}
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    leftIcon={canUserUpdateForm(selectedDiaryEntry) ? <RiIcons.RiEditLine /> : <RiIcons.RiFileListLine />}
+                    onClick={() => {
+                      setShowDetails(false);
+                      setShowFormView(true);
+                    }}
+                    className="hover:bg-white/5"
+                  >
+                    {canUserUpdateForm(selectedDiaryEntry) ? 'Edit Form' : 'View Form'}
+                  </Button>
+
                   {/* Workflow Action Buttons */}
                   {(selectedDiaryEntry.status === 'pending' || selectedDiaryEntry.status === 'rejected') && (
                     <>
@@ -1411,22 +1284,6 @@ const DiaryPage: React.FC = () => {
                           className="text-red-500 border-red-500/30 hover:bg-red-500/10 hover:border-red-500"
                         >
                           Reject
-                        </Button>
-                      )}
-
-                      {/* Edit Form */}
-                      {canUserEditEntry(selectedDiaryEntry) && (
-                        <Button 
-                          variant="outline"
-                          size="sm"
-                          leftIcon={<RiIcons.RiEditLine />}
-                          onClick={() => {
-                            setShowDetails(false);
-                            setShowFormView(true);
-                          }}
-                          className="hover:bg-white/5"
-                        >
-                          Edit
                         </Button>
                       )}
 

@@ -20,20 +20,23 @@ import {
   RiUpload2Line,
   RiTimeLine
 } from 'react-icons/ri';
+import { generatePrefixedFormNumber } from '../../utils/formUtils';
 
 interface SurveyCheckFormTemplateProps {
   onClose: () => void;
   onSave: (formData: any) => void;
+  initialData?: any;
 }
 
 export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = ({
   onClose,
-  onSave
+  onSave,
+  initialData
 }) => {
   // State for form data
   const [formData, setFormData] = useState({
     contractNo: '',
-    riscNo: '',
+    riscNo: generatePrefixedFormNumber('RISC'),
     revision: '',
     supervisor: '',
     attention: '',
@@ -69,6 +72,7 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
     formReceivedBy: '',
     attachmentTime1: '',
     attachmentTime2: '',
+    ...initialData
   });
 
   // State for signature images
@@ -422,7 +426,7 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
             </div>
             
             <div>
-              ${formData.deficiencies.filter(d => d.trim() !== '').map((d, i) => `<div class="deficiency-line"><span style="font-weight: bold; margin-right: 8px;">${i+1}.</span>${d}</div>`).join('')}
+              ${formData.deficiencies.filter((d: string) => d.trim() !== '').map((d: string, i: number) => `<div class="deficiency-line"><span style="font-weight: bold; margin-right: 8px;">${i+1}.</span>${d}</div>`).join('')}
             </div>
             
             <div className="text-sm italic mb-6">
@@ -801,7 +805,7 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
             </div>
             
             <div>
-              {formData.deficiencies.map((deficiency, index) => (
+              {formData.deficiencies.map((deficiency: string, index: number) => (
                 <div key={index} className="flex items-center mb-2">
                   <span className="font-bold mr-2 text-gray-700 w-6">{index+1}.</span>
                   <input 

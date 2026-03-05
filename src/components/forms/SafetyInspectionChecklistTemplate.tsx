@@ -24,6 +24,9 @@ interface SafetyInspectionChecklistTemplateProps {
   onClose: () => void;
   onSave: (formData: any) => void;
   initialData?: any;
+  isEditMode?: boolean;
+  readOnly?: boolean;
+  title?: string;
 }
 
 interface ChecklistItemProps {
@@ -35,7 +38,10 @@ interface ChecklistItemProps {
 export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionChecklistTemplateProps> = ({
   onClose,
   onSave,
-  initialData
+  initialData,
+  isEditMode,
+  readOnly,
+  title
 }) => {
   const [currentPage, setCurrentPage] = useState<1 | 2 | 3 | 4>(1);
   const [formData, setFormData] = useState({
@@ -851,14 +857,14 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
       <div className="px-6 py-4 flex justify-between items-center bg-gradient-to-r from-[#0f172a] to-[#1e293b] border-b border-[#334155]">
         <h2 className="text-xl font-semibold text-white flex items-center">
           <RiFileTextLine className="mr-2 text-blue-400" />
-          {currentPage <= 2 ? "Safety Inspection Checklist" : "Safety Environmental Photo Record"}
+          {title || (currentPage <= 2 ? "Safety Inspection Checklist" : "Safety Environmental Photo Record")}
         </h2>
         <div className="flex gap-3">
           <button 
             onClick={onClose}
             className="px-4 py-2 bg-[#334155] hover:bg-[#475569] text-gray-100 rounded-md shadow-md text-sm font-medium transition-all duration-200 hover:scale-105"
           >
-            Cancel
+            {readOnly ? 'Close' : 'Cancel'}
           </button>
           <button 
             onClick={handleDownloadPDF}
@@ -879,13 +885,15 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
               </button>
             ))}
           </div>
-          <button
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-md text-sm font-medium transition-all duration-200 hover:scale-105 flex items-center gap-2"
-            onClick={handleSave}
-          >
-            Save
-            <RiCheckLine className="text-white" />
-          </button>
+          {!readOnly && (
+            <button
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-md text-sm font-medium transition-all duration-200 hover:scale-105 flex items-center gap-2"
+              onClick={handleSave}
+            >
+              Save
+              <RiCheckLine className="text-white" />
+            </button>
+          )}
         </div>
       </div>
       
@@ -917,6 +925,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                       className="flex-1 border-b border-gray-400 outline-none bg-transparent" 
                       value={formData.contractNo}
                       onChange={(e) => handleInputChange('contractNo', e.target.value)}
+                      readOnly={readOnly}
                     />
                   </div>
                   <div></div>
@@ -927,6 +936,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                       className="flex-1 border-b border-gray-400 outline-none bg-transparent" 
                       value={formData.contractTitle}
                       onChange={(e) => handleInputChange('contractTitle', e.target.value)}
+                      readOnly={readOnly}
                     />
                   </div>
                   <div></div>
@@ -937,6 +947,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                       className="w-40 border-b border-gray-400 outline-none bg-transparent"
                       value={formData.date}
                       onChange={(e) => handleInputChange('date', e.target.value)}
+                      readOnly={readOnly}
                     />
                     <span className="font-semibold mx-4">Time:</span>
                     <input 
@@ -944,6 +955,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                       className="w-32 border-b border-gray-400 outline-none bg-transparent"
                       value={formData.time}
                       onChange={(e) => handleInputChange('time', e.target.value)}
+                      readOnly={readOnly}
                     />
                   </div>
                 </div>
@@ -988,21 +1000,24 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                                   value={item.description}
                                   onChange={(e) => handleItemDescriptionChange(category.id, item.id, e.target.value)}
                                   placeholder="Insert item"
+                                  readOnly={readOnly}
                                 />
-                                <div className="flex space-x-1">
-                                  <button
-                                    onClick={() => handleRemoveItem(category.id, item.id)}
-                                    className="text-red-500 hover:text-red-700"
-                                  >
-                                    <RiDeleteBin6Line className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleAddItem(category.id)}
-                                    className="text-blue-500 hover:text-blue-700"
-                                  >
-                                    <RiAddLine className="w-4 h-4" />
-                                  </button>
-                                </div>
+                                {!readOnly && (
+                                  <div className="flex space-x-1">
+                                    <button
+                                      onClick={() => handleRemoveItem(category.id, item.id)}
+                                      className="text-red-500 hover:text-red-700"
+                                    >
+                                      <RiDeleteBin6Line className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleAddItem(category.id)}
+                                      className="text-blue-500 hover:text-blue-700"
+                                    >
+                                      <RiAddLine className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </td>
                             <td className="border border-gray-800 p-2 text-center">
@@ -1011,6 +1026,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                                 name={`response-${item.id}`}
                                 checked={responses[category.id]?.[item.id] === 'Y'}
                                 onChange={() => handleResponseChange(category.id, item.id, 'Y')}
+                                disabled={readOnly}
                               />
                             </td>
                             <td className="border border-gray-800 p-2 text-center">
@@ -1019,6 +1035,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                                 name={`response-${item.id}`}
                                 checked={responses[category.id]?.[item.id] === 'N'}
                                 onChange={() => handleResponseChange(category.id, item.id, 'N')}
+                                disabled={readOnly}
                               />
                             </td>
                             <td className="border border-gray-800 p-2 text-center">
@@ -1027,6 +1044,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                                 name={`response-${item.id}`}
                                 checked={responses[category.id]?.[item.id] === 'NA'}
                                 onChange={() => handleResponseChange(category.id, item.id, 'NA')}
+                                disabled={readOnly}
                               />
                             </td>
                             <td className="border border-gray-800 p-2">
@@ -1035,6 +1053,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                                 className="w-full border-none outline-none bg-transparent"
                                 value={checklistDates[category.id]?.[item.id]?.agreedDate || ''}
                                 onChange={(e) => handleChecklistDateChange(category.id, item.id, 'agreedDate', e.target.value)}
+                                readOnly={readOnly}
                               />
                             </td>
                             <td className="border border-gray-800 p-2">
@@ -1043,6 +1062,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                                 className="w-full border-none outline-none bg-transparent"
                                 value={checklistDates[category.id]?.[item.id]?.dateCompleted || ''}
                                 onChange={(e) => handleChecklistDateChange(category.id, item.id, 'dateCompleted', e.target.value)}
+                                readOnly={readOnly}
                               />
                             </td>
                             <td className="border border-gray-800 p-2">
@@ -1051,6 +1071,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                                 className="w-full border-none outline-none bg-transparent"
                                 value={checklistDates[category.id]?.[item.id]?.rectificationStatus || ''}
                                 onChange={(e) => handleChecklistDateChange(category.id, item.id, 'rectificationStatus', e.target.value)}
+                                readOnly={readOnly}
                               />
                             </td>
                           </tr>
@@ -1085,6 +1106,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                       className="flex-1 border-b border-gray-400 outline-none bg-transparent" 
                       value={formData.date}
                       onChange={(e) => handleInputChange('date', e.target.value)}
+                      readOnly={readOnly}
                     />
                   </div>
                   <div className="flex items-center">
@@ -1094,6 +1116,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                       className="flex-1 border-b border-gray-400 outline-none bg-transparent" 
                       value={formData.time}
                       onChange={(e) => handleInputChange('time', e.target.value)}
+                      readOnly={readOnly}
                     />
                   </div>
                 </div>
@@ -1125,21 +1148,24 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                             value={item.description}
                             onChange={(e) => handlePhotoTableItemChange(item.id, 'description', e.target.value)}
                             placeholder="Insert item"
+                            readOnly={readOnly}
                           />
-                          <div className="flex space-x-1">
-                            <button
-                              onClick={() => handleRemovePhotoTableItem(item.id)}
-                              className="text-red-500 hover:text-red-700"
-                            >
-                              <RiDeleteBin6Line className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={handleAddPhotoTableItem}
-                              className="text-blue-500 hover:text-blue-700"
-                            >
-                              <RiAddLine className="w-4 h-4" />
-                            </button>
-                          </div>
+                          {!readOnly && (
+                            <div className="flex space-x-1">
+                              <button
+                                onClick={() => handleRemovePhotoTableItem(item.id)}
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <RiDeleteBin6Line className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={handleAddPhotoTableItem}
+                                className="text-blue-500 hover:text-blue-700"
+                              >
+                                <RiAddLine className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="border border-gray-800 p-2 text-center">
@@ -1148,6 +1174,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                           name={`photo-response-${item.id}`}
                           checked={photoResponses[item.id] === 'Y'}
                           onChange={() => handlePhotoResponseChange(item.id, 'Y')}
+                          disabled={readOnly}
                         />
                       </td>
                       <td className="border border-gray-800 p-2 text-center">
@@ -1156,6 +1183,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                           name={`photo-response-${item.id}`}
                           checked={photoResponses[item.id] === 'N'}
                           onChange={() => handlePhotoResponseChange(item.id, 'N')}
+                          disabled={readOnly}
                         />
                       </td>
                       <td className="border border-gray-800 p-2 text-center">
@@ -1164,6 +1192,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                           name={`photo-response-${item.id}`}
                           checked={photoResponses[item.id] === 'NA'}
                           onChange={() => handlePhotoResponseChange(item.id, 'NA')}
+                          disabled={readOnly}
                         />
                       </td>
                       <td className="border border-gray-800 p-2">
@@ -1172,6 +1201,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                           className="w-full border-none outline-none bg-transparent"
                           value={item.agreedDate}
                           onChange={(e) => handlePhotoTableItemChange(item.id, 'agreedDate', e.target.value)}
+                          readOnly={readOnly}
                         />
                       </td>
                       <td className="border border-gray-800 p-2">
@@ -1180,6 +1210,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                           className="w-full border-none outline-none bg-transparent"
                           value={item.dateCompleted}
                           onChange={(e) => handlePhotoTableItemChange(item.id, 'dateCompleted', e.target.value)}
+                          readOnly={readOnly}
                         />
                       </td>
                       <td className="border border-gray-800 p-2">
@@ -1188,6 +1219,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                           className="w-full border-none outline-none bg-transparent"
                           value={item.rectificationStatus}
                           onChange={(e) => handlePhotoTableItemChange(item.id, 'rectificationStatus', e.target.value)}
+                          readOnly={readOnly}
                         />
                       </td>
                     </tr>
@@ -1227,8 +1259,8 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                       <tr>
                         <td colSpan={4} className="border-r border-gray-800 p-2 h-40 relative">
                           <div 
-                            className="border border-dashed border-gray-400 h-24 flex items-center justify-center cursor-pointer"
-                            onClick={() => document.getElementById(`before-photo-${actualIndex}`)?.click()}
+                            className={`border border-dashed border-gray-400 h-24 flex items-center justify-center ${readOnly ? '' : 'cursor-pointer'}`}
+                            onClick={() => !readOnly && document.getElementById(`before-photo-${actualIndex}`)?.click()}
                           >
                             {record.beforePhoto ? (
                               <img 
@@ -1237,7 +1269,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                                 className="h-full object-contain"
                               />
                             ) : (
-                              <p className="text-gray-500">Click to upload photo</p>
+                              <p className="text-gray-500">{readOnly ? 'No photo uploaded' : 'Click to upload photo'}</p>
                             )}
                             <input
                               type="file"
@@ -1245,6 +1277,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                               className="hidden"
                               accept="image/*"
                               onChange={(e) => handleFileUpload(actualIndex, 'before', e)}
+                              disabled={readOnly}
                             />
                           </div>
                           
@@ -1255,6 +1288,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                               className="w-full border-none outline-none bg-transparent border-b border-gray-400"
                               value={record.location}
                               onChange={(e) => handlePhotoRecordChange(actualIndex, 'location', e.target.value)}
+                              readOnly={readOnly}
                             />
                           </div>
                           
@@ -1264,13 +1298,14 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                               className="w-full border border-gray-300 p-1 h-24 resize-none"
                               value={record.finding}
                               onChange={(e) => handlePhotoRecordChange(actualIndex, 'finding', e.target.value)}
+                              readOnly={readOnly}
                             ></textarea>
                           </div>
                         </td>
                         <td colSpan={4} className="border-gray-800 p-2 h-40 relative">
                           <div 
-                            className="border border-dashed border-gray-400 h-24 flex items-center justify-center cursor-pointer"
-                            onClick={() => document.getElementById(`after-photo-${actualIndex}`)?.click()}
+                            className={`border border-dashed border-gray-400 h-24 flex items-center justify-center ${readOnly ? '' : 'cursor-pointer'}`}
+                            onClick={() => !readOnly && document.getElementById(`after-photo-${actualIndex}`)?.click()}
                           >
                             {record.afterPhoto ? (
                               <img 
@@ -1279,7 +1314,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                                 className="h-full object-contain"
                               />
                             ) : (
-                              <p className="text-gray-500">Click to upload photo</p>
+                              <p className="text-gray-500">{readOnly ? 'No photo uploaded' : 'Click to upload photo'}</p>
                             )}
                             <input
                               type="file"
@@ -1287,6 +1322,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                               className="hidden"
                               accept="image/*"
                               onChange={(e) => handleFileUpload(actualIndex, 'after', e)}
+                              disabled={readOnly}
                             />
                           </div>
                           
@@ -1296,6 +1332,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                               className="w-full border border-gray-300 p-1 h-32 resize-none"
                               value={record.action}
                               onChange={(e) => handlePhotoRecordChange(actualIndex, 'action', e.target.value)}
+                              readOnly={readOnly}
                             ></textarea>
                           </div>
                         </td>
@@ -1316,6 +1353,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                       className="flex-1 border-b border-gray-400 outline-none bg-transparent"
                       value={formData.recordName}
                       onChange={(e) => handleInputChange('recordName', e.target.value)}
+                      readOnly={readOnly}
                     />
                   </div>
                   <div className="flex items-center">
@@ -1325,6 +1363,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                       className="w-40 border-b border-gray-400 outline-none bg-transparent"
                       value={formData.recordDate}
                       onChange={(e) => handleInputChange('recordDate', e.target.value)}
+                      readOnly={readOnly}
                     />
                   </div>
                 </div>

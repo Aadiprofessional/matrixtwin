@@ -22,6 +22,10 @@ import { generatePrefixedFormNumber } from '../../utils/formUtils';
 interface DailyCleaningInspectionTemplateProps {
   onClose: () => void;
   onSave: (formData: any) => void;
+  initialData?: any;
+  isEditMode?: boolean;
+  readOnly?: boolean;
+  title?: string;
 }
 
 // Define status option types
@@ -46,38 +50,43 @@ interface Photo {
 
 export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTemplateProps> = ({
   onClose,
-  onSave
+  onSave,
+  initialData,
+  isEditMode,
+  readOnly,
+  title
 }) => {
   const [currentPage, setCurrentPage] = useState<1 | 2>(1);
   
   // Form data
   const [formData, setFormData] = useState({
-    formNumber: generatePrefixedFormNumber('CL'), // Auto-generate form number for Cleansing
-    contractNo: '',
-    contractTitle: '',
-    location: '',
-    inspectionNo: '',
-    inspectionDate: '',
-    timeWeek: '',
-    inspectionTime: '',
+    formNumber: initialData?.formNumber || generatePrefixedFormNumber('CL'),
+    contractNo: initialData?.contractNo || '',
+    contractTitle: initialData?.contractTitle || '',
+    location: initialData?.location || '',
+    inspectionNo: initialData?.inspectionNo || '',
+    inspectionDate: initialData?.inspectionDate || '',
+    timeWeek: initialData?.timeWeek || '',
+    inspectionTime: initialData?.inspectionTime || '',
     
     // Inspector information
-    inspectorName: '',
-    appointedBy: '',
-    techManager: '',
-    date: '',
+    inspectorName: initialData?.inspectorName || '',
+    appointedBy: initialData?.appointedBy || '',
+    techManager: initialData?.techManager || '',
+    date: initialData?.date || '',
     
     // Site signatures
-    erSignature: '',
-    erDate: '',
-    siteAgentSignature: '',
-    siteAgentDate: '',
-    projectManagerSignature: '',
-    projectManagerDate: ''
+    erSignature: initialData?.erSignature || '',
+    erDate: initialData?.erDate || '',
+    siteAgentSignature: initialData?.siteAgentSignature || '',
+    siteAgentDate: initialData?.siteAgentDate || '',
+    projectManagerSignature: initialData?.projectManagerSignature || '',
+    projectManagerDate: initialData?.projectManagerDate || ''
   });
   
   // Checklist items
-  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>(
+    initialData?.checklistItems || [
     { id: 1, description: 'Maintenance of passageways, common accesses & public areas are free of obstruction', chinese: '保持通道，公共通道及公眾地方沒有阻礙', status: '', action: '', remark: '', photo: false },
     { id: 2, description: 'Proper storage & stacking of materials', chinese: '物料存放規固及適當疊存', status: '', action: '', remark: '', photo: false },
     { id: 3, description: 'Proper placement & storage of tools & equipment after work', chinese: '工具和設備在每日完工後適當地放置及儲存', status: '', action: '', remark: '', photo: false },
@@ -92,7 +101,8 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
   ]);
   
   // Photos
-  const [photos, setPhotos] = useState<Photo[]>([
+  const [photos, setPhotos] = useState<Photo[]>(
+    initialData?.photos || [
     { id: 1, dataUrl: null },
     { id: 2, dataUrl: null },
     { id: 3, dataUrl: null }

@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { RiAddLine, RiGroupLine, RiCalendarCheckLine, RiTimeLine, RiFileListLine, RiUserLine, RiArrowUpLine, RiArrowDownLine, RiCheckLine, RiCloseLine, RiSearchLine, RiArrowRightSLine, RiFilter3Line, RiLayoutGridLine, RiListCheck, RiArrowLeftLine, RiArrowRightLine, RiLoader4Line, RiFlowChart, RiSettings4Line, RiNotificationLine, RiTeamLine, RiPercentLine, RiErrorWarningLine, RiFileWarningLine, RiTaskLine, RiDeleteBinLine } from 'react-icons/ri';
+import { Dialog } from '../components/ui/Dialog';
+import { RiAddLine, RiGroupLine, RiCalendarCheckLine, RiTimeLine, RiFileListLine, RiUserLine, RiCheckLine, RiCloseLine, RiFilter3Line, RiLayoutGridLine, RiListCheck, RiArrowLeftLine, RiArrowRightLine, RiFlowChart, RiSettings4Line, RiNotificationLine, RiTeamLine, RiPercentLine, RiErrorWarningLine, RiFileWarningLine, RiTaskLine, RiDeleteBinLine, RiEditLine, RiDownload2Line, RiPrinterLine, RiMoreLine, RiChat3Line } from 'react-icons/ri';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { projectService } from '../services/projectService';
 import { MonthlyReturnTemplate } from '../components/forms/MonthlyReturnTemplate';
-import { Dialog } from '../components/ui/Dialog';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
-import { emailService } from '../services/emailService';
+import { PeopleSelectorModal } from '../components/ui/PeopleSelectorModal';
 
 interface User {
   id: string;
@@ -59,149 +59,15 @@ interface LabourEntry {
   updated_at?: string;
 }
 
-interface Worker {
-  id: string;
-  name: string;
-  status: 'present' | 'absent' | 'late';
-  timeIn?: string;
-  timeOut?: string;
-  hours: number;
-  role: string;
-  avatar: string;
-}
-
-interface LabourRecord {
-  id: number;
-  date: string;
-  workers: number;
-  hours: number;
-  status: 'pending' | 'approved' | 'rejected';
-  project: string;
-}
-
-// People selector modal component
-const PeopleSelectorModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onSelect: (user: User) => void;
-  title: string;
-  users: User[];
-  loading: boolean;
-}> = ({ isOpen, onClose, onSelect, title, users, loading }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Filter users based on search
-  const filteredUsers = searchQuery 
-    ? users.filter(user => 
-        user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : users;
-  
-  if (!isOpen) return null;
-  
-  return (
-    <div 
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-      onClick={onClose}
-    >
-      <motion.div
-        className="w-full max-w-md max-h-[80vh] bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-xl overflow-hidden"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <h3 className="text-lg font-semibold flex items-center">
-            <RiUserLine className="mr-2" />
-            {title}
-          </h3>
-          <button 
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            onClick={onClose}
-          >
-            <RiCloseLine className="text-xl" />
-          </button>
-        </div>
-        
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="relative">
-            <RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name, role, or email..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
-        
-        <div className="overflow-y-auto max-h-[400px] p-2">
-          {loading ? (
-            <div className="p-4 text-center text-gray-600 dark:text-gray-400">
-              <RiLoader4Line className="animate-spin text-2xl mx-auto mb-2" />
-              Loading users...
-            </div>
-          ) : filteredUsers.length > 0 ? (
-            <div className="grid grid-cols-1 gap-2">
-              {filteredUsers.map(user => (
-                <div 
-                  key={user.id}
-                  className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md cursor-pointer transition-colors flex items-center"
-                  onClick={() => {
-                    onSelect(user);
-                    onClose();
-                  }}
-                >
-                  {user.avatar ? (
-                    <img 
-                      src={user.avatar} 
-                      alt={user.name}
-                      className="w-10 h-10 rounded-full mr-3"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 flex items-center justify-center font-medium mr-3">
-                      {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                    </div>
-                  )}
-                  <div className="flex-grow">
-                    <div className="font-medium text-gray-900 dark:text-white">{user.name}</div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">{user.role}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-500">{user.email}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-4 text-center text-gray-500 dark:text-gray-400">
-              No users found matching "{searchQuery}"
-            </div>
-          )}
-        </div>
-      </motion.div>
-    </div>
-  );
-};
-
 const LabourPage: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
   const [showNewReturn, setShowNewReturn] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [workerCount, setWorkerCount] = useState(1);
-  const [hoursWorked, setHoursWorked] = useState(8);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'records' | 'workers'>('records');
   const [statsTimeframe, setStatsTimeframe] = useState<'day' | 'week' | 'month'>('week');
   
   // API integration states
-  const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [labourEntries, setLabourEntries] = useState<LabourEntry[]>([]);
@@ -259,10 +125,9 @@ const LabourPage: React.FC = () => {
   }, [user?.id, selectedProject?.id]);
 
   // Fetch labour entries from API with project filtering
-  const fetchLabourEntries = async () => {
+  const fetchLabourEntries = useCallback(async () => {
     if (!user) return;
     try {
-      setLoading(true);
       const projectParam = selectedProject?.id ? `?projectId=${selectedProject.id}` : '';
       const response = await fetch(`https://server.matrixtwin.com/api/labour/list/${user.id}${projectParam}`, {
         headers: {
@@ -278,13 +143,11 @@ const LabourPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching labour entries:', error);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [user, selectedProject?.id]);
 
   // Fetch users from API (using project members)
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     if (!selectedProject?.id) return;
     
     try {
@@ -316,15 +179,7 @@ const LabourPage: React.FC = () => {
     } finally {
       setLoadingUsers(false);
     }
-  };
-
-  // Filtered entries based on search
-  const filteredEntries = labourEntries.filter(entry => 
-    entry.project.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    entry.submitter.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    entry.labour_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    entry.date.includes(searchTerm)
-  );
+  }, [selectedProject?.id, user]);
 
   const addNewNode = () => {
     const newNode: ProcessNode = {
@@ -417,7 +272,9 @@ const LabourPage: React.FC = () => {
         formData: pendingFormData,
         processNodes: processNodesForBackend,
         createdBy: user.id,
-        projectId: selectedProject?.id
+        projectId: selectedProject?.id,
+        formId: pendingFormData.formNumber,
+        name: pendingFormData.formNumber
       });
 
       const response = await fetch('https://server.matrixtwin.com/api/labour/create', {
@@ -430,7 +287,9 @@ const LabourPage: React.FC = () => {
           formData: pendingFormData,
           processNodes: processNodesForBackend,
           createdBy: user.id,
-          projectId: selectedProject?.id
+          projectId: selectedProject?.id,
+          formId: pendingFormData.formNumber,
+          name: pendingFormData.formNumber
         })
       });
 
@@ -502,30 +361,6 @@ const LabourPage: React.FC = () => {
       console.error('Error fetching entry details:', error);
       setSelectedLabourEntry(entry);
       setShowDetails(true);
-    }
-  };
-
-  const handleViewForm = async (entry: LabourEntry) => {
-    try {
-      // Fetch full entry details including form data
-      const response = await fetch(`https://server.matrixtwin.com/api/labour/${entry.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const fullEntry = await response.json();
-        setSelectedLabourEntry(fullEntry);
-        setShowFormView(true);
-      } else {
-        setSelectedLabourEntry(entry);
-        setShowFormView(true);
-      }
-    } catch (error) {
-      console.error('Error fetching entry details:', error);
-      setSelectedLabourEntry(entry);
-      setShowFormView(true);
     }
   };
 
@@ -607,32 +442,6 @@ const LabourPage: React.FC = () => {
     }
   };
   
-  // Check if user can edit/approve the labour entry
-  const canUserEditEntry = (entry: LabourEntry) => {
-    if (!user?.id) return false;
-    
-    // Check if entry is permanently rejected
-    if (entry.status === 'permanently_rejected') {
-      return false;
-    }
-    
-    // Admin can edit when entry is in initial state, rejected, or pending
-    if (user.role === 'admin' && (entry.status === 'pending' || entry.status === 'rejected')) {
-      return true;
-    }
-    
-    // Check if user is executor of current node and entry is rejected
-    const currentNode = entry.labour_workflow_nodes?.find(
-      node => node.node_order === entry.current_node_index
-    );
-    
-    if (currentNode && currentNode.executor_id === user.id && entry.status === 'rejected') {
-      return true;
-    }
-    
-    return false;
-  };
-
   // Check if user can update form data (current node executor or CC with edit access)
   const canUserUpdateForm = (entry: LabourEntry) => {
     if (!user?.id) return false;
@@ -944,49 +753,6 @@ const LabourPage: React.FC = () => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
-      >
-        <Card className="p-6 flex items-center">
-          <div className="rounded-full p-3 bg-portfolio-orange/10 text-portfolio-orange mr-4">
-            <RiUserLine className="text-2xl" />
-          </div>
-          <div>
-            <h3 className="text-2xl font-display font-semibold">
-              {labourEntries.length}
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Total Returns</p>
-          </div>
-        </Card>
-        
-        <Card className="p-6 flex items-center">
-          <div className="rounded-full p-3 bg-portfolio-orange/10 text-portfolio-orange mr-4">
-            <RiTimeLine className="text-2xl" />
-          </div>
-          <div>
-            <h3 className="text-2xl font-display font-semibold">
-              {labourEntries.reduce((total, entry) => total + entry.hours_worked, 0)}
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Total Hours</p>
-          </div>
-        </Card>
-        
-        <Card className="p-6 flex items-center">
-          <div className="rounded-full p-3 bg-portfolio-orange/10 text-portfolio-orange mr-4">
-            <RiCalendarCheckLine className="text-2xl" />
-          </div>
-          <div>
-            <h3 className="text-2xl font-display font-semibold">
-              {labourEntries.length > 0 ? (labourEntries.reduce((total, entry) => total + entry.hours_worked, 0) / labourEntries.length).toFixed(2) : '0.00'}
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Average Hours per Entry</p>
-          </div>
-        </Card>
-      </motion.div>
-      
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
       >
         <Card className="overflow-hidden">
@@ -1273,50 +1039,65 @@ const LabourPage: React.FC = () => {
               transition={{ duration: 0.5, delay: 0.3 }}
             >
               {labourEntries.map((entry) => {
-                const statusColor = entry.status === 'approved' 
-                  ? 'from-green-500 to-green-600' 
-                  : entry.status === 'pending' 
-                    ? 'from-yellow-500 to-yellow-600' 
-                    : 'from-red-500 to-red-600';
-                  
                 return (
                   <Card 
                     key={entry.id} 
-                    className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
-                    hover
+                    className="p-0 overflow-hidden hover:shadow-xl transition-all duration-300 border border-secondary-100 dark:border-dark-700"
                   >
-                    <div className={`h-2 w-full bg-gradient-to-r ${statusColor}`}></div>
-                    <div className="p-4">
-                      <div className="flex justify-between items-start">
-                        <h3 className="text-lg font-medium">{entry.project}</h3>
-                        <div className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                          entry.status === 'approved' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                          entry.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                          'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                        }`}>
-                          {entry.status.charAt(0).toUpperCase() + entry.status.slice(1)}
+                    <div className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-800/20 p-4">
+                      <div className="flex justify-between mb-2">
+                        <div className="flex items-center">
+                          <RiCalendarCheckLine className="text-portfolio-orange dark:text-portfolio-orange mr-2" />
+                          <span className="font-medium text-secondary-900 dark:text-white">{entry.date}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                            entry.status === 'approved' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                            entry.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                            'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                          }`}>
+                            {entry.status.charAt(0).toUpperCase() + entry.status.slice(1)}
+                          </div>
                         </div>
                       </div>
                       
-                      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                      <h3 className="font-display font-semibold text-lg text-secondary-900 dark:text-white mb-1">
+                        {entry.project}
+                      </h3>
+                      
+                      <div className="flex items-center text-sm text-secondary-600 dark:text-secondary-400">
+                        <RiUserLine className="mr-1" />
+                        <span className="ml-1">Submitter: {entry.submitter}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
                         <div>
-                          <p className="text-secondary-500 dark:text-secondary-400">Date</p>
-                          <p className="font-medium">{entry.date}</p>
+                          <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
+                            Workers:
+                          </h4>
+                          <p className="text-secondary-600 dark:text-secondary-400 font-medium">
+                            {entry.worker_count} Workers
+                          </p>
                         </div>
                         <div>
-                          <p className="text-secondary-500 dark:text-secondary-400">Hours</p>
-                          <p className="font-medium">{entry.hours_worked}</p>
+                          <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
+                            Total Hours:
+                          </h4>
+                          <p className="text-secondary-600 dark:text-secondary-400 font-medium">
+                            {entry.hours_worked} Hours
+                          </p>
                         </div>
-                        <div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            className="mt-2"
-                            onClick={() => handleViewDetails(entry)}
-                          >
-                            View Details
-                          </Button>
-                        </div>
+                      </div>
+                      
+                      <div className="mb-4">
+                        <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-2">
+                          Trade Type:
+                        </h4>
+                        <p className="text-secondary-600 dark:text-secondary-400 line-clamp-1">
+                          {entry.trade_type || 'General Labour'}
+                        </p>
                       </div>
                       
                       <div className="flex justify-end mt-4">
@@ -1325,20 +1106,9 @@ const LabourPage: React.FC = () => {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              onClick={() => handleViewForm(entry)}
-                              leftIcon={<RiFileListLine />}
-                              className="hover:bg-portfolio-orange/5 dark:hover:bg-portfolio-orange/10"
-                            >
-                              {canUserUpdateForm(entry) ? 'Edit Form' : 'View Form'}
-                            </Button>
-                          )}
-                          {canUserViewEntry(entry) && (
-                            <Button 
-                              variant="outline" 
-                              size="sm"
                               onClick={() => handleViewDetails(entry)}
                               rightIcon={<RiArrowRightLine />}
-                              className="hover:bg-primary-50 dark:hover:bg-primary-900/20"
+                              className="hover:bg-portfolio-orange/10 dark:hover:bg-portfolio-orange/20"
                             >
                               View Details
                             </Button>
@@ -1402,16 +1172,7 @@ const LabourPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                       <div className="flex justify-end space-x-2">
-                        {canUserViewEntry(entry) && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleViewForm(entry)}
-                            className="hover:bg-portfolio-orange/5 hover:text-portfolio-orange dark:hover:bg-portfolio-orange/10 dark:hover:text-portfolio-orange"
-                          >
-                            {canUserUpdateForm(entry) ? 'Edit' : 'Form'}
-                          </Button>
-                        )}
+
                         {canUserViewEntry(entry) && (
                           <Button 
                             variant="ghost" 
@@ -1769,266 +1530,273 @@ const LabourPage: React.FC = () => {
       </AnimatePresence>
 
       {/* Entry Details Dialog */}
-      <AnimatePresence>
-        {showDetails && selectedLabourEntry && (
-          <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-            onClick={() => setShowDetails(false)}
-          >
-            <motion.div
-              className="bg-dark-900/80 backdrop-blur-md border border-white/10 shadow-lg rounded-lg overflow-hidden w-full max-w-4xl max-h-[90vh] overflow-auto"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-6 space-y-6">
-                <div className="flex justify-between items-center bg-portfolio-orange/5 dark:bg-portfolio-orange/10 p-4 rounded-lg">
-                  <div className="text-lg font-bold text-portfolio-orange dark:text-portfolio-orange flex items-center">
-                    <RiTeamLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
-                    Labour Return - {selectedLabourEntry.date}
-                  </div>
-                  <div className="px-3 py-1 bg-white dark:bg-gray-700 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
+      <Dialog
+        isOpen={showDetails}
+        onClose={() => setShowDetails(false)}
+        title="Labour Return Details"
+      >
+        {selectedLabourEntry && (
+          <div className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center bg-primary-50 dark:bg-primary-900/20 p-3 rounded-lg">
+              <div className="text-lg font-bold text-primary-900 dark:text-primary-300 flex items-center">
+                <RiTeamLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                Labour Return - {selectedLabourEntry.date}
+              </div>
+              <div className="flex items-center space-x-2">
+                 <span className="px-3 py-1 bg-white dark:bg-gray-700 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm border border-gray-200 dark:border-gray-600">
                     {selectedLabourEntry.project}
-                  </div>
+                 </span>
+                 {getWorkflowStatusBadge(selectedLabourEntry)}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <RiUserLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Submitter</span>
+                </div>
+                <div className="font-medium">{selectedLabourEntry.submitter}</div>
+              </div>
+              
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <RiTeamLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Worker Count</span>
+                </div>
+                <div className="font-medium">{selectedLabourEntry.worker_count}</div>
+              </div>
+              
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <RiTimeLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Hours Worked</span>
+                </div>
+                <div className="font-medium">{selectedLabourEntry.hours_worked}</div>
+              </div>
+              
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <RiPercentLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Trade Type</span>
+                </div>
+                <div className="font-medium">{selectedLabourEntry.trade_type}</div>
+              </div>
+            </div>
+            
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                <RiTaskLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <span className="text-sm font-medium uppercase tracking-wide">Work Description</span>
+              </div>
+              <div className="whitespace-pre-line">{selectedLabourEntry.work_description || 'None'}</div>
+            </div>
+            
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                <RiErrorWarningLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <span className="text-sm font-medium uppercase tracking-wide">Labour Type</span>
+              </div>
+              <div className="whitespace-pre-line">{selectedLabourEntry.labour_type || 'None'}</div>
+            </div>
+            
+            {/* Workflow Status Section */}
+            {selectedLabourEntry.labour_workflow_nodes && selectedLabourEntry.labour_workflow_nodes.length > 0 && (
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
+                  <RiFlowChart className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiUserLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Submitter</span>
-                    </div>
-                    <div className="font-medium">{selectedLabourEntry.submitter}</div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiTeamLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Worker Count</span>
-                    </div>
-                    <div className="font-medium">{selectedLabourEntry.worker_count}</div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiTimeLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Hours Worked</span>
-                    </div>
-                    <div className="font-medium">{selectedLabourEntry.hours_worked}</div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiPercentLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Trade Type</span>
-                    </div>
-                    <div className="font-medium">{selectedLabourEntry.trade_type}</div>
-                  </div>
-                </div>
-                
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                    <RiTaskLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
-                    <span className="text-sm font-medium uppercase tracking-wide">Work Description</span>
-                  </div>
-                  <div className="whitespace-pre-line">{selectedLabourEntry.work_description || 'None'}</div>
-                </div>
-                
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                    <RiErrorWarningLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
-                    <span className="text-sm font-medium uppercase tracking-wide">Labour Type</span>
-                  </div>
-                  <div className="whitespace-pre-line">{selectedLabourEntry.labour_type || 'None'}</div>
-                </div>
-                
-                {/* Workflow Status Section */}
-                {selectedLabourEntry.labour_workflow_nodes && selectedLabourEntry.labour_workflow_nodes.length > 0 && (
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-4">
-                      <RiFlowChart className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      {selectedLabourEntry.labour_workflow_nodes
-                        .sort((a: any, b: any) => a.node_order - b.node_order)
-                        .map((node: any) => (
-                          <div key={node.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                            <div className="flex items-center">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                                node.status === 'completed' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
-                                node.status === 'pending' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                                node.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' :
-                                'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400'
-                              }`}>
-                                {node.status === 'completed' ? <RiCheckLine /> :
-                                 node.status === 'pending' ? <RiNotificationLine /> :
-                                 node.status === 'rejected' ? <RiCloseLine /> :
-                                 <RiSettings4Line />}
-                              </div>
-                              <div>
-                                <div className="font-medium text-gray-900 dark:text-white">{node.node_name}</div>
-                                {node.executor_name && (
-                                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                                    Assigned to: {node.executor_name}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                              node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                              node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                              'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-                            }`}>
-                              {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
-                            </span>
+                <div className="space-y-3">
+                  {selectedLabourEntry.labour_workflow_nodes
+                    .sort((a: any, b: any) => a.node_order - b.node_order)
+                    .map((node: any) => (
+                      <div key={node.id} className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-dark-700 rounded-lg">
+                        <div className="flex items-center">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                            node.status === 'completed' ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400' :
+                            node.status === 'pending' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                            node.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400' :
+                            'bg-gray-100 text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'
+                          }`}>
+                            {node.status === 'completed' ? <RiCheckLine /> :
+                             node.status === 'pending' ? <RiNotificationLine /> :
+                             node.status === 'rejected' ? <RiCloseLine /> :
+                             <RiMoreLine />}
                           </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Comments Section */}
-                {selectedLabourEntry.labour_comments && selectedLabourEntry.labour_comments.length > 0 && (
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-4">
-                      <RiNotificationLine className="mr-2 text-portfolio-orange dark:text-portfolio-orange" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      {selectedLabourEntry.labour_comments
-                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                        .map((comment: any) => (
-                          <div key={comment.id} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="font-medium text-gray-900 dark:text-white">{comment.user_name}</div>
-                              <div className="flex items-center space-x-2">
-                                {comment.action && (
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                    comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                                    'bg-portfolio-orange/10 text-portfolio-orange dark:bg-portfolio-orange/10 dark:text-portfolio-orange'
-                                  }`}>
-                                    {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
-                                  </span>
-                                )}
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                  {new Date(comment.created_at).toLocaleDateString()}
-                                </span>
+                          <div>
+                            <div className="font-medium text-secondary-900 dark:text-white">{node.node_name}</div>
+                            {node.executor_name && (
+                              <div className="text-sm text-secondary-600 dark:text-secondary-400">
+                                Assigned to: {node.executor_name}
                               </div>
-                            </div>
-                            <div className="text-gray-700 dark:text-gray-300">{comment.comment}</div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-                
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                  {/* First row - Export and Delete buttons */}
-                  <div className="flex justify-end space-x-3 mb-3">
-                    <Button 
-                      variant="outline"
-                      leftIcon={<RiArrowRightLine />}
-                    >
-                      Export
-                    </Button>
-                    <Button 
-                      variant="outline"
-                      leftIcon={<RiFileListLine />}
-                    >
-                      Print
-                    </Button>
-                    
-                    {/* Admin delete button */}
-                    {user?.role === 'admin' && (
-                      <Button 
-                        variant="outline"
-                        leftIcon={<RiDeleteBinLine />}
-                        onClick={() => {
-                          setShowDetails(false);
-                          handleDeleteEntry(selectedLabourEntry);
-                        }}
-                        className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      >
-                        Delete Entry
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Second row - Workflow action buttons */}
-                  <div className="flex justify-end space-x-3">
-                    {/* Workflow Action Buttons - show for pending entries and rejected entries where user has permissions */}
-                    {(selectedLabourEntry.status === 'pending' || selectedLabourEntry.status === 'rejected') && (
-                      <>
-                        {/* Admin can edit when entry is pending or rejected */}
-                        {canUserEditEntry(selectedLabourEntry) && (
-                          <Button 
-                            variant="outline"
-                            leftIcon={<RiFileWarningLine />}
-                            onClick={() => {
-                              setShowDetails(false);
-                              setShowFormView(true);
-                            }}
-                          >
-                            Edit Form
-                          </Button>
-                        )}
-                        
-                        {/* Current node executor can approve, reject, or send back */}
-                        {canUserApproveEntry(selectedLabourEntry) && (
-                          <>
-                            {/* Back to previous node button (only if not first node) */}
-                            {selectedLabourEntry.current_node_index > 0 && (
-                              <Button 
-                                variant="outline"
-                                leftIcon={<RiArrowLeftLine />}
-                                onClick={() => handleWorkflowAction('back')}
-                                className="text-orange-600 border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                              >
-                                Send Back
-                              </Button>
                             )}
-                            
-                            <Button 
-                              variant="outline"
-                              leftIcon={<RiCloseLine />}
-                              onClick={() => handleWorkflowAction('reject')}
-                              className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            >
-                              Reject
-                            </Button>
-                            <Button 
-                              variant="primary"
-                              leftIcon={<RiCheckLine />}
-                              onClick={() => handleWorkflowAction('approve')}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              {selectedLabourEntry.current_node_index === 1 ? 'Complete' : 'Approve'}
-                            </Button>
-                          </>
-                        )}
-                      </>
-                    )}
-                    
-                    <Button 
-                      variant="primary"
-                      onClick={() => setShowDetails(false)}
-                    >
-                      Close
-                    </Button>
-                  </div>
+                          </div>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                          node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                          node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                          'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+                        }`}>
+                          {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
+                        </span>
+                      </div>
+                    ))}
                 </div>
               </div>
-            </motion.div>
+            )}
+            
+            {/* Comments Section */}
+            {selectedLabourEntry.labour_comments && selectedLabourEntry.labour_comments.length > 0 && (
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
+                  <RiChat3Line className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
+                </div>
+                
+                <div className="space-y-3">
+                  {selectedLabourEntry.labour_comments
+                    .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                    .map((comment: any) => (
+                      <div key={comment.id} className="p-3 bg-secondary-50 dark:bg-dark-700 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-medium text-secondary-900 dark:text-white">{comment.user_name}</div>
+                          <div className="flex items-center space-x-2">
+                            {comment.action && (
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                                comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                                'bg-portfolio-orange/10 text-portfolio-orange dark:bg-portfolio-orange/10 dark:text-portfolio-orange'
+                              }`}>
+                                {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
+                              </span>
+                            )}
+                            <span className="text-xs text-secondary-500 dark:text-secondary-400">
+                              {new Date(comment.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-secondary-700 dark:text-secondary-300">{comment.comment}</div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="pt-6 mt-6 border-t border-white/10">
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
+                {/* Left side: Utility actions */}
+                <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
+                   <Button 
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<RiDownload2Line />}
+                    className="text-secondary-400 hover:text-white hover:bg-white/5"
+                  >
+                    Export
+                  </Button>
+                  <Button 
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<RiPrinterLine />}
+                    className="text-secondary-400 hover:text-white hover:bg-white/5"
+                  >
+                    Print
+                  </Button>
+                  
+                  {/* Admin delete button */}
+                  {user?.role === 'admin' && (
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={<RiDeleteBinLine />}
+                      onClick={() => {
+                        setShowDetails(false);
+                        handleDeleteEntry(selectedLabourEntry);
+                      }}
+                      className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+
+                {/* Right side: Workflow actions */}
+                <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-end">
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDetails(false)}
+                    className="border-white/10 hover:bg-white/5"
+                  >
+                    Close
+                  </Button>
+
+                  {/* View/Edit Form Button */}
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    leftIcon={canUserUpdateForm(selectedLabourEntry) ? <RiEditLine /> : <RiFileListLine />}
+                    onClick={() => {
+                      setShowDetails(false);
+                      setShowFormView(true);
+                    }}
+                    className="hover:bg-white/5"
+                  >
+                    {canUserUpdateForm(selectedLabourEntry) ? 'Edit Form' : 'View Form'}
+                  </Button>
+
+                  {/* Workflow Action Buttons */}
+                  {(selectedLabourEntry.status === 'pending' || selectedLabourEntry.status === 'rejected') && (
+                    <>
+                      {/* Send Back (if applicable) */}
+                      {canUserApproveEntry(selectedLabourEntry) && selectedLabourEntry.current_node_index > 0 && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<RiArrowLeftLine />}
+                          onClick={() => handleWorkflowAction('back')}
+                          className="text-orange-500 border-orange-500/30 hover:bg-orange-500/10 hover:border-orange-500"
+                        >
+                          Send Back
+                        </Button>
+                      )}
+                      
+                      {/* Reject */}
+                      {canUserApproveEntry(selectedLabourEntry) && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<RiCloseLine />}
+                          onClick={() => handleWorkflowAction('reject')}
+                          className="text-red-500 border-red-500/30 hover:bg-red-500/10 hover:border-red-500"
+                        >
+                          Reject
+                        </Button>
+                      )}
+
+                      {/* Approve/Complete */}
+                      {canUserApproveEntry(selectedLabourEntry) && (
+                        <Button 
+                          variant="primary"
+                          size="sm"
+                          leftIcon={<RiCheckLine />}
+                          onClick={() => handleWorkflowAction('approve')}
+                          className="bg-portfolio-orange hover:bg-portfolio-orange/80 text-white border-none shadow-lg shadow-portfolio-orange/20"
+                        >
+                          {selectedLabourEntry.current_node_index === 1 ? 'Complete' : 'Approve'}
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
-      </AnimatePresence>
+      </Dialog>
 
       {/* Form View Modal */}
       {showFormView && selectedLabourEntry && (

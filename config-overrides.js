@@ -15,6 +15,7 @@ module.exports = function override(config, env) {
              oneOfRule.exclude = [oneOfRule.exclude];
            }
            oneOfRule.exclude.push(/node_modules\/@mediapipe\/tasks-vision/);
+           oneOfRule.exclude.push(/node_modules\/docx-preview/);
         }
       });
     }
@@ -28,7 +29,12 @@ module.exports = function override(config, env) {
          rule.exclude = [rule.exclude];
        }
        // Add the exclusion for the problematic package
-       rule.exclude.push(/node_modules\/@mediapipe\/tasks-vision/);
+       if (Array.isArray(rule.exclude)) {
+          rule.exclude.push(/node_modules\/@mediapipe\/tasks-vision/);
+          rule.exclude.push(/node_modules\/docx-preview/);
+       } else {
+          rule.exclude = [rule.exclude, /node_modules\/@mediapipe\/tasks-vision/, /node_modules\/docx-preview/];
+       }
     }
   });
 

@@ -34,12 +34,16 @@ const iconMap: {[key: string]: IconType} = {
   RiApps2Line: Ri.RiApps2Line,
   
   // Notification
+  RiNotificationLine: Ri.RiNotificationLine,
+  RiNotification3Fill: Ri.RiNotification3Fill,
   RiBellLine: Ri.RiBellLine,
   RiNotification3Line: Ri.RiNotification3Line,
   RiAlarmWarningLine: Ri.RiAlarmWarningLine,
   
   // Form/Document
   RiFileList3Line: Ri.RiFileList3Line,
+  RiFileListLine: Ri.RiFileListLine,
+  RiFileWarningLine: Ri.RiFileWarningLine,
   RiQuestionLine: Ri.RiQuestionLine,
   RiQuestionnaireLine: Ri.RiQuestionnaireLine,
   RiFileTextLine: Ri.RiFileTextLine,

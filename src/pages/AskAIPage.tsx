@@ -19,9 +19,117 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { useProjects } from '../contexts/ProjectContext';
-import { useAIChat } from '../contexts/AIChatContext';
+import { useAIChat, Message as ChatMessage } from '../contexts/AIChatContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { ChartBlock } from '../components/ai/ChartBlock';
+import { AIFormLink } from '../components/ai/AIFormLink';
+
+// Helper component to render message content with mixed types (Text, Chart, Forms)
+const MessageContentRenderer: React.FC<{ message: ChatMessage }> = ({ message }) => {
+  if (message.sender === 'user') {
+    return <>{message.content}</>;
+  }
+
+  // Preprocess content to ensure code blocks are properly formatted for Markdown
+  // This fixes issues where code fences might be malformed or lack necessary newlines
+  let content = message.content
+    // Convert form comments to code blocks
+    .replace(
+      /<!--FORMS_JSON_START-->([\s\S]*?)<!--FORMS_JSON_END-->/g,
+      '\n```forms-json\n$1\n```\n'
+    )
+    // Fix chartjs blocks that might have spaces (e.g. ``` chartjs)
+    .replace(/```\s*chartjs/gi, '\n```chartjs')
+    // Fix broken newlines before code blocks
+    .replace(/([^\n])```/g, '$1\n```');
+
+  if (message.isStreaming) {
+    content += ' ▍';
+  }
+
+  return (
+    <div className="markdown-container w-full break-words">
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-white mt-6 mb-4 pb-2 border-b border-white/10" {...props} />,
+          h2: ({node, ...props}) => <h2 className="text-xl font-bold text-white mt-5 mb-3" {...props} />,
+          h3: ({node, ...props}) => <h3 className="text-lg font-semibold text-portfolio-orange mt-4 mb-2" {...props} />,
+          h4: ({node, ...props}) => <h4 className="text-base font-semibold text-white mt-3 mb-2" {...props} />,
+          p: ({node, ...props}) => <p className="mb-3 leading-relaxed text-gray-300 last:mb-0 whitespace-pre-wrap" {...props} />,
+          a: ({node, ...props}) => <a className="text-portfolio-orange hover:text-white underline transition-colors" target="_blank" rel="noopener noreferrer" {...props} />,
+          ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-1 text-gray-300" {...props} />,
+          ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4 space-y-1 text-gray-300" {...props} />,
+          li: ({node, ...props}) => <li className="pl-1" {...props} />,
+          blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-portfolio-orange/50 pl-4 py-1 my-4 bg-white/5 rounded-r italic text-gray-400" {...props} />,
+          hr: ({node, ...props}) => <hr className="border-white/10 my-6" {...props} />,
+          table: ({node, ...props}) => <div className="overflow-x-auto my-4 rounded-lg border border-white/10"><table className="min-w-full divide-y divide-white/10" {...props} /></div>,
+          thead: ({node, ...props}) => <thead className="bg-white/5" {...props} />,
+          th: ({node, ...props}) => <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" {...props} />,
+          tbody: ({node, ...props}) => <tbody className="divide-y divide-white/5 bg-transparent" {...props} />,
+          tr: ({node, ...props}) => <tr className="hover:bg-white/5 transition-colors" {...props} />,
+          td: ({node, ...props}) => <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-300" {...props} />,
+          code: ({node, className, children, ...props}) => {
+            const match = /language-([\w-]+)/.exec(className || '')
+            const language = match ? match[1] : '';
+
+            // Check if the content looks like a chart config even if language is not set
+            // This is a fallback for when the language tag is missing but content is clearly a chart config
+            const contentStr = String(children).replace(/\n$/, '');
+            
+            if (language === 'chartjs') {
+              try {
+                const config = JSON.parse(contentStr);
+                return <ChartBlock config={config} />;
+              } catch (e) {
+                console.error('Failed to parse chart config:', e);
+                // Fallback to displaying code if parsing fails
+              }
+            }
+
+            if (language === 'forms-json') {
+              try {
+                const data = JSON.parse(contentStr);
+                if (data.forms && Array.isArray(data.forms)) {
+                  return <AIFormLink forms={data.forms} />;
+                }
+              } catch (e) {
+                console.error('Failed to parse forms JSON:', e);
+              }
+            }
+
+            return match ? (
+              <div className="rounded-lg bg-[#1e1e1e] my-4 overflow-hidden border border-white/10 shadow-lg">
+                <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
+                  <span className="text-xs text-gray-400 font-mono">{match[1]}</span>
+                  <div className="flex space-x-1.5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-500/20"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/20"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-green-500/20"></div>
+                  </div>
+                </div>
+                <div className="p-4 overflow-x-auto">
+                  <code className={`${className} font-mono text-sm`} {...props}>
+                    {children}
+                  </code>
+                </div>
+              </div>
+            ) : (
+              <code className="bg-white/10 rounded px-1.5 py-0.5 text-xs font-mono text-portfolio-orange" {...props}>
+                {children}
+              </code>
+            )
+          },
+          pre: ({node, ...props}) => <pre className="bg-transparent p-0 m-0" {...props} />,
+          img: ({node, ...props}) => <img className="rounded-lg max-w-full h-auto my-4 border border-white/10" {...props} alt={props.alt || 'AI generated image'} />,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+};
 
 const AskAIPage: React.FC = () => {
   const { t } = useTranslation();
@@ -323,61 +431,8 @@ const AskAIPage: React.FC = () => {
                           </div>
                         )}
                         
-                        <div className={`prose prose-sm prose-p:my-1 prose-headings:my-2 ${message.sender === 'user' ? 'prose-invert text-white' : 'prose-invert text-gray-200'} max-w-none leading-relaxed`}>
-                          {message.sender === 'user' 
-                            ? message.content 
-                            : (
-                                <ReactMarkdown 
-                                  remarkPlugins={[remarkGfm]}
-                                  components={{
-                                    h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-white mt-6 mb-4 pb-2 border-b border-white/10" {...props} />,
-                                    h2: ({node, ...props}) => <h2 className="text-xl font-bold text-white mt-5 mb-3" {...props} />,
-                                    h3: ({node, ...props}) => <h3 className="text-lg font-semibold text-portfolio-orange mt-4 mb-2" {...props} />,
-                                    h4: ({node, ...props}) => <h4 className="text-base font-semibold text-white mt-3 mb-2" {...props} />,
-                                    p: ({node, ...props}) => <p className="mb-3 leading-relaxed text-gray-300 last:mb-0" {...props} />,
-                                    a: ({node, ...props}) => <a className="text-portfolio-orange hover:text-white underline transition-colors" target="_blank" rel="noopener noreferrer" {...props} />,
-                                    ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-1 text-gray-300" {...props} />,
-                                    ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4 space-y-1 text-gray-300" {...props} />,
-                                    li: ({node, ...props}) => <li className="pl-1" {...props} />,
-                                    blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-portfolio-orange/50 pl-4 py-1 my-4 bg-white/5 rounded-r italic text-gray-400" {...props} />,
-                                    hr: ({node, ...props}) => <hr className="border-white/10 my-6" {...props} />,
-                                    table: ({node, ...props}) => <div className="overflow-x-auto my-4 rounded-lg border border-white/10"><table className="min-w-full divide-y divide-white/10" {...props} /></div>,
-                                    thead: ({node, ...props}) => <thead className="bg-white/5" {...props} />,
-                                    th: ({node, ...props}) => <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" {...props} />,
-                                    tbody: ({node, ...props}) => <tbody className="divide-y divide-white/5 bg-transparent" {...props} />,
-                                    tr: ({node, ...props}) => <tr className="hover:bg-white/5 transition-colors" {...props} />,
-                                    td: ({node, ...props}) => <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-300" {...props} />,
-                                    code: ({node, className, children, ...props}) => {
-                                      const match = /language-(\w+)/.exec(className || '')
-                                      return match ? (
-                                        <div className="rounded-lg bg-[#1e1e1e] my-4 overflow-hidden border border-white/10 shadow-lg">
-                                          <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
-                                            <span className="text-xs text-gray-400 font-mono">{match[1]}</span>
-                                            <div className="flex space-x-1.5">
-                                              <div className="w-2.5 h-2.5 rounded-full bg-red-500/20"></div>
-                                              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/20"></div>
-                                              <div className="w-2.5 h-2.5 rounded-full bg-green-500/20"></div>
-                                            </div>
-                                          </div>
-                                          <div className="p-4 overflow-x-auto">
-                                            <code className={`${className} font-mono text-sm`} {...props}>
-                                              {children}
-                                            </code>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <code className="bg-white/10 rounded px-1.5 py-0.5 text-xs font-mono text-portfolio-orange" {...props}>
-                                          {children}
-                                        </code>
-                                      )
-                                    },
-                                    pre: ({node, ...props}) => <pre className="bg-transparent p-0 m-0" {...props} />,
-                                    img: ({node, ...props}) => <img className="rounded-lg max-w-full h-auto my-4 border border-white/10" {...props} alt={props.alt || 'AI generated image'} />,
-                                  }}
-                                >
-                                  {message.content}
-                                </ReactMarkdown>
-                              )}
+                        <div className={`w-full ${message.sender === 'user' ? 'text-white' : 'text-gray-200'} leading-relaxed`}>
+                          <MessageContentRenderer message={message} />
                           {message.isStreaming && message.content === '' && (
                             <div className="flex items-center text-portfolio-orange py-1">
                               <div className="flex space-x-1">

@@ -28,6 +28,7 @@ interface ExcelGridProps {
   mergedCells?: Map<string, MergeInfo>;
   totalWidth?: number;
   totalHeight?: number;
+  paperSize?: { width: number; height: number; label?: string };
 }
 
 interface GridCell {
@@ -226,7 +227,8 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
   rows: propRows,
   columns: propColumns,
   cells: propCells,
-  mergedCells: propMergedCells
+  mergedCells: propMergedCells,
+  paperSize
 }) => {
   const gridRef = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState<GridRow[]>(propRows || []);
@@ -1351,6 +1353,54 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
       >
         ⚏
       </div>
+
+      {/* Paper Size Visualization */}
+      {paperSize && (
+        <>
+          {/* Blue border for page boundary */}
+          <div
+            className="absolute border-r-4 border-b-4 border-blue-600 border-dashed pointer-events-none z-10"
+            style={{
+              left: GRID_CONFIG.HEADER_WIDTH,
+              top: GRID_CONFIG.HEADER_HEIGHT,
+              width: paperSize.width,
+              height: paperSize.height,
+              borderColor: '#1d4ed8' // darker blue (blue-700) for more contrast
+            }}
+          />
+          
+          {/* Page Label overlay */}
+          {paperSize.label && (
+            <div 
+              className="absolute pointer-events-none select-none flex items-center justify-center"
+              style={{
+                left: GRID_CONFIG.HEADER_WIDTH,
+                top: GRID_CONFIG.HEADER_HEIGHT,
+                width: paperSize.width,
+                height: paperSize.height,
+                zIndex: 5
+              }}
+            >
+              <div className="text-6xl font-bold text-gray-200 opacity-50 transform -rotate-12">
+                {paperSize.label}
+              </div>
+            </div>
+          )}
+
+          {/* Page dimensions badge */}
+          {paperSize.label && (
+            <div 
+              className="absolute bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded shadow-sm border border-blue-200 font-medium z-20"
+              style={{
+                left: GRID_CONFIG.HEADER_WIDTH + paperSize.width - 100,
+                top: GRID_CONFIG.HEADER_HEIGHT - 24
+              }}
+            >
+              {paperSize.label} ({paperSize.width}x{paperSize.height})
+            </div>
+          )}
+        </>
+      )}
 
       {/* Column headers */}
       {columns.map((col, index) => (

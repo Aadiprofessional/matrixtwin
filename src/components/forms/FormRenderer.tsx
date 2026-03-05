@@ -7,7 +7,10 @@ import {
   RiCalendarLine,
   RiUserLine,
   RiCheckLine,
-  RiArrowRightLine
+  RiArrowRightLine,
+  RiUpload2Line,
+  RiDeleteBinLine,
+  RiImageLine
 } from 'react-icons/ri';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -196,6 +199,17 @@ export const FormRenderer: React.FC<FormRendererProps> = ({
     }));
   };
 
+  const handleFileUpload = (fieldId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        handleInputChange(fieldId, reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -306,6 +320,7 @@ export const FormRenderer: React.FC<FormRendererProps> = ({
       top: field.y,
       width: field.width,
       height: field.height,
+      minHeight: (field.type === 'signature' || field.type === 'image') ? 80 : undefined,
       zIndex: field.zIndex || 1,
       pointerEvents: readOnly ? 'none' : 'auto'
     };
@@ -370,16 +385,68 @@ export const FormRenderer: React.FC<FormRendererProps> = ({
           </div>
         );
       case 'date':
+      case 'time':
+      case 'datetime-local':
+      case 'datetime':
         return (
           <div style={style} className={`flex ${settings.titleLayout === 'horizontal' ? 'flex-row items-center' : 'flex-col'}`}>
             {renderLabel()}
             <input
-              type="date"
+              type={field.type === 'datetime' ? 'datetime-local' : field.type}
               value={value}
               onChange={(e) => handleInputChange(field.id, e.target.value)}
               className="flex-grow w-full px-2 py-1 bg-transparent border-b border-gray-300 focus:border-portfolio-orange outline-none text-gray-900 text-sm"
               {...commonProps}
             />
+          </div>
+        );
+      case 'signature':
+      case 'image':
+        return (
+          <div style={style} className="flex flex-col h-full bg-white/50 backdrop-blur-sm rounded-lg border border-gray-200/50 overflow-hidden">
+            {settings.hideTitle ? null : (
+              <label className={`text-xs font-medium text-gray-500 px-1 pt-1 ${settings.titleLayout === 'horizontal' ? 'mr-1 shrink-0' : ''}`}>
+                {field.label}
+                {settings.required && <span className="text-red-500 ml-1">*</span>}
+              </label>
+            )}
+            <div className="flex-grow border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center relative bg-gray-50 hover:bg-gray-100 transition-colors overflow-hidden">
+              {value ? (
+                <div className="relative w-full h-full flex items-center justify-center group">
+                  <img 
+                    src={value} 
+                    alt="Uploaded" 
+                    className="w-full h-full object-contain" 
+                  />
+                  {!readOnly && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleInputChange(field.id, '');
+                      }}
+                      className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                    >
+                      <RiDeleteBinLine />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <label className={`cursor-pointer w-full h-full flex flex-col items-center justify-center ${readOnly ? 'cursor-not-allowed' : ''}`}>
+                  <RiUpload2Line className="text-xl text-gray-400 mb-1" />
+                  <span className="text-[10px] text-gray-500 text-center px-1 leading-tight">
+                    {field.type === 'signature' ? 'Sign' : 'Image'}
+                  </span>
+                  {!readOnly && (
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => handleFileUpload(field.id, e)}
+                    />
+                  )}
+                </label>
+              )}
+            </div>
           </div>
         );
       case 'label':
@@ -464,34 +531,29 @@ export const FormRenderer: React.FC<FormRendererProps> = ({
       </div>
 
       {/* Main Content - Scrollable */}
-      <div className="flex-grow overflow-auto p-8 bg-dark-900 flex justify-center">
-        <div className="space-y-8 w-full max-w-[800px]"> {/* Restrict width for better readability */}
+      <div className="flex-grow overflow-auto p-8 bg-dark-900 flex justify-center items-start">
+        <div className="space-y-8"> {/* Removed max-w constraint to allow full form width */}
           
           {/* Form Page Container */}
-          <div className="overflow-hidden bg-white shadow-xl relative min-h-[842px]" 
+          <div className="bg-white shadow-xl relative" 
                 style={{ 
                   width: currentPage?.dimensions?.width || 595, 
                   height: currentPage?.dimensions?.height || 842,
-                  margin: '0 auto'
+                  margin: '0 auto',
+                  overflow: 'hidden', // Ensure nothing goes outside
+                  boxSizing: 'border-box'
                 }}>
              {/* Render Grid Lines (Visual Reference) - Only show if fields are present, otherwise show grid content */}
-             {/* If user wants NO grid lines, we can hide this or make it very subtle. 
-                 The user said "no grid supposed to be". 
-                 But if the content is IN the grid, we must render the grid but maybe without borders?
-                 Let's try rendering the ExcelGrid fully but perhaps with a "readOnly" prop if supported,
-                 or just render it as is but without opacity.
-             */}
-             {/* Grid hidden as requested */}
-             <div className="absolute inset-0 pointer-events-none">
-               {/* Grid removed */}
-             </div>
+             <div className="absolute inset-0 pointer-events-none"></div>
 
-             {/* Render Fields - overlay on top */}
-             {currentPage?.fields?.map((field: FormField) => (
-               <React.Fragment key={field.id}>
-                 {renderField(field)}
-               </React.Fragment>
-             ))}
+             {/* Render Fields - overlay on top with slight scale to ensure safety margin */}
+             <div className="absolute inset-0 w-full h-full" style={{ transform: 'scale(0.93)', transformOrigin: 'top left' }}>
+               {currentPage?.fields?.map((field: FormField) => (
+                 <React.Fragment key={field.id}>
+                   {renderField(field)}
+                 </React.Fragment>
+               ))}
+             </div>
           </div>
 
           {/* Process Configuration Section (Bottom) */}

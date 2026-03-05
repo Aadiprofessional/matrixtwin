@@ -2700,6 +2700,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               
               // Create a new grid for this page
               const grid = createInitialGrid(maxRow + 5, maxCol + 2); // Add some padding
+              if (!grid.mergedCells) {
+                grid.mergedCells = new Map<string, MergeInfo>();
+              }
               
               const fields: FormField[] = (pageData.widgets || []).map((widget: any) => {
                 const colIndex = colToIndex(widget.position?.col || 'A');
@@ -2722,11 +2725,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 if (widget.type === 'signature') type = 'signature';
                 if (widget.type === 'table') type = 'layoutTable';
                 
-                // Calculate dimensions
-                const width = (widget.position?.col_span || 1) * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
-                const height = (widget.position?.row_span || 1) * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT;
-                const x = EXCEL_GRID_CONFIG.HEADER_WIDTH + (colIndex * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH);
-                const y = EXCEL_GRID_CONFIG.HEADER_HEIGHT + (rowIndex * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT);
+                // Add unique ID to avoid collisions
+                const fieldId = widget.id || `field-${crypto.randomUUID()}`;
+
+                // Calculate dimensions based on span
+                const colSpan = widget.position?.col_span || 1;
+                const rowSpan = widget.position?.row_span || 1;
                 
                 const settings: any = {
                   required: widget.required,
@@ -2740,9 +2744,76 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                   settings.data = widget.value;
                   if (widget.headers) settings.headers = widget.headers;
                 }
-                
-                // Add unique ID to avoid collisions
-                const fieldId = widget.id || `field-${crypto.randomUUID()}`;
+
+                // Try to place in grid cell
+                if (grid.cells[rowIndex] && grid.cells[rowIndex][colIndex]) {
+                  const startCell = grid.cells[rowIndex][colIndex];
+                  
+                  // Handle merging if span > 1
+                  if (rowSpan > 1 || colSpan > 1) {
+                    const mergeInfo: MergeInfo = {
+                      startRow: rowIndex,
+                      endRow: rowIndex + rowSpan - 1,
+                      startCol: colIndex,
+                      endCol: colIndex + colSpan - 1,
+                      isMaster: true
+                    };
+                    
+                    // Add to mergedCells map
+                    const key = `${rowIndex}-${colIndex}`;
+                    if (grid.mergedCells) {
+                      grid.mergedCells.set(key, mergeInfo);
+                    }
+                    
+                    // Mark cells as occupied and set mergeInfo
+                    for (let r = 0; r < rowSpan; r++) {
+                      for (let c = 0; c < colSpan; c++) {
+                        if (grid.cells[rowIndex + r] && grid.cells[rowIndex + r][colIndex + c]) {
+                          const cell = grid.cells[rowIndex + r][colIndex + c];
+                          cell.isEmpty = false;
+                          cell.fieldId = fieldId;
+                          
+                          // Set merge info on cell
+                          cell.mergeInfo = {
+                            ...mergeInfo,
+                            isMaster: r === 0 && c === 0
+                          };
+                          cell.merged = true;
+                        }
+                      }
+                    }
+                  } else {
+                    // Single cell
+                    startCell.isEmpty = false;
+                    startCell.fieldId = fieldId;
+                  }
+
+                  const width = colSpan * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
+                  const height = rowSpan * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT;
+
+                  return {
+                    id: fieldId,
+                    type,
+                    label: widget.label || 'Label',
+                    settings,
+                    width,
+                    height,
+                    x: startCell.x,
+                    y: startCell.y,
+                    zIndex: 1,
+                    gridPosition: { row: rowIndex, col: colIndex },
+                    cellId: startCell.id,
+                    gridRow: rowIndex,
+                    gridCol: colIndex,
+                    span: { row: rowSpan, col: colSpan }
+                  };
+                }
+
+                // Fallback calculations if grid cell issues
+                const width = colSpan * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
+                const height = rowSpan * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT;
+                const x = EXCEL_GRID_CONFIG.HEADER_WIDTH + (colIndex * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH);
+                const y = EXCEL_GRID_CONFIG.HEADER_HEIGHT + (rowIndex * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT);
 
                 return {
                   id: fieldId,
@@ -3923,6 +3994,76 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     return filteredPages; // Remove empty pages
   };
 
+  // Helper to find the best matching grid position for a widget based on dimensions
+  const getBestFitGridPosition = (x: number, y: number, width: number, height: number, grid: ExcelGridType) => {
+    // Find rows that overlap with the widget
+    let startRow = -1;
+    let endRow = -1;
+    
+    for (let r = 0; r < grid.rows.length; r++) {
+      const row = grid.rows[r];
+      const rowTop = row.y;
+      const rowBottom = row.y + row.height;
+      
+      const overlap = Math.max(0, Math.min(rowBottom, y + height) - Math.max(rowTop, y));
+      
+      if (overlap > 0) {
+        if (startRow === -1) startRow = r;
+        endRow = r;
+      }
+    }
+    
+    // Find columns that overlap with the widget
+    let startCol = -1;
+    let endCol = -1;
+    
+    // For column assignment, we want to be "intelligent"
+    // Requirement: "if row 2 contains a single widget that extends slightly beyond column B into column C's territory, 
+    // the system must automatically assign that widget to column C's grid rather than B"
+    // This implies we should look at where the widget is mostly located or its center.
+    
+    const widgetCenterX = x + width / 2;
+    
+    for (let c = 0; c < grid.columns.length; c++) {
+      const col = grid.columns[c];
+      const colLeft = col.x;
+      const colRight = col.x + col.width;
+      
+      const overlap = Math.max(0, Math.min(colRight, x + width) - Math.max(colLeft, x));
+      
+      if (overlap > 0) {
+        if (startCol === -1) startCol = c;
+        endCol = c;
+      }
+    }
+    
+    // Refine start column based on center point if it spans multiple
+    if (startCol !== -1 && endCol !== -1 && startCol !== endCol) {
+      // If the widget center is in a different column than startCol, shift startCol
+      for (let c = startCol; c <= endCol; c++) {
+        const col = grid.columns[c];
+        if (widgetCenterX >= col.x && widgetCenterX <= col.x + col.width) {
+          // The center is in this column. 
+          startCol = c;
+          break;
+        }
+      }
+    }
+    
+    // Default to 0 if not found
+    if (startRow === -1) startRow = 0;
+    if (endRow === -1) endRow = startRow;
+    if (startCol === -1) startCol = 0;
+    if (endCol === -1) endCol = startCol;
+    
+    return {
+      row: startRow,
+      col: startCol,
+      rowSpan: Math.max(1, endRow - startRow + 1),
+      colSpan: Math.max(1, endCol - startCol + 1)
+    };
+  };
+
   const handleAIFormGenerated = (formData: any) => {
     console.log('Received AI generated form data:', formData);
     saveToHistory();
@@ -4010,8 +4151,30 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
         
         page.fields.forEach((field: any, index: number) => {
           let targetCell, cell;
+          let rowSpan = 1;
+          let colSpan = 1;
           
-          if (field.gridPosition && page.grid) {
+          // Check if we have coordinate data to calculate best fit (Intelligent Grid Assignment)
+          if (field.x !== undefined && field.y !== undefined && field.width && field.height) {
+            const bestFit = getBestFitGridPosition(field.x, field.y, field.width, field.height, pageGrid);
+            
+            targetCell = {
+              row: bestFit.row,
+              col: bestFit.col,
+              x: pageGrid.cells[bestFit.row]?.[bestFit.col]?.x || field.x,
+              y: pageGrid.cells[bestFit.row]?.[bestFit.col]?.y || field.y
+            };
+            
+            rowSpan = bestFit.rowSpan;
+            colSpan = bestFit.colSpan;
+            
+            // Get the cell from the grid
+            cell = pageGrid.cells[targetCell.row]?.[targetCell.col];
+            if (cell) {
+              cell.isEmpty = false;
+              cell.fieldId = field.id;
+            }
+          } else if (field.gridPosition && page.grid) {
             // Use AI-generated grid position
             const gridPos = field.gridPosition;
             targetCell = {
@@ -4020,6 +4183,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               x: field.x || (gridPos.col - 1) * page.grid.cellWidth,
               y: field.y || (gridPos.row - 1) * page.grid.cellHeight
             };
+            
+            rowSpan = field.gridPosition.rowSpan || 1;
+            colSpan = field.gridPosition.colSpan || 1;
             
             // Get the cell from the grid
             cell = pageGrid.cells[targetCell.row]?.[targetCell.col];
@@ -4054,15 +4220,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           let fieldWidth = field.width || cell?.width || EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
           let fieldHeight = field.height || defaultHeight;
           
-          if (field.gridPosition && page.grid) {
-            const rowSpan = field.gridPosition.rowSpan || 1;
-            const colSpan = field.gridPosition.colSpan || 1;
-            
-            // Calculate width and height based on merged cells
-            if (colSpan > 1) {
+          // Calculate width and height based on merged cells if we have span info
+          if (rowSpan > 1 || colSpan > 1) {
+            if (colSpan > 1 && page.grid) {
               fieldWidth = colSpan * page.grid.cellWidth;
             }
-            if (rowSpan > 1) {
+            if (rowSpan > 1 && page.grid) {
               fieldHeight = rowSpan * page.grid.cellHeight;
             }
             
@@ -4089,8 +4252,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             zIndex: 1,
             gridRow: targetCell.row + 1, // Convert back to 1-based
             gridCol: targetCell.col + 1, // Convert back to 1-based
-            rowSpan: field.gridPosition?.rowSpan || 1,
-            colSpan: field.gridPosition?.colSpan || 1
+            rowSpan: rowSpan,
+            colSpan: colSpan
           };
 
           // Process settings based on field type
@@ -5129,10 +5292,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     <div 
                       className={`relative bg-white rounded-lg shadow-lg transition-all duration-300 ${
                         isDragging ? 'ring-2 ring-portfolio-orange ring-opacity-50 shadow-portfolio-orange/20' : ''
-                      }`}
+                      } overflow-auto`}
                       style={{
-                        width: `${pageWidth}px`,
-                        minHeight: `${pageHeight}px`,
+                        width: `${pageWidth + 50}px`,
+                        height: `${pageHeight + 50}px`,
+                        maxWidth: '100%',
+                        maxHeight: '100%'
                       }}
                       onDrop={(e) => {
                         e.preventDefault();
@@ -5254,10 +5419,15 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     >
                       {/* Excel Grid Canvas */}
                       <ExcelGridComponent
-                        width={pageWidth}
-                        height={pageHeight}
+                        width={Math.max(pageWidth + 400, 1000)} // Canvas larger than page
+                        height={Math.max(pageHeight + 400, 1000)} // Canvas larger than page
                         selectedCell={selectedCell}
                         isDragging={isDragging}
+                        paperSize={{
+                          width: page.dimensions.width,
+                          height: page.dimensions.height,
+                          label: page.dimensions.size
+                        }}
                         onCellSelect={(row, col) => {
                           setSelectedCell({ row, col });
                           setCurrentPageIndex(pageIndex);

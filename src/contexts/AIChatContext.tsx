@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useRef, useCallb
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 
-interface Message {
+export interface Message {
   id: string;
   content: string;
   sender: 'user' | 'ai';
@@ -420,6 +420,8 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
       let fullContent = '';
       const decoder = new TextDecoder();
 
+      let buffer = '';
+      
       const processStream = async () => {
         try {
           while (true) {
@@ -427,70 +429,82 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
             
             if (done) {
               console.log('✅ Stream completed');
+              // Process any remaining buffer as text
+              if (buffer.trim()) {
+                fullContent += buffer;
+              }
               updateMessageContent(aiMessageId, fullContent, true);
               break;
             }
 
-            // Decode the chunk
+            // Decode the chunk and append to buffer
             const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
             
-            // Check if it's SSE format
-            if (chunk.includes('data: ')) {
-                const lines = chunk.split('\n');
-                for (const line of lines) {
-                    if (line.trim() === '') continue;
-                    
-                    if (line.startsWith('data: ')) {
-                        const data = line.slice(6).trim();
-                        
-                        if (data === '[DONE]') {
-                            console.log('🏁 Received [DONE] signal');
-                            updateMessageContent(aiMessageId, fullContent, true);
-                            return;
-                        }
-
-                        try {
-                            // Try to parse as JSON first
-                            const parsed = JSON.parse(data);
-                            // Handle various potential response formats
-                            const content = parsed.choices?.[0]?.delta?.content || 
-                                          parsed.response || 
-                                          parsed.output || 
-                                          parsed.text || 
-                                          parsed.content ||
-                                          '';
-                            
-                            if (content) {
-                                fullContent += content;
-                                updateMessageContent(aiMessageId, fullContent, false);
-                            } else if (typeof parsed === 'string') {
-                                fullContent += parsed;
-                                updateMessageContent(aiMessageId, fullContent, false);
-                            }
-                        } catch (e) {
-                            // If not JSON, treat as raw text
-                            fullContent += data;
-                            updateMessageContent(aiMessageId, fullContent, false);
-                        }
-                    }
+            // Process the buffer line by line to handle SSE and NDJSON correctly
+            const lines = buffer.split('\n');
+            
+            // Keep the last line in the buffer as it might be incomplete
+            // unless the buffer ends with a newline, in which case the last element is empty
+            // and we have processed all complete lines.
+            // But split('a\n') -> ['a', '']
+            // split('a') -> ['a']
+            // So if the last element is empty, it means the buffer ended with \n
+            
+            // If the buffer doesn't end with \n, the last line is incomplete.
+            // If it does, the last line is empty string (which we can skip or keep as buffer base).
+            
+            // Actually, we should just pop the last element always and set it as new buffer.
+             // If buffer ended with \n, the last element is empty string, which is fine as new buffer.
+             // If buffer didn't end with \n, the last element is partial line, which is correct.
+             buffer = lines.pop() || '';
+             
+             for (const line of lines) {
+               const trimmedLine = line.trim();
+               if (!trimmedLine) continue; // Skip empty lines/heartbeats
+               
+               // normalize line ending (remove \r if present)
+               let contentToProcess = line.replace(/\r$/, '');
+               
+               // Remove "data: " prefix if present
+              if (line.startsWith('data: ')) {
+                contentToProcess = line.slice(6);
+              } else if (line.startsWith('data:')) {
+                contentToProcess = line.slice(5);
+              }
+              
+              // Try to parse as JSON
+              try {
+                // First try parsing the line as is
+                const parsed = JSON.parse(contentToProcess);
+                
+                // Handle n8n specific format
+                if (parsed.type === 'item' && parsed.content) {
+                  fullContent += parsed.content;
+                } else if (parsed.type === 'begin' || parsed.type === 'end') {
+                  // Ignore begin/end messages
+                } else if (parsed.response || parsed.output || parsed.text || parsed.content) {
+                  // Handle other common JSON formats
+                  fullContent += (parsed.response || parsed.output || parsed.text || parsed.content);
+                } else {
+                  // Fallback for unknown JSON structure or OpenAI format
+                  if (parsed.choices?.[0]?.delta?.content) {
+                    fullContent += parsed.choices[0].delta.content;
+                  }
                 }
-            } else {
-                // Not SSE, treat as raw text stream or plain JSON response
-                try {
-                    // Check if the whole chunk is a valid JSON object (might be a non-streaming response)
-                    const parsed = JSON.parse(chunk);
-                    const content = parsed.response || parsed.output || parsed.text || parsed.content;
-                    if (content) {
-                        fullContent += content;
-                    } else {
-                        fullContent += chunk;
-                    }
-                } catch {
-                    // Not JSON, just append raw text
-                    fullContent += chunk;
+              } catch (e) {
+                // Not valid JSON, treat as raw text
+                // But be careful not to append "data: " or junk
+                // If we stripped "data:", append the rest
+                // If it was just "data: [DONE]", contentToProcess is "[DONE]"
+                if (contentToProcess.trim() !== '[DONE]') {
+                   fullContent += contentToProcess;
                 }
-                updateMessageContent(aiMessageId, fullContent, false);
+              }
             }
+            
+            // Update UI with latest content
+            updateMessageContent(aiMessageId, fullContent, false);
           }
         } catch (streamError) {
           console.error('❌ Error processing stream:', streamError);

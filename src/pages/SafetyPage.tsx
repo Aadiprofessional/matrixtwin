@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { RiAddLine, RiShieldCheckLine, RiAlarmWarningLine, RiFileWarningLine, RiPercentLine, RiLineChartLine, RiArrowUpLine, RiArrowDownLine, RiFilter3Line, RiBellLine, RiErrorWarningLine, RiArrowLeftLine, RiArrowRightLine, RiCheckLine, RiFlowChart, RiSettings4Line, RiNotificationLine, RiUserLine, RiSearchLine, RiCloseLine, RiTeamLine, RiListCheck, RiLayoutGridLine, RiLoader4Line, RiDownload2Line, RiPrinterLine, RiDeleteBinLine } from 'react-icons/ri';
+import { Dialog } from '../components/ui/Dialog';
+import { RiAddLine, RiShieldCheckLine, RiAlarmWarningLine, RiFileWarningLine, RiPercentLine, RiArrowUpLine, RiArrowDownLine, RiFilter3Line, RiBellLine, RiErrorWarningLine, RiArrowLeftLine, RiArrowRightLine, RiCheckLine, RiFlowChart, RiSettings4Line, RiNotificationLine, RiUserLine, RiCloseLine, RiTeamLine, RiListCheck, RiLayoutGridLine, RiDownload2Line, RiPrinterLine, RiDeleteBinLine, RiEditLine, RiFileListLine, RiMoreLine, RiChat3Line } from 'react-icons/ri';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { SafetyInspectionChecklistTemplate } from '../components/forms/SafetyInspectionChecklistTemplate';
 import { Input } from '../components/ui/Input';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
-import { emailService } from '../services/emailService';
 import { projectService } from '../services/projectService';
+import { PeopleSelectorModal } from '../components/ui/PeopleSelectorModal';
 
 // Define UserSelection interface
 interface User {
@@ -60,114 +61,6 @@ interface SafetyEntry {
   updated_at?: string;
 }
 
-// People selector modal component
-const PeopleSelectorModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onSelect: (user: User) => void;
-  title: string;
-  users: User[];
-  loading: boolean;
-}> = ({ isOpen, onClose, onSelect, title, users, loading }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Filter users based on search
-  const filteredUsers = searchQuery 
-    ? users.filter(user => 
-        user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : users;
-  
-  if (!isOpen) return null;
-  
-  return (
-    <div 
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-      onClick={onClose}
-    >
-      <motion.div
-        className="w-full max-w-md max-h-[80vh] bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-xl overflow-hidden"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <h3 className="text-lg font-semibold flex items-center">
-            <RiUserLine className="mr-2" />
-            {title}
-          </h3>
-          <button 
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            onClick={onClose}
-          >
-            <RiCloseLine className="text-xl" />
-          </button>
-        </div>
-        
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="relative">
-            <RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name, role, or email..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
-        
-        <div className="overflow-y-auto max-h-[400px] p-2">
-          {loading ? (
-            <div className="p-4 text-center text-gray-600 dark:text-gray-400">
-              <RiLoader4Line className="animate-spin text-2xl mx-auto mb-2" />
-              Loading users...
-            </div>
-          ) : filteredUsers.length > 0 ? (
-            <div className="grid grid-cols-1 gap-2">
-              {filteredUsers.map(user => (
-                <div 
-                  key={user.id}
-                  className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md cursor-pointer transition-colors flex items-center"
-                  onClick={() => {
-                    onSelect(user);
-                    onClose();
-                  }}
-                >
-                  {user.avatar ? (
-                    <img 
-                      src={user.avatar} 
-                      alt={user.name}
-                      className="w-10 h-10 rounded-full mr-3"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 flex items-center justify-center font-medium mr-3">
-                      {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                    </div>
-                  )}
-                  <div className="flex-grow">
-                    <div className="font-medium text-gray-900 dark:text-white">{user.name}</div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">{user.role}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-500">{user.email}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-4 text-center text-gray-500 dark:text-gray-400">
-              No users found matching "{searchQuery}"
-            </div>
-          )}
-        </div>
-      </motion.div>
-    </div>
-  );
-};
-
 interface SafetyInspection {
   id: number;
   date: string;
@@ -194,12 +87,10 @@ const SafetyPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
-  const [searchQuery, setSearchQuery] = useState('');
   const [showNewInspection, setShowNewInspection] = useState(false);
   const [selectedSafetyEntry, setSelectedSafetyEntry] = useState<SafetyEntry | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showFormView, setShowFormView] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   
@@ -212,7 +103,6 @@ const SafetyPage: React.FC = () => {
     { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
   ]);
   const [selectedNode, setSelectedNode] = useState<ProcessNode | null>(null);
-  const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
   const [showPeopleSelector, setShowPeopleSelector] = useState(false);
   const [peopleSelectorType, setPeopleSelectorType] = useState<'executor' | 'cc'>('executor');
   
@@ -293,10 +183,9 @@ const SafetyPage: React.FC = () => {
   }, [location.search, safetyEntries]);
 
   // Fetch safety entries from API with project filtering
-  const fetchSafetyEntries = async () => {
+  const fetchSafetyEntries = useCallback(async () => {
     if (!user) return;
     try {
-      setLoading(true);
       const projectParam = selectedProject?.id ? `?projectId=${selectedProject.id}` : '';
       const response = await fetch(`https://server.matrixtwin.com/api/safety/list/${user.id}${projectParam}`, {
         headers: {
@@ -312,13 +201,11 @@ const SafetyPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching safety entries:', error);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [user, selectedProject?.id]);
 
   // Fetch users from API (using project members)
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     if (!selectedProject?.id) return;
     
     try {
@@ -350,15 +237,10 @@ const SafetyPage: React.FC = () => {
     } finally {
       setLoadingUsers(false);
     }
-  };
+  }, [selectedProject?.id, user]);
 
-  // Filtered entries based on search
-  const filteredEntries = safetyEntries.filter(entry => 
-    entry.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    entry.inspector.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    entry.inspection_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    entry.date.includes(searchQuery)
-  );
+  // Filtered entries based on search - Simplified since search is removed
+  const filteredEntries = safetyEntries;
 
   const addNewNode = () => {
     const newNode: ProcessNode = {
@@ -451,7 +333,9 @@ const SafetyPage: React.FC = () => {
         formData: pendingFormData,
         processNodes: processNodesForBackend,
         createdBy: user.id,
-        projectId: selectedProject?.id
+        projectId: selectedProject?.id,
+        formId: pendingFormData.formNumber,
+        name: pendingFormData.formNumber
       });
 
       const response = await fetch('https://server.matrixtwin.com/api/safety/create', {
@@ -464,7 +348,9 @@ const SafetyPage: React.FC = () => {
           formData: pendingFormData,
           processNodes: processNodesForBackend,
           createdBy: user.id,
-          projectId: selectedProject?.id
+          projectId: selectedProject?.id,
+          formId: pendingFormData.formNumber,
+          name: pendingFormData.formNumber
         })
       });
 
@@ -478,7 +364,6 @@ const SafetyPage: React.FC = () => {
         // Reset states
         setShowProcessFlow(false);
         setPendingFormData(null);
-        setSelectedCcs([]);
         setSelectedNode(null);
         
         // Reset process nodes to default
@@ -513,7 +398,6 @@ const SafetyPage: React.FC = () => {
   const handleCancelProcessFlow = () => {
     setPendingFormData(null);
     setShowProcessFlow(false);
-    setSelectedCcs([]);
     setSelectedNode(null);
   };
 
@@ -626,16 +510,29 @@ const SafetyPage: React.FC = () => {
       });
 
       if (response.ok) {
-        // Backend handles all email notifications
+        const result = await response.json();
+        
+        // Handle permanent rejection
+        if (result.permanently_rejected) {
+          alert('Entry has been permanently rejected - no more edits are allowed as all nodes have reached their completion limit.');
+        } else {
+          alert(`Entry ${action}d successfully! Notifications have been sent.`);
+        }
         
         // Refresh safety entries and entry details
         await fetchSafetyEntries();
         await handleViewDetails(selectedSafetyEntry);
-        
-        alert(`Entry ${action}d successfully! Notifications have been sent.`);
       } else {
         const error = await response.json();
-        alert(`Failed to ${action} entry: ${error.error}`);
+        
+        // Handle specific error cases
+        if (error.error?.includes('completion limit')) {
+          alert(`Cannot ${action}: ${error.error}\n${error.details || ''}`);
+        } else if (error.error?.includes('No previous node available')) {
+          alert(`Cannot send back: ${error.error}\n${error.details || ''}`);
+        } else {
+          alert(`Failed to ${action} entry: ${error.error}`);
+        }
       }
     } catch (error) {
       console.error(`Error ${action}ing entry:`, error);
@@ -761,21 +658,6 @@ const SafetyPage: React.FC = () => {
     return false;
   };
 
-  const getWeatherIcon = (weather: string) => {
-    switch (weather?.toLowerCase()) {
-      case 'sunny':
-        return '☀️';
-      case 'cloudy':
-        return '☁️';
-      case 'rainy':
-        return '🌧️';
-      case 'stormy':
-        return '⛈️';
-      default:
-        return '🌤️';
-    }
-  };
-
   const getStats = () => {
     const totalInspections = safetyEntries.length;
     const averageScore = totalInspections > 0 
@@ -821,16 +703,43 @@ const SafetyPage: React.FC = () => {
 
   const getWorkflowStatusBadge = (entry: SafetyEntry) => {
     const statusColors = {
-      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-      in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-      completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-      rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
+      completed: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+      rejected: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
+      permanently_rejected: 'bg-red-200 text-red-900 dark:bg-red-900/40 dark:text-red-300'
     };
+
+    // Get current node completion info
+    const currentNode = entry.safety_workflow_nodes?.find(
+      node => node.node_order === entry.current_node_index
+    );
     
+    let statusText = entry.status.charAt(0).toUpperCase() + entry.status.slice(1);
+    let completionInfo = '';
+    
+    if (entry.status === 'permanently_rejected') {
+      statusText = 'Permanently Rejected';
+    } else if (currentNode && entry.status === 'pending') {
+      const completionCount = currentNode.completion_count || 0;
+      const maxCompletions = currentNode.max_completions || 2;
+      completionInfo = ` (${completionCount}/${maxCompletions})`;
+      
+      if (completionCount >= maxCompletions && !currentNode.can_re_edit) {
+        statusText = 'Limit Reached';
+      }
+    }
+
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[entry.status as keyof typeof statusColors] || statusColors.pending}`}>
-        {entry.status?.charAt(0).toUpperCase() + entry.status?.slice(1) || 'Pending'}
-      </span>
+      <div className="flex flex-col items-start">
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[entry.status as keyof typeof statusColors] || statusColors.pending}`}>
+          {statusText}
+        </span>
+        {completionInfo && (
+          <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Completions{completionInfo}
+          </span>
+        )}
+      </div>
     );
   };
 
@@ -1456,57 +1365,63 @@ const SafetyPage: React.FC = () => {
                 transition={{ duration: 0.5, delay: 0.3 }}
               >
                 {filteredEntries.map((entry) => {
-                  const statusColor = entry.status === 'completed' 
-                    ? 'from-green-500 to-green-600' 
-                    : entry.status === 'pending' 
-                      ? 'from-yellow-500 to-yellow-600' 
-                      : 'from-red-500 to-red-600';
-                  
                   return (
                     <Card 
                       key={entry.id} 
-                      className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
-                      hover
+                      className="p-0 overflow-hidden hover:shadow-xl transition-all duration-300 border border-secondary-100 dark:border-dark-700"
                     >
-                      <div className={`h-2 w-full bg-gradient-to-r ${statusColor}`}></div>
-                      <div className="p-4">
-                        <div className="flex justify-between items-start">
-                          <h3 className="text-lg font-medium">{entry.inspection_type}</h3>
-                          {getWorkflowStatusBadge(entry)}
+                      <div className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-800/20 p-4">
+                        <div className="flex justify-between mb-2">
+                          <div className="flex items-center">
+                            <RiShieldCheckLine className="text-red-600 dark:text-red-400 mr-2" />
+                            <span className="font-medium text-red-900 dark:text-red-300">{entry.date}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            {getWorkflowStatusBadge(entry)}
+                          </div>
                         </div>
                         
-                        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                        <h3 className="font-display font-semibold text-lg text-secondary-900 dark:text-white mb-1">
+                          {entry.inspection_type}
+                        </h3>
+                        
+                        <div className="flex items-center text-sm text-secondary-600 dark:text-secondary-400">
+                          <RiUserLine className="mr-1" />
+                          <span className="ml-1">Inspector: {entry.inspector}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="p-4">
+                        <div className="grid grid-cols-2 gap-4 mb-4">
                           <div>
-                            <p className="text-secondary-500 dark:text-secondary-400">Date</p>
-                            <p className="font-medium">{entry.date}</p>
+                            <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
+                              Safety Score:
+                            </h4>
+                            <p className={`font-medium text-lg ${getScoreColorClass(entry.safety_score)}`}>
+                              {entry.safety_score}%
+                            </p>
                           </div>
                           <div>
-                            <p className="text-secondary-500 dark:text-secondary-400">Score</p>
-                            <p className={`font-medium ${getScoreColorClass(entry.safety_score)}`}>{entry.safety_score}%</p>
+                            <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
+                              Findings:
+                            </h4>
+                            <p className="text-secondary-600 dark:text-secondary-400 font-medium">
+                              {entry.findings_count} Issues
+                            </p>
                           </div>
-                          <div>
-                            <p className="text-secondary-500 dark:text-secondary-400">Inspector</p>
-                            <p className="font-medium">{entry.inspector}</p>
-                          </div>
-                          <div>
-                            <p className="text-secondary-500 dark:text-secondary-400">Findings</p>
-                            <p className="font-medium">{entry.findings_count}</p>
-                          </div>
+                        </div>
+                        
+                        <div className="mb-4">
+                          <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-2">
+                            Project:
+                          </h4>
+                          <p className="text-secondary-600 dark:text-secondary-400 line-clamp-1">
+                            {entry.project}
+                          </p>
                         </div>
                         
                         <div className="flex justify-end mt-4">
                           <div className="flex space-x-2">
-                            {canUserViewEntry(entry) && (
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleViewForm(entry)}
-                                leftIcon={<RiFileWarningLine />}
-                                className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                              >
-                                {canUserUpdateForm(entry) ? 'Edit Form' : 'View Form'}
-                              </Button>
-                            )}
                             {canUserViewEntry(entry) && (
                               <Button 
                                 variant="outline" 
@@ -1524,7 +1439,7 @@ const SafetyPage: React.FC = () => {
                                 variant="outline" 
                                 size="sm"
                                 onClick={() => handleDeleteEntry(entry)}
-                                leftIcon={<RiCloseLine />}
+                                leftIcon={<RiDeleteBinLine />}
                                 className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
                               >
                                 Delete
@@ -1597,17 +1512,6 @@ const SafetyPage: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                           <div className="flex justify-end space-x-2">
-                            {canUserViewEntry(entry) && (
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleViewForm(entry)}
-                                leftIcon={<RiFileWarningLine />}
-                                className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                              >
-                                {canUserUpdateForm(entry) ? 'Edit Form' : 'View Form'}
-                              </Button>
-                            )}
                             {canUserViewEntry(entry) && (
                               <Button 
                                 variant="outline" 
@@ -1948,273 +1852,284 @@ const SafetyPage: React.FC = () => {
       </AnimatePresence>
 
       {/* Entry Details Dialog */}
-      <AnimatePresence>
-        {showDetails && selectedSafetyEntry && (
-          <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-            onClick={() => setShowDetails(false)}
-          >
-            <motion.div
-              className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-6 space-y-6">
-                <div className="flex justify-between items-center bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
-                  <div className="text-lg font-bold text-red-900 dark:text-red-300 flex items-center">
-                    <RiShieldCheckLine className="mr-2 text-red-600 dark:text-red-400" />
-                    Safety Inspection - {selectedSafetyEntry.date}
-                  </div>
-                  <div className="px-3 py-1 bg-white dark:bg-gray-700 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
-                    {selectedSafetyEntry.project}
-                  </div>
+      <Dialog
+        isOpen={showDetails}
+        onClose={() => setShowDetails(false)}
+        title="Safety Inspection Details"
+      >
+        {selectedSafetyEntry && (
+          <div className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center bg-primary-50 dark:bg-primary-900/20 p-3 rounded-lg">
+              <div className="text-lg font-bold text-primary-900 dark:text-primary-300 flex items-center">
+                <RiShieldCheckLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                Safety Inspection - {selectedSafetyEntry.date}
+              </div>
+              <div className="flex items-center space-x-2">
+                 {getWorkflowStatusBadge(selectedSafetyEntry)}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <RiUserLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Inspector</span>
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiUserLine className="mr-2 text-red-600 dark:text-red-400" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Inspector</span>
-                    </div>
-                    <div className="font-medium">{selectedSafetyEntry.inspector}</div>
+                <div className="font-medium">{selectedSafetyEntry.inspector}</div>
+              </div>
+              
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <div className="mr-2 text-primary-600 dark:text-primary-400">
+                    <RiShieldCheckLine />
                   </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiShieldCheckLine className="mr-2 text-red-600 dark:text-red-400" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Inspection Type</span>
-                    </div>
-                    <div className="font-medium">{selectedSafetyEntry.inspection_type}</div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiPercentLine className="mr-2 text-red-600 dark:text-red-400" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Safety Score</span>
-                    </div>
-                    <div className={`font-medium text-lg ${getScoreColorClass(selectedSafetyEntry.safety_score)}`}>
-                      {selectedSafetyEntry.safety_score}%
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiAlarmWarningLine className="mr-2 text-red-600 dark:text-red-400" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Findings Count</span>
-                    </div>
-                    <div className="font-medium">{selectedSafetyEntry.findings_count}</div>
-                  </div>
+                  <span className="text-sm font-medium uppercase tracking-wide">Inspection Type</span>
                 </div>
-                
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                    <RiErrorWarningLine className="mr-2 text-red-600 dark:text-red-400" />
-                    <span className="text-sm font-medium uppercase tracking-wide">Incidents Reported</span>
-                  </div>
-                  <div className="whitespace-pre-line">{selectedSafetyEntry.incidents_reported || 'None'}</div>
+                <div className="font-medium">{selectedSafetyEntry.inspection_type}</div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+               <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <RiPercentLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Safety Score</span>
                 </div>
-                
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                    <RiSettings4Line className="mr-2 text-red-600 dark:text-red-400" />
-                    <span className="text-sm font-medium uppercase tracking-wide">Corrective Actions</span>
-                  </div>
-                  <div className="whitespace-pre-line">{selectedSafetyEntry.corrective_actions || 'None'}</div>
-                </div>
-                
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                    <RiFileWarningLine className="mr-2 text-red-600 dark:text-red-400" />
-                    <span className="text-sm font-medium uppercase tracking-wide">Notes</span>
-                  </div>
-                  <div className="whitespace-pre-line">{selectedSafetyEntry.notes || 'None'}</div>
-                </div>
-                
-                {/* Workflow Status Section */}
-                {selectedSafetyEntry.safety_workflow_nodes && selectedSafetyEntry.safety_workflow_nodes.length > 0 && (
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-4">
-                      <RiFlowChart className="mr-2 text-red-600 dark:text-red-400" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      {selectedSafetyEntry.safety_workflow_nodes
-                        .sort((a: any, b: any) => a.node_order - b.node_order)
-                        .map((node: any) => (
-                          <div key={node.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                            <div className="flex items-center">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                                node.status === 'completed' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
-                                node.status === 'pending' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                                node.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' :
-                                'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400'
-                              }`}>
-                                {node.status === 'completed' ? <RiCheckLine /> :
-                                 node.status === 'pending' ? <RiNotificationLine /> :
-                                 node.status === 'rejected' ? <RiCloseLine /> :
-                                 <RiSettings4Line />}
-                              </div>
-                              <div>
-                                <div className="font-medium text-gray-900 dark:text-white">{node.node_name}</div>
-                                {node.executor_name && (
-                                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                                    Assigned to: {node.executor_name}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                              node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                              node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                              'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-                            }`}>
-                              {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Comments Section */}
-                {selectedSafetyEntry.safety_comments && selectedSafetyEntry.safety_comments.length > 0 && (
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-4">
-                      <RiNotificationLine className="mr-2 text-red-600 dark:text-red-400" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      {selectedSafetyEntry.safety_comments
-                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                        .map((comment: any) => (
-                          <div key={comment.id} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="font-medium text-gray-900 dark:text-white">{comment.user_name}</div>
-                              <div className="flex items-center space-x-2">
-                                {comment.action && (
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                    comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                                  }`}>
-                                    {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
-                                  </span>
-                                )}
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                  {new Date(comment.created_at).toLocaleDateString()}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-gray-700 dark:text-gray-300">{comment.comment}</div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-                
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                  {/* First row - Export and Delete buttons */}
-                  <div className="flex justify-end space-x-3 mb-3">
-                    <Button 
-                      variant="outline"
-                      leftIcon={<RiDownload2Line />}
-                    >
-                      Export
-                    </Button>
-                    <Button 
-                      variant="outline"
-                      leftIcon={<RiPrinterLine />}
-                    >
-                      Print
-                    </Button>
-                    
-                    {/* Admin delete button */}
-                    {user?.role === 'admin' && (
-                      <Button 
-                        variant="outline"
-                        leftIcon={<RiDeleteBinLine />}
-                        onClick={() => {
-                          setShowDetails(false);
-                          handleDeleteEntry(selectedSafetyEntry);
-                        }}
-                        className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      >
-                        Delete Entry
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Second row - Workflow action buttons */}
-                  <div className="flex justify-end space-x-3">
-                    {/* Workflow Action Buttons - show for pending entries and rejected entries where user has permissions */}
-                    {(selectedSafetyEntry.status === 'pending' || selectedSafetyEntry.status === 'rejected') && (
-                      <>
-                        {canUserEditEntry(selectedSafetyEntry) && (
-                          <Button 
-                            variant="outline"
-                            leftIcon={<RiFileWarningLine />}
-                            onClick={() => {
-                              setShowDetails(false);
-                              handleViewForm(selectedSafetyEntry);
-                            }}
-                          >
-                            Edit Form
-                          </Button>
-                        )}
-                        
-                        {canUserApproveEntry(selectedSafetyEntry) && (
-                          <>
-                            {/* Back to Previous Node Button (if not at first node) */}
-                            {selectedSafetyEntry.current_node_index > 0 && (
-                              <Button 
-                                variant="outline"
-                                leftIcon={<RiArrowLeftLine />}
-                                onClick={() => handleWorkflowAction('back')}
-                                className="text-orange-600 border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                              >
-                                Send Back
-                              </Button>
-                            )}
-                            <Button 
-                              variant="outline"
-                              leftIcon={<RiCloseLine />}
-                              onClick={() => handleWorkflowAction('reject')}
-                              className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            >
-                              Reject
-                            </Button>
-                            <Button 
-                              variant="primary"
-                              leftIcon={<RiCheckLine />}
-                              onClick={() => handleWorkflowAction('approve')}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              {selectedSafetyEntry.current_node_index === 1 ? 'Complete' : 'Approve'}
-                            </Button>
-                          </>
-                        )}
-                      </>
-                    )}
-                    
-                    <Button 
-                      variant="primary"
-                      onClick={() => setShowDetails(false)}
-                    >
-                      Close
-                    </Button>
-                  </div>
+                <div className={`font-medium text-lg ${getScoreColorClass(selectedSafetyEntry.safety_score)}`}>
+                  {selectedSafetyEntry.safety_score}%
                 </div>
               </div>
-            </motion.div>
+              
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <RiAlarmWarningLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Findings Count</span>
+                </div>
+                <div className="font-medium">{selectedSafetyEntry.findings_count}</div>
+              </div>
+            </div>
+            
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                <RiErrorWarningLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <span className="text-sm font-medium uppercase tracking-wide">Incidents Reported</span>
+              </div>
+              <div className="whitespace-pre-line">{selectedSafetyEntry.incidents_reported || 'None'}</div>
+            </div>
+            
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                <RiSettings4Line className="mr-2 text-primary-600 dark:text-primary-400" />
+                <span className="text-sm font-medium uppercase tracking-wide">Corrective Actions</span>
+              </div>
+              <div className="whitespace-pre-line">{selectedSafetyEntry.corrective_actions || 'None'}</div>
+            </div>
+            
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                <RiFileWarningLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <span className="text-sm font-medium uppercase tracking-wide">Notes</span>
+              </div>
+              <div className="whitespace-pre-line">{selectedSafetyEntry.notes || 'None'}</div>
+            </div>
+            
+            {/* Workflow Status Section */}
+            {selectedSafetyEntry.safety_workflow_nodes && selectedSafetyEntry.safety_workflow_nodes.length > 0 && (
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
+                  <RiFlowChart className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
+                </div>
+                
+                <div className="space-y-3">
+                  {selectedSafetyEntry.safety_workflow_nodes
+                    .sort((a: any, b: any) => a.node_order - b.node_order)
+                    .map((node: any) => (
+                      <div key={node.id} className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-dark-700 rounded-lg">
+                        <div className="flex items-center">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                            node.status === 'completed' ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400' :
+                            node.status === 'pending' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                            node.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400' :
+                            'bg-gray-100 text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'
+                          }`}>
+                            {node.status === 'completed' ? <RiCheckLine /> :
+                             node.status === 'pending' ? <RiNotificationLine /> :
+                             node.status === 'rejected' ? <RiCloseLine /> :
+                             <RiMoreLine />}
+                          </div>
+                          <div>
+                            <div className="font-medium text-secondary-900 dark:text-white">{node.node_name}</div>
+                            {node.executor_name && (
+                              <div className="text-sm text-secondary-600 dark:text-secondary-400">
+                                Assigned to: {node.executor_name}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                          node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                          node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                          'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+                        }`}>
+                          {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Comments Section */}
+            {selectedSafetyEntry.safety_comments && selectedSafetyEntry.safety_comments.length > 0 && (
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
+                  <RiChat3Line className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
+                </div>
+                
+                <div className="space-y-3">
+                  {selectedSafetyEntry.safety_comments
+                    .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                    .map((comment: any) => (
+                      <div key={comment.id} className="p-3 bg-secondary-50 dark:bg-dark-700 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-medium text-secondary-900 dark:text-white">{comment.user_name}</div>
+                          <div className="flex items-center space-x-2">
+                            {comment.action && (
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                                comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                                'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+                              }`}>
+                                {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
+                              </span>
+                            )}
+                            <span className="text-xs text-secondary-500 dark:text-secondary-400">
+                              {new Date(comment.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-secondary-700 dark:text-secondary-300">{comment.comment}</div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="pt-6 mt-6 border-t border-white/10">
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
+                {/* Left side: Utility actions */}
+                <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
+                   <Button 
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<RiDownload2Line />}
+                    className="text-secondary-400 hover:text-white hover:bg-white/5"
+                  >
+                    Export
+                  </Button>
+                  <Button 
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<RiPrinterLine />}
+                    className="text-secondary-400 hover:text-white hover:bg-white/5"
+                  >
+                    Print
+                  </Button>
+                  
+                  {/* Admin delete button */}
+                  {user?.role === 'admin' && (
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={<RiDeleteBinLine />}
+                      onClick={() => {
+                        setShowDetails(false);
+                        handleDeleteEntry(selectedSafetyEntry);
+                      }}
+                      className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+
+                {/* Right side: Workflow actions */}
+                <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-end">
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDetails(false)}
+                    className="border-white/10 hover:bg-white/5"
+                  >
+                    Close
+                  </Button>
+
+                  {/* View/Edit Form Button */}
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    leftIcon={canUserUpdateForm(selectedSafetyEntry) ? <RiEditLine /> : <RiFileListLine />}
+                    onClick={() => {
+                      setShowDetails(false);
+                      handleViewForm(selectedSafetyEntry);
+                    }}
+                    className="hover:bg-white/5"
+                  >
+                    {canUserUpdateForm(selectedSafetyEntry) ? 'Edit Form' : 'View Form'}
+                  </Button>
+
+                  {/* Workflow Action Buttons */}
+                  {(selectedSafetyEntry.status === 'pending' || selectedSafetyEntry.status === 'rejected') && (
+                    <>
+                      {/* Send Back (if applicable) */}
+                      {canUserApproveEntry(selectedSafetyEntry) && (selectedSafetyEntry.current_node_index || 0) > 0 && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<RiArrowLeftLine />}
+                          onClick={() => handleWorkflowAction('back')}
+                          className="text-orange-500 border-orange-500/30 hover:bg-orange-500/10 hover:border-orange-500"
+                        >
+                          Send Back
+                        </Button>
+                      )}
+                      
+                      {/* Reject */}
+                      {canUserApproveEntry(selectedSafetyEntry) && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<RiCloseLine />}
+                          onClick={() => handleWorkflowAction('reject')}
+                          className="text-red-500 border-red-500/30 hover:bg-red-500/10 hover:border-red-500"
+                        >
+                          Reject
+                        </Button>
+                      )}
+
+                      {/* Approve/Complete */}
+                      {canUserApproveEntry(selectedSafetyEntry) && (
+                        <Button 
+                          variant="primary"
+                          size="sm"
+                          leftIcon={<RiCheckLine />}
+                          onClick={() => handleWorkflowAction('approve')}
+                          className="bg-portfolio-orange hover:bg-portfolio-orange/80 text-white border-none shadow-lg shadow-portfolio-orange/20"
+                        >
+                          {(selectedSafetyEntry.current_node_index === 1) ? 'Complete' : 'Approve'}
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
-      </AnimatePresence>
+      </Dialog>
 
       {/* Form View Modal */}
       {showFormView && selectedSafetyEntry && (
@@ -2235,6 +2150,13 @@ const SafetyPage: React.FC = () => {
                 onClose={() => setShowFormView(false)}
                 onSave={handleFormUpdate}
                 initialData={selectedSafetyEntry?.form_data}
+                isEditMode={canUserEditEntry(selectedSafetyEntry) || canUserUpdateForm(selectedSafetyEntry)}
+                readOnly={!canUserEditEntry(selectedSafetyEntry) && !canUserUpdateForm(selectedSafetyEntry)}
+                title={`${
+                  canUserEditEntry(selectedSafetyEntry) ? 'Edit' : 
+                  canUserUpdateForm(selectedSafetyEntry) ? 'Update' : 
+                  'View'
+                } Safety Inspection - ${selectedSafetyEntry.date}`}
               />
             </motion.div>
           </div>

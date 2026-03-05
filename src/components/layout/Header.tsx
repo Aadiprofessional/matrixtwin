@@ -10,6 +10,7 @@ import {
   RiSearchLine,
   RiArrowRightLine,
   RiNotification3Line,
+  RiNotification3Fill,
   RiCloseLine,
   RiSunLine,
   RiMoonLine,
@@ -289,21 +290,26 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
   }, [searchQuery, selectedProject]);
 
   const handleSearchSelect = (result: any) => {
-    setSearchQuery('');
-    setSearchResults([]);
-    setIsSearchFocused(false);
-    setIsSearchExpanded(false);
-    
     // Navigate to the specific form detail page
     // The path structure matches what's used in SearchPage.tsx
     // result.type should be 'diary', 'safety', etc.
     // result.projectId and result.id are required
-    if (result.projectId && result.type && result.id) {
-      let type = result.type;
-      if (type === 'inspection' || type === 'survey') {
-        type = 'rfi';
+    const projectId = result.projectId || result.project_id;
+    const type = result.type || result.form_type;
+    const id = result.id || result.form_id;
+
+    if (projectId && type && id) {
+      let finalType = type;
+      if (finalType === 'inspection' || finalType === 'survey') {
+        finalType = 'rfi';
       }
-      navigate(`/dashboard/${result.projectId}/${type}?id=${result.id}`);
+      navigate(`/dashboard/${projectId}/${finalType}?id=${id}`);
+      
+      // Close search after navigation
+      setSearchQuery('');
+      setSearchResults([]);
+      setIsSearchFocused(false);
+      setIsSearchExpanded(false);
     }
   };
 
@@ -399,13 +405,16 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                   setIsSearchExpanded(true);
                 }}
                 onBlur={() => {
-                  setIsSearchFocused(false);
-                  if (window.innerWidth < 768 && !searchQuery) {
-                    setTimeout(() => setIsSearchVisible(false), 200);
-                  }
-                  if (window.innerWidth >= 768 && !searchQuery) {
-                    setTimeout(() => setIsSearchExpanded(false), 200);
-                  }
+                  // Delay closing to allow click events on dropdown items
+                  setTimeout(() => {
+                    setIsSearchFocused(false);
+                    if (window.innerWidth < 768 && !searchQuery) {
+                      setIsSearchVisible(false);
+                    }
+                    if (window.innerWidth >= 768 && !searchQuery) {
+                      setIsSearchExpanded(false);
+                    }
+                  }, 200);
                 }}
                 className="pl-10 pr-10 py-2 h-full w-full bg-white/5 border border-white/10 focus:border-portfolio-orange/50 rounded-full text-white shadow-inner focus:shadow-portfolio-orange/20 transition-all duration-300 placeholder-gray-500"
               />
@@ -466,7 +475,10 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                       {searchResults.map((result, index) => (
                         <li 
                           key={result.id || index}
-                          onClick={() => handleSearchSelect(result)}
+                          onMouseDown={(e) => {
+                            e.preventDefault(); // Prevent input blur
+                            handleSearchSelect(result);
+                          }}
                           className="px-4 py-3 hover:bg-white/5 cursor-pointer border-b border-white/5 last:border-0 transition-colors"
                         >
                           <div className="flex items-center justify-between">
@@ -613,7 +625,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
           >
             <div className="text-xl">
               <IconContext.Provider value={{ className: "text-xl" }}>
-                <div><IconWrapper icon="RiBellLine" /></div>
+                <div><RiNotification3Fill className="text-xl" /></div>
               </IconContext.Provider>
             </div>
             {unreadCount > 0 && (

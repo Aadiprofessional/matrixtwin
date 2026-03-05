@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { RiAddLine, RiBrushLine, RiCheckboxCircleLine, RiCloseCircleLine, RiCalendarCheckLine, RiTaskLine, RiEyeLine, RiMapPinLine, RiFilterLine, RiUploadCloud2Line, RiArrowLeftRightLine, RiPercentLine, RiCheckLine, RiArrowRightLine, RiArrowLeftLine, RiListCheck, RiLayoutGridLine, RiFilter3Line, RiCloseLine, RiLoader4Line, RiFlowChart, RiSettings4Line, RiUserLine, RiSearchLine, RiArrowDownLine, RiDropLine, RiNotificationLine, RiErrorWarningLine, RiFileWarningLine, RiAlertLine, RiMapPin2Line, RiCalendarLine, RiTeamLine, RiFileTextLine, RiDownload2Line, RiPrinterLine, RiDeleteBinLine } from 'react-icons/ri';
-import { IconContext } from 'react-icons';
+import { Input } from '../components/ui/Input';
+import { RiAddLine, RiBrushLine, RiCheckboxCircleLine, RiCalendarCheckLine, RiTaskLine, RiMapPinLine, RiPercentLine, RiCheckLine, RiArrowRightLine, RiArrowLeftLine, RiFilter3Line, RiCloseLine, RiLoader4Line, RiFlowChart, RiSettings4Line, RiUserLine, RiSearchLine, RiNotificationLine, RiFileWarningLine, RiAlertLine, RiTeamLine, RiFileTextLine, RiDownload2Line, RiPrinterLine, RiDeleteBinLine, RiFileListLine } from 'react-icons/ri';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { DailyCleaningInspectionTemplate } from '../components/forms/DailyCleaningInspectionTemplate';
 import { Dialog } from '../components/ui/Dialog';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
-import { emailService } from '../services/emailService';
 import { projectService } from '../services/projectService';
+import { PeopleSelectorModal } from '../components/ui/PeopleSelectorModal';
 
 interface User {
   id: string;
@@ -57,154 +57,22 @@ interface CleansingEntry {
   updated_at?: string;
 }
 
-interface CleansingRecord {
-  id: number;
-  date: string;
-  area: string;
-  status: 'completed' | 'pending' | 'failed';
-  notes: string;
-  project: string;
-  completedBy?: string;
-  imageUrl?: string;
-}
-
-interface AreaStats {
-  area: string;
-  cleanlinessScore: number;
-  lastCleaned: string;
-  nextDue: string;
-  status: 'clean' | 'due' | 'overdue';
-}
-
 // People selector modal component
-const PeopleSelectorModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onSelect: (user: User) => void;
-  title: string;
-  users: User[];
-  loading: boolean;
-}> = ({ isOpen, onClose, onSelect, title, users, loading }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Filter users based on search
-  const filteredUsers = searchQuery 
-    ? users.filter(user => 
-        user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : users;
-  
-  if (!isOpen) return null;
-  
-  return (
-    <div 
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-      onClick={onClose}
-    >
-      <motion.div
-        className="bg-dark-900/80 backdrop-blur-md border border-white/10 shadow-lg rounded-lg overflow-hidden w-full max-w-md max-h-[80vh]"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <h3 className="text-lg font-semibold flex items-center">
-            <RiUserLine className="mr-2" />
-            {title}
-          </h3>
-          <button 
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            onClick={onClose}
-          >
-            <RiCloseLine className="text-xl" />
-          </button>
-        </div>
-        
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="relative">
-            <RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name, role, or email..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
-        
-        <div className="overflow-y-auto max-h-[400px] p-2">
-          {loading ? (
-            <div className="p-4 text-center text-gray-600 dark:text-gray-400">
-              <RiLoader4Line className="animate-spin text-2xl mx-auto mb-2" />
-              Loading users...
-            </div>
-          ) : filteredUsers.length > 0 ? (
-            <div className="grid grid-cols-1 gap-2">
-              {filteredUsers.map(user => (
-                <div 
-                  key={user.id}
-                  className="p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md cursor-pointer transition-colors flex items-center"
-                  onClick={() => {
-                    onSelect(user);
-                    onClose();
-                  }}
-                >
-                  {user.avatar ? (
-                    <img 
-                      src={user.avatar} 
-                      alt={user.name}
-                      className="w-10 h-10 rounded-full mr-3"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-portfolio-orange/10 text-portfolio-orange border border-portfolio-orange/20 flex items-center justify-center font-medium mr-3">
-                      {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                    </div>
-                  )}
-                  <div className="flex-grow">
-                    <div className="font-medium text-gray-900 dark:text-white">{user.name}</div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">{user.role}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-500">{user.email}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-4 text-center text-gray-500 dark:text-gray-400">
-              No users found matching "{searchQuery}"
-            </div>
-          )}
-        </div>
-      </motion.div>
-    </div>
-  );
-};
+// Removed: imported from ../components/ui/PeopleSelectorModal
 
 const CleansingPage: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
-  const [showNewRecord, setShowNewRecord] = useState(false);
-  const [showUploadView, setShowUploadView] = useState(false);
-  const [recordDate, setRecordDate] = useState(new Date().toISOString().split('T')[0]);
-  const [recordArea, setRecordArea] = useState('');
-  const [recordNotes, setRecordNotes] = useState('');
-  const [showGridView, setShowGridView] = useState(false);
-  const [selectedAreaStats, setSelectedAreaStats] = useState<AreaStats | null>(null);
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // API integration states
-  const [loading, setLoading] = useState(true);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [cleansingEntries, setCleansingEntries] = useState<CleansingEntry[]>([]);
+  const [showNewRecord, setShowNewRecord] = useState(false);
   const [selectedCleansingEntry, setSelectedCleansingEntry] = useState<CleansingEntry | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showFormView, setShowFormView] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   
   // Process flow states
   const [showProcessFlow, setShowProcessFlow] = useState(false);
@@ -215,82 +83,20 @@ const CleansingPage: React.FC = () => {
     { id: 'end', type: 'end', name: 'Complete', editAccess: false, settings: {} }
   ]);
   const [selectedNode, setSelectedNode] = useState<ProcessNode | null>(null);
-  const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
   const [showPeopleSelector, setShowPeopleSelector] = useState(false);
   const [peopleSelectorType, setPeopleSelectorType] = useState<'executor' | 'cc'>('executor');
   
-  // Add filter state
-  const [showFilters, setShowFilters] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
-  const [activeFilterTab, setActiveFilterTab] = useState('status');
-  
-  // Add state for multi-step form
-  const [formStep, setFormStep] = useState<number>(1);
-  const [formData, setFormData] = useState<Record<string, any>>({});
-  const [assignees, setAssignees] = useState<string[]>([]);
-
-  // Fetch cleansing entries on component mount and when project changes
-  const location = useLocation();
-  useEffect(() => {
-    if (user?.id) {
-      fetchCleansingEntries();
-      fetchUsers();
-    }
-  }, [user?.id, selectedProject?.id]);
-
-  // Handle URL query parameters to open specific form
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const id = params.get('id');
-    if (id && cleansingEntries.length > 0) {
-      const entry = cleansingEntries.find(e => e.id === id);
-      if (entry) {
-        setSelectedCleansingEntry(entry);
-        setShowDetails(true);
-      }
-    }
-  }, [location.search, cleansingEntries]);
-
-  // Calculate metrics from cleansing entries
-  const getMetrics = () => {
-    const totalEntries = cleansingEntries.length;
-    const averageScore = totalEntries > 0 
-      ? Math.round(cleansingEntries.reduce((sum, entry) => sum + (entry.cleanliness_score || 0), 0) / totalEntries)
-      : 0;
-    
-    // Mock area statistics for now - in a real app this would come from API
-    const cleanAreas = cleansingEntries.filter(entry => entry.cleanliness_score >= 90).length;
-    const dueAreas = cleansingEntries.filter(entry => entry.cleanliness_score >= 70 && entry.cleanliness_score < 90).length;
-    const overdueAreas = cleansingEntries.filter(entry => entry.cleanliness_score < 70).length;
-    const complianceRate = totalEntries > 0 ? Math.round((cleanAreas / totalEntries) * 100) : 0;
-    
-    return {
-      averageScore,
-      cleanAreas,
-      dueAreas,
-      overdueAreas,
-      complianceRate
-    };
-  };
-
-  const metrics = getMetrics();
-
-  // Mock area statistics for now - in a real app this would come from API
-  const areaStats: AreaStats[] = [
-    { area: 'Main Entrance', cleanlinessScore: 95, lastCleaned: '2024-01-15', nextDue: '2024-01-22', status: 'clean' },
-    { area: 'Office Area', cleanlinessScore: 88, lastCleaned: '2024-01-14', nextDue: '2024-01-21', status: 'due' },
-    { area: 'Storage Room', cleanlinessScore: 65, lastCleaned: '2024-01-10', nextDue: '2024-01-17', status: 'overdue' },
-    { area: 'Break Room', cleanlinessScore: 92, lastCleaned: '2024-01-15', nextDue: '2024-01-22', status: 'clean' }
-  ];
+  // Cleansing entries from API
+  const [cleansingEntries, setCleansingEntries] = useState<CleansingEntry[]>([]);
 
   // Fetch cleansing entries from API with project filtering
-  const fetchCleansingEntries = async () => {
+  const fetchCleansingEntries = useCallback(async () => {
+    if (!user) return;
+
     try {
       setLoading(true);
       const projectParam = selectedProject?.id ? `?projectId=${selectedProject.id}` : '';
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/cleansing/list/${user?.id}${projectParam}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/cleansing/list/${user.id}${projectParam}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -307,10 +113,10 @@ const CleansingPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, selectedProject?.id]);
 
   // Fetch users from API (using project members)
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     if (!selectedProject?.id) return;
     
     try {
@@ -342,8 +148,29 @@ const CleansingPage: React.FC = () => {
     } finally {
       setLoadingUsers(false);
     }
-  };
+  }, [selectedProject?.id, user]);
 
+  // Fetch cleansing entries on component mount and when project changes
+  useEffect(() => {
+    if (user?.id) {
+      fetchCleansingEntries();
+      fetchUsers();
+    }
+  }, [user?.id, selectedProject?.id, fetchCleansingEntries, fetchUsers]);
+
+  // Handle URL query parameters for direct navigation
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    if (id && cleansingEntries.length > 0) {
+      const entry = cleansingEntries.find(e => e.id === id);
+      if (entry) {
+        setSelectedCleansingEntry(entry);
+        setShowDetails(true);
+      }
+    }
+  }, [location.search, cleansingEntries]);
+  
   // Filtered entries based on search
   const filteredEntries = cleansingEntries.filter(entry => 
     entry.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -351,14 +178,13 @@ const CleansingPage: React.FC = () => {
     entry.area.toLowerCase().includes(searchQuery.toLowerCase()) ||
     entry.date.includes(searchQuery)
   );
-
+  
+  // Process flow helper functions
   const addNewNode = () => {
     const newNode: ProcessNode = {
       id: `node_${Date.now()}`,
       type: 'node',
       name: 'New Process Step',
-      editAccess: true,
-      ccRecipients: [],
       settings: {}
     };
     
@@ -369,12 +195,12 @@ const CleansingPage: React.FC = () => {
     setProcessNodes(updatedNodes);
     setSelectedNode(newNode);
   };
-
+  
   const openPeopleSelector = (type: 'executor' | 'cc') => {
     setPeopleSelectorType(type);
     setShowPeopleSelector(true);
   };
-
+  
   const handleUserSelection = (selectedUser: User) => {
     if (peopleSelectorType === 'executor' && selectedNode) {
       const updatedNode = { 
@@ -403,7 +229,7 @@ const CleansingPage: React.FC = () => {
       }
     }
   };
-
+  
   const removeUserFromCc = (userId: string) => {
     if (selectedNode) {
       const updatedCcs = (selectedNode.ccRecipients || []).filter(cc => cc.id !== userId);
@@ -418,13 +244,16 @@ const CleansingPage: React.FC = () => {
       setSelectedNode(updatedNode);
     }
   };
-
+  
+  // Create new cleansing entry - now shows process flow first
   const handleCreateRecord = (formData: any) => {
     setPendingFormData(formData);
     setShowNewRecord(false);
     setShowProcessFlow(true);
+    setSelectedNode(processNodes.find(node => node.type === 'node') || null);
   };
-
+  
+  // Final save after process flow configuration
   const handleFinalSave = async () => {
     if (!pendingFormData || !user?.id) return;
     
@@ -442,10 +271,12 @@ const CleansingPage: React.FC = () => {
         formData: pendingFormData,
         processNodes: processNodesForBackend,
         createdBy: user.id,
-        projectId: selectedProject?.id
+        projectId: selectedProject?.id,
+        formId: pendingFormData.formNumber,
+        name: pendingFormData.formNumber
       });
 
-      const response = await fetch('https://server.matrixtwin.com/api/cleansing/create', {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/cleansing/create`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -455,7 +286,9 @@ const CleansingPage: React.FC = () => {
           formData: pendingFormData,
           processNodes: processNodesForBackend,
           createdBy: user.id,
-          projectId: selectedProject?.id
+          projectId: selectedProject?.id,
+          formId: pendingFormData.formNumber,
+          name: pendingFormData.formNumber
         })
       });
 
@@ -469,7 +302,6 @@ const CleansingPage: React.FC = () => {
         // Reset states
         setShowProcessFlow(false);
         setPendingFormData(null);
-        setSelectedCcs([]);
         setSelectedNode(null);
         
         // Reset process nodes to default
@@ -482,32 +314,24 @@ const CleansingPage: React.FC = () => {
         // Show success message
         alert('Cleansing entry created successfully! Notifications have been sent to assigned users.');
       } else {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch (parseError) {
-          errorData = { message: `HTTP ${response.status}: ${response.statusText}` };
-        }
-        
-        console.error('Failed to create cleansing entry:', errorData);
-        console.error('Response status:', response.status);
-        console.error('Response headers:', Object.fromEntries(response.headers.entries()));
-        
-        alert(`Failed to create cleansing entry: ${errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`}`);
+        const error = await response.json();
+        console.error('Failed to create cleansing entry:', error);
+        alert(`Failed to create cleansing entry: ${error.error}`);
       }
     } catch (error) {
       console.error('Error creating cleansing entry:', error);
       alert('Failed to create cleansing entry. Please try again.');
     }
   };
-
+  
+  // Cancel process flow and go back to form
   const handleCancelProcessFlow = () => {
-    setPendingFormData(null);
     setShowProcessFlow(false);
-    setSelectedCcs([]);
-    setSelectedNode(null);
+    setShowNewRecord(true);
+    setPendingFormData(null);
   };
-
+  
+  // View entry details
   const handleViewDetails = async (entry: CleansingEntry) => {
     try {
       // Fetch full entry details including workflow and comments
@@ -532,6 +356,7 @@ const CleansingPage: React.FC = () => {
     }
   };
 
+  // View form data
   const handleViewForm = async (entry: CleansingEntry) => {
     try {
       // Fetch full entry details including form data
@@ -556,51 +381,7 @@ const CleansingPage: React.FC = () => {
     }
   };
 
-  const handleFormUpdate = async (formData: any) => {
-    if (!selectedCleansingEntry || !user?.id) return;
-    
-    try {
-      console.log('Updating cleansing form data:', {
-        cleansingId: selectedCleansingEntry.id,
-        formData,
-        updatedBy: user.id
-      });
-
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/cleansing/${selectedCleansingEntry.id}/update`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          formData: formData,
-          action: 'update',
-          userId: user.id
-        })
-      });
-
-      if (response.ok) {
-        // Refresh cleansing entries
-        await fetchCleansingEntries();
-        setShowFormView(false);
-        setSelectedCleansingEntry(null);
-        alert('Cleansing entry updated successfully!');
-      } else {
-        const error = await response.json();
-        
-        // Handle completion limit errors
-        if (error.error?.includes('completion limit')) {
-          alert(`Cannot update form: ${error.error}\n${error.details || ''}`);
-        } else {
-          alert(`Failed to update cleansing entry: ${error.error}`);
-        }
-      }
-    } catch (error: any) {
-      console.error('Error updating cleansing entry:', error);
-      alert('Failed to update cleansing entry. Please try again.');
-    }
-  };
-
+  // Handle workflow actions (approve/reject/back to previous)
   const handleWorkflowAction = async (action: 'approve' | 'reject' | 'back') => {
     if (!selectedCleansingEntry || !user?.id) return;
 
@@ -615,13 +396,6 @@ const CleansingPage: React.FC = () => {
     }
 
     try {
-      console.log(`Attempting to ${action} cleansing entry:`, {
-        cleansingId: selectedCleansingEntry.id,
-        action,
-        comment,
-        userId: user.id
-      });
-
       const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/cleansing/${selectedCleansingEntry.id}/update`, {
         method: 'PUT',
         headers: {
@@ -660,12 +434,51 @@ const CleansingPage: React.FC = () => {
           alert(`Failed to ${action} entry: ${error.error}`);
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error(`Error ${action}ing entry:`, error);
       alert(`Failed to ${action} entry. Please try again.`);
     }
   };
 
+  // Handle form update with completion limit checking
+  const handleFormUpdate = async (formData: any) => {
+    if (!selectedCleansingEntry || !user?.id) return;
+    
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/cleansing/${selectedCleansingEntry.id}/update`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          formData: formData,
+          action: 'update',
+          userId: user.id
+        })
+      });
+
+      if (response.ok) {
+        // Refresh cleansing entries
+        await fetchCleansingEntries();
+        setShowFormView(false);
+        alert('Form updated successfully!');
+      } else {
+        const error = await response.json();
+        
+        // Handle completion limit errors
+        if (error.error?.includes('completion limit')) {
+          alert(`Cannot update form: ${error.error}\n${error.details || ''}`);
+        } else {
+          alert(`Failed to update form: ${error.error}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating form:', error);
+      alert('Failed to update form. Please try again.');
+    }
+  };
+  
   // Check if user can edit/approve the cleansing entry
   const canUserEditEntry = (entry: CleansingEntry) => {
     if (!user?.id) return false;
@@ -740,7 +553,7 @@ const CleansingPage: React.FC = () => {
     return isAssigned;
   };
 
-  // Check if user can approve/reject current workflow step (with completion limit awareness)
+  // Check if user can approve entry (with completion limit awareness)
   const canUserApproveEntry = (entry: CleansingEntry) => {
     if (!user?.id) return false;
     
@@ -827,13 +640,26 @@ const CleansingPage: React.FC = () => {
       alert('Failed to delete cleansing entry. Please try again.');
     }
   };
+  
+  // Get statistics
+  const getStats = () => {
+    const totalEntries = cleansingEntries.length;
+    const avgScore = totalEntries > 0 
+      ? Math.round(cleansingEntries.reduce((sum, entry) => sum + (entry.cleanliness_score || 0), 0) / totalEntries)
+      : 0;
+    const cleanAreas = cleansingEntries.filter(entry => entry.cleanliness_score >= 90).length;
+    
+    return { totalEntries, avgScore, cleanAreas };
+  };
+  
+  const stats = getStats();
 
+  // Get workflow status badge
   const getWorkflowStatusBadge = (entry: CleansingEntry) => {
     const statusColors = {
-      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-      in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-      completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-      rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
+      completed: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+      rejected: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
       permanently_rejected: 'bg-red-200 text-red-900 dark:bg-red-900/40 dark:text-red-300'
     };
 
@@ -842,7 +668,7 @@ const CleansingPage: React.FC = () => {
       node => node.node_order === entry.current_node_index
     );
     
-    let statusText = entry.status?.charAt(0).toUpperCase() + entry.status?.slice(1) || 'Pending';
+    let statusText = entry.status.charAt(0).toUpperCase() + entry.status.slice(1);
     let completionInfo = '';
     
     if (entry.status === 'permanently_rejected') {
@@ -856,7 +682,7 @@ const CleansingPage: React.FC = () => {
         statusText = 'Limit Reached';
       }
     }
-    
+
     return (
       <div className="flex flex-col items-start">
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[entry.status as keyof typeof statusColors] || statusColors.pending}`}>
@@ -871,100 +697,26 @@ const CleansingPage: React.FC = () => {
     );
   };
 
-  // ProcessFlowBuilder component
-  const ProcessFlowBuilder: React.FC<{
-    nodes: ProcessNode[];
-    selectedNodeId: string | null;
-    onSelectNode: (node: ProcessNode) => void;
-  }> = ({ nodes, selectedNodeId, onSelectNode }) => {
-    const getNodeColor = (type: string) => {
-      switch (type) {
-        case 'start':
-          return 'bg-green-100 border-green-600 text-green-600 dark:bg-green-900/30 dark:text-green-400';
-        case 'end':
-          return 'bg-red-100 border-red-600 text-red-600 dark:bg-red-900/30 dark:text-red-400';
-        default:
-          return 'bg-blue-100 border-blue-600 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
-      }
-    };
-    
+  if (loading) {
     return (
-      <div className="py-2">
-        <div className="flex flex-col items-center">
-          {nodes.map((node, index) => (
-            <React.Fragment key={node.id}>
-              <motion.div
-                whileHover={{ scale: 1.03 }}
-                className={`w-full max-w-sm rounded-lg p-3 border-2 cursor-pointer transition-colors ${
-                  selectedNodeId === node.id ? 'ring-2 ring-offset-2 ring-blue-600' : ''
-                } ${getNodeColor(node.type)}`}
-                onClick={() => onSelectNode(node)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">{node.name}</div>
-                  <div className="text-xs px-2 py-1 rounded-full bg-white/20 dark:bg-gray-800/50">
-                    {node.type === 'start' ? 'Start' : node.type === 'end' ? 'End' : 'Process'}
-                  </div>
-                </div>
-                
-                {node.type === 'node' && (
-                  <div className="mt-1 text-sm opacity-80">
-                    {node.executor ? `Executor: ${node.executor}` : 'No executor assigned'}
-                  </div>
-                )}
-              </motion.div>
-              
-              {/* Connector line between nodes */}
-              {index < nodes.length - 1 && (
-                <div className="w-px h-10 bg-gray-300 dark:bg-gray-600 flex justify-center items-center my-1">
-                  <div className="bg-white dark:bg-gray-800 rounded-full p-1">
-                    <RiArrowDownLine className="text-gray-500 dark:text-gray-400" />
-                  </div>
-                </div>
-              )}
-            </React.Fragment>
-          ))}
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <RiLoader4Line className="animate-spin text-4xl text-green-600 mx-auto mb-4" />
+          <p className="text-secondary-600 dark:text-secondary-400">Loading cleansing entries...</p>
         </div>
       </div>
     );
-  };
-
-  // Helper functions
-  const getFilteredAreaStats = () => {
-    return areaStats; // For now, return all areas. Can add filtering logic later
-  };
-
-  const handleAreaClick = (area: AreaStats) => {
-    console.log('Area clicked:', area);
-    // Add area-specific actions here
-  };
-
-  const getAreaStatusColor = (status: string) => {
-    switch (status) {
-      case 'clean':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-      case 'due':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
-      case 'overdue':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
-    }
-  };
-
-  const handleSubmitRecord = (formData: any) => {
-    handleCreateRecord(formData);
-  };
-
+  }
+  
   return (
-    <div className="space-y-6">
-      {/* Enhanced header with cleansing dashboard */}
+    <div className="max-w-7xl mx-auto pb-12">
+      {/* Enhanced header with gradient background */}
       <div className="relative overflow-hidden rounded-xl mb-8 bg-gradient-to-r from-green-800 via-green-700 to-emerald-800">
         <div className="absolute inset-0 bg-ai-dots opacity-20"></div>
         <div className="absolute right-0 bottom-0 w-1/3 h-1/2">
           <svg viewBox="0 0 200 200" className="absolute inset-0 h-full w-full">
             <motion.path 
-              d="M50,0 L200,0 L200,200 L100,180 Q70,160 50,120 Q30,80 50,0"
+              d="M30,0 L200,0 L200,200 L0,150 Q10,100 30,0"
               fill="url(#cleansingGradient)" 
               className="opacity-30"
               initial={{ x: 200 }}
@@ -995,6 +747,22 @@ const CleansingPage: React.FC = () => {
                 <p className="text-green-200 mt-2 max-w-2xl">
                   Monitor cleanliness standards, track cleaning activities, and maintain a clean construction environment
                 </p>
+                {/* Project indicator */}
+                {selectedProject ? (
+                  <div className="mt-3 flex items-center text-green-100">
+                    <RiTeamLine className="mr-2" />
+                    <span className="text-sm">
+                      Showing cleansing entries for: <span className="font-semibold">{selectedProject.name}</span>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex items-center text-yellow-200">
+                    <RiAlertLine className="mr-2" />
+                    <span className="text-sm">
+                      No project selected. Please select a project to view cleansing entries.
+                    </span>
+                  </div>
+                )}
               </motion.div>
             </div>
             
@@ -1016,860 +784,267 @@ const CleansingPage: React.FC = () => {
               </Button>
               <Button 
                 variant="futuristic"
-                leftIcon={<RiUploadCloud2Line />}
-                onClick={() => setShowUploadView(true)}
+                leftIcon={<RiFileTextLine />}
                 animated
                 glowing
               >
-                Upload Evidence
+                Generate Report
               </Button>
             </motion.div>
           </div>
 
-          {/* Cleanliness Score Visualization */}
+          {/* Statistics Section */}
           <motion.div 
-            className="mt-8 flex flex-col md:flex-row items-center gap-8"
+            className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
-            <div className="relative h-40 w-40">
-              <svg className="w-full h-full" viewBox="0 0 100 100">
-                <circle 
-                  cx="50" 
-                  cy="50" 
-                  r="45" 
-                  fill="none" 
-                  stroke="rgba(255,255,255,0.2)" 
-                  strokeWidth="10" 
-                />
-                <motion.circle 
-                  cx="50" 
-                  cy="50" 
-                  r="45" 
-                  fill="none" 
-                  stroke="url(#cleansinessScoreGradient)" 
-                  strokeWidth="10" 
-                  strokeLinecap="round"
-                  strokeDasharray="283"
-                  initial={{ strokeDashoffset: 283 }}
-                  animate={{ strokeDashoffset: 283 - (283 * metrics.averageScore / 100) }}
-                  transition={{ duration: 1.5, delay: 0.3 }}
-                />
-                <defs>
-                  <linearGradient id="cleansinessScoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#ef4444" />
-                    <stop offset="50%" stopColor="#eab308" />
-                    <stop offset="100%" stopColor="#22c55e" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-3xl font-bold text-white">{metrics.averageScore}%</div>
-                <div className="text-sm text-white/80">Cleanliness Score</div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
+              <div className="p-3 bg-green-500/20 rounded-full mr-4">
+                <RiBrushLine className="text-2xl text-green-300" />
+              </div>
+              <div>
+                <div className="text-sm text-green-100">Total Records</div>
+                <div className="text-2xl font-bold text-white">{stats.totalEntries}</div>
               </div>
             </div>
             
-            <div className="flex-1">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-center">
-                  <div className="text-2xl font-semibold text-white">{metrics.cleanAreas}</div>
-                  <div className="text-sm text-white/80">Clean Areas</div>
-                </div>
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-center">
-                  <div className="text-2xl font-semibold text-white">{metrics.dueAreas}</div>
-                  <div className="text-sm text-white/80">Due Soon</div>
-                </div>
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-center">
-                  <div className="text-2xl font-semibold text-white">{metrics.overdueAreas}</div>
-                  <div className="text-sm text-white/80">Overdue</div>
-                </div>
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-center">
-                  <div className="text-2xl font-semibold text-white">{metrics.complianceRate}%</div>
-                  <div className="text-sm text-white/80">Compliance Rate</div>
-                </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
+              <div className="p-3 bg-green-500/20 rounded-full mr-4">
+                <RiPercentLine className="text-2xl text-green-300" />
+              </div>
+              <div>
+                <div className="text-sm text-green-100">Average Score</div>
+                <div className="text-2xl font-bold text-white">{stats.avgScore}%</div>
+              </div>
+            </div>
+            
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
+              <div className="p-3 bg-green-500/20 rounded-full mr-4">
+                <RiCheckboxCircleLine className="text-2xl text-green-300" />
+              </div>
+              <div>
+                <div className="text-sm text-green-100">Clean Areas</div>
+                <div className="text-2xl font-bold text-white">{stats.cleanAreas}</div>
               </div>
             </div>
           </motion.div>
         </div>
       </div>
       
-      {/* Cleanliness metrics */}
-      <motion.div 
-        className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"
-        initial={{ opacity: 0, y: 20 }}
+      {/* Search and Filter Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
+        className="mb-8"
       >
-        <Card className="p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-secondary-600 dark:text-secondary-400 text-sm">Average Score</p>
-              <h3 className="text-3xl font-semibold mt-1">{metrics.averageScore}%</h3>
+        <Card className="p-5 border-none shadow-md bg-white/80 dark:bg-dark-800/80 backdrop-blur-sm">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-grow relative">
+              <Input
+                type="text"
+                placeholder={t('common.search') + " cleansing records..."}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                leftIcon={<RiSearchLine className="text-secondary-500" />}
+                className="w-full pl-10 pr-4 py-3 text-base"
+              />
+              {searchQuery && (
+                <button 
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-400 hover:text-secondary-600"
+                  onClick={() => setSearchQuery('')}
+                >
+                  <RiCloseLine />
+                </button>
+              )}
             </div>
-            <div className={`p-2 rounded-full bg-opacity-10 ${metrics.averageScore >= 90 ? 'bg-green-500' : metrics.averageScore >= 80 ? 'bg-yellow-500' : 'bg-red-500'}`}>
-              <RiPercentLine className={`text-xl ${metrics.averageScore >= 90 ? 'text-green-500' : metrics.averageScore >= 80 ? 'text-yellow-500' : 'text-red-500'}`} />
-            </div>
-          </div>
-          <div className="mt-4 w-full h-1 bg-secondary-200 dark:bg-secondary-800 rounded-full overflow-hidden">
-            <div 
-              className={`h-1 rounded-full ${metrics.averageScore >= 90 ? 'bg-green-500' : metrics.averageScore >= 80 ? 'bg-yellow-500' : 'bg-red-500'}`}
-              style={{ width: `${metrics.averageScore}%` }}
-            ></div>
-          </div>
-        </Card>
-        
-        <Card className="p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-secondary-600 dark:text-secondary-400 text-sm">Clean Areas</p>
-              <h3 className="text-3xl font-semibold mt-1 text-green-500">{metrics.cleanAreas}</h3>
-            </div>
-            <div className="p-2 rounded-full bg-green-500 bg-opacity-10">
-              <RiCheckboxCircleLine className="text-xl text-green-500" />
-            </div>
-          </div>
-          <p className="mt-2 text-sm text-green-500">{Math.round((metrics.cleanAreas / areaStats.length) * 100)}% of total areas</p>
-        </Card>
-        
-        <Card className="p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-secondary-600 dark:text-secondary-400 text-sm">Due for Cleaning</p>
-              <h3 className="text-3xl font-semibold mt-1 text-yellow-500">{metrics.dueAreas}</h3>
-            </div>
-            <div className="p-2 rounded-full bg-yellow-500 bg-opacity-10">
-              <RiCalendarCheckLine className="text-xl text-yellow-500" />
+            <div className="hidden sm:flex items-center text-secondary-500 dark:text-secondary-400">
+              <RiFilter3Line className="mr-2" />
+              <span className="text-sm">
+                {filteredEntries.length} {filteredEntries.length === 1 ? 'record' : 'records'} {t('common.found')}
+              </span>
             </div>
           </div>
-          <p className="mt-2 text-sm text-yellow-500">{Math.round((metrics.dueAreas / areaStats.length) * 100)}% of total areas</p>
-        </Card>
-        
-        <Card className="p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-secondary-600 dark:text-secondary-400 text-sm">Overdue</p>
-              <h3 className="text-3xl font-semibold mt-1 text-red-500">{metrics.overdueAreas}</h3>
-            </div>
-            <div className="p-2 rounded-full bg-red-500 bg-opacity-10">
-              <RiCloseCircleLine className="text-xl text-red-500" />
-            </div>
-          </div>
-          <p className="mt-2 text-sm text-red-500">{Math.round((metrics.overdueAreas / areaStats.length) * 100)}% of total areas</p>
         </Card>
       </motion.div>
       
-      {/* Area status cards */}
-        <motion.div 
-        className="w-full rounded-lg overflow-hidden mb-6"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-        >
-        <Card>
-          <div className="p-6 border-b border-secondary-200 dark:border-secondary-700 flex justify-between items-center">
-            <div>
-              <h2 className="text-xl font-display font-semibold">Area Status</h2>
-              <p className="text-secondary-600 dark:text-secondary-400 text-sm mt-1">
-                View cleanliness status of different areas
-              </p>
-            </div>
-            <div className="flex space-x-2">
-              <div className="bg-secondary-100 dark:bg-secondary-800 rounded-full flex p-1 shadow-sm">
-                <button 
-                  className={`px-3 py-1.5 rounded-full flex items-center transition-all duration-200 ${
-                    !showGridView 
-                      ? 'bg-white dark:bg-secondary-700 text-secondary-900 dark:text-white shadow transform scale-105' 
-                      : 'text-secondary-600 dark:text-secondary-400 hover:bg-white/10'
-                  }`}
-                  onClick={() => setShowGridView(false)}
-                >
-                  <RiListCheck className="text-lg mr-1" />
-                  <span className="text-sm font-medium">List</span>
-                </button>
-                <button 
-                  className={`px-3 py-1.5 rounded-full flex items-center transition-all duration-200 ${
-                    showGridView 
-                      ? 'bg-white dark:bg-secondary-700 text-secondary-900 dark:text-white shadow transform scale-105' 
-                      : 'text-secondary-600 dark:text-secondary-400 hover:bg-white/10'
-                  }`}
-                  onClick={() => setShowGridView(true)}
-                >
-                  <RiLayoutGridLine className="text-lg mr-1" />
-                  <span className="text-sm font-medium">Grid</span>
-                </button>
-              </div>
-              
-              {/* Filter Button */}
-              <button 
-                className={`px-4 py-2 rounded-full flex items-center transition-all duration-200 ${
-                  showFilters
-                    ? 'bg-green-600 text-white shadow-lg shadow-green-600/30'
-                    : 'bg-secondary-100 dark:bg-secondary-800 hover:bg-secondary-200 dark:hover:bg-secondary-700'
-                }`}
-                onClick={() => setShowFilters(!showFilters)}
-              >
-                <RiFilter3Line className={`text-lg ${showFilters ? 'mr-2' : 'mr-1'}`} />
-                <span className="text-sm font-medium">{showFilters ? 'Hide Filters' : 'Filter'}</span>
-              </button>
-            </div>
-          </div>
-          
-          {/* Filters Section */}
-          <AnimatePresence>
-            {showFilters && (
-              <motion.div 
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="border-b border-secondary-200 dark:border-secondary-700 overflow-hidden backdrop-blur-md"
-              >
-                <div className="p-4 bg-gradient-to-r from-secondary-50/90 to-secondary-100/90 dark:from-secondary-800/90 dark:to-secondary-900/90">
-                  {/* Filter tabs */}
-                  <div className="flex flex-wrap mb-4 border-b border-secondary-200 dark:border-secondary-700 gap-1">
-                    <button
-                      className={`px-4 py-2 rounded-t-lg text-sm font-medium transition duration-200 ${
-                        activeFilterTab === 'status'
-                          ? 'bg-white dark:bg-secondary-700 text-green-600 dark:text-green-400 border-b-2 border-green-600'
-                          : 'text-secondary-600 dark:text-secondary-400 hover:bg-white/50 dark:hover:bg-secondary-700/50'
-                      }`}
-                      onClick={() => setActiveFilterTab('status')}
-                    >
-                      Status
-                    </button>
-                    <button
-                      className={`px-4 py-2 rounded-t-lg text-sm font-medium transition duration-200 ${
-                        activeFilterTab === 'date'
-                          ? 'bg-white dark:bg-secondary-700 text-green-600 dark:text-green-400 border-b-2 border-green-600'
-                          : 'text-secondary-600 dark:text-secondary-400 hover:bg-white/50 dark:hover:bg-secondary-700/50'
-                      }`}
-                      onClick={() => setActiveFilterTab('date')}
-                    >
-                      Date Range
-                    </button>
-                    
-                    <div className="ml-auto">
-                      <button
-                        className="px-3 py-1.5 text-xs bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 rounded-full hover:bg-green-200 dark:hover:bg-green-900/50 transition duration-200 flex items-center"
-                        onClick={() => {
-                          setFilterStatus('all');
-                          setFilterDateFrom('');
-                          setFilterDateTo('');
-                        }}
-                      >
-                        <RiCloseLine className="mr-1" />
-                        Reset All
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Filter content based on active tab */}
-                  <div className="bg-white/80 dark:bg-secondary-800/80 rounded-lg p-4 shadow-sm">
-                    <AnimatePresence mode="wait">
-                      {activeFilterTab === 'status' && (
-                        <motion.div
-                          key="status"
-                          initial={{ opacity: 0, y: 5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -5 }}
-                          transition={{ duration: 0.2 }}
-                          className="flex flex-wrap gap-2"
-                        >
-                          {['all', 'clean', 'due', 'overdue'].map((status) => (
-                            <button
-                              key={status}
-                              className={`px-4 py-2 rounded-full text-sm font-medium transition duration-200 ${
-                                filterStatus === status
-                                  ? status === 'all'
-                                    ? 'bg-secondary-200 dark:bg-secondary-700 text-secondary-900 dark:text-white'
-                                    : status === 'clean'
-                                    ? 'bg-green-600 text-white'
-                                    : status === 'due'
-                                    ? 'bg-yellow-600 text-white'
-                                    : 'bg-red-600 text-white'
-                                  : 'bg-white dark:bg-secondary-700 text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-600'
-                              }`}
-                              onClick={() => setFilterStatus(status)}
-                            >
-                              {status === 'all' && 'All Status'}
-                              {status === 'clean' && 'Clean'}
-                              {status === 'due' && 'Due Soon'}
-                              {status === 'overdue' && 'Overdue'}
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                      
-                      {activeFilterTab === 'date' && (
-                        <motion.div
-                          key="date"
-                          initial={{ opacity: 0, y: 5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -5 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-sm font-medium mb-1 text-secondary-600 dark:text-secondary-400">
-                                From Date
-                              </label>
-                              <input 
-                                type="date" 
-                                className="w-full p-3 border border-secondary-300 dark:border-secondary-600 rounded-lg bg-white dark:bg-secondary-700 focus:ring-2 focus:ring-green-600/50 focus:border-green-600"
-                                value={filterDateFrom}
-                                onChange={(e) => setFilterDateFrom(e.target.value)}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium mb-1 text-secondary-600 dark:text-secondary-400">
-                                To Date
-                              </label>
-                              <input 
-                                type="date" 
-                                className="w-full p-3 border border-secondary-300 dark:border-secondary-600 rounded-lg bg-white dark:bg-secondary-700 focus:ring-2 focus:ring-green-600/50 focus:border-green-600"
-                                value={filterDateTo}
-                                onChange={(e) => setFilterDateTo(e.target.value)}
-                              />
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                  
-                  {/* Active filters display */}
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-secondary-500 dark:text-secondary-400">Active filters:</span>
-                    
-                    {filterStatus !== 'all' && (
-                      <div className="px-2 py-1 rounded-full text-xs bg-secondary-100 dark:bg-secondary-700 flex items-center">
-                        <span className="mr-1">Status: </span>
-                        <span className={`font-medium ${
-                          filterStatus === 'clean' ? 'text-green-600 dark:text-green-400' : 
-                          filterStatus === 'due' ? 'text-yellow-600 dark:text-yellow-400' :
-                          'text-red-600 dark:text-red-400'
-                        }`}>
-                          {filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)}
-                        </span>
-                        <button 
-                          className="ml-1 text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-200"
-                          onClick={() => setFilterStatus('all')}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    )}
-                    
-                    {(filterDateFrom || filterDateTo) && (
-                      <div className="px-2 py-1 rounded-full text-xs bg-secondary-100 dark:bg-secondary-700 flex items-center">
-                        <span className="mr-1">Date: </span>
-                        <span className="font-medium text-green-600 dark:text-green-400">
-                          {filterDateFrom ? filterDateFrom : 'Any'} → {filterDateTo ? filterDateTo : 'Any'}
-                        </span>
-                        <button 
-                          className="ml-1 text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-200"
-                          onClick={() => {
-                            setFilterDateFrom('');
-                            setFilterDateTo('');
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    )}
-                    
-                    {filterStatus === 'all' && !filterDateFrom && !filterDateTo && (
-                      <span className="text-xs italic text-secondary-500 dark:text-secondary-400">No active filters</span>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          
-          {showGridView ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-              {getFilteredAreaStats().map((area) => (
-            <Card 
-              key={area.area} 
-              className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => handleAreaClick(area)}
-              hover
-            >
-              <div className={`h-2 w-full bg-gradient-to-r ${getAreaStatusColor(area.status)}`}></div>
-              <div className="p-4">
-                <div className="flex justify-between items-start">
-                  <h3 className="text-lg font-medium">{area.area}</h3>
-                  <div className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                    area.status === 'clean' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                    area.status === 'due' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                    'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                  }`}>
-                    {area.status.charAt(0).toUpperCase() + area.status.slice(1)}
-                  </div>
-                </div>
-                
-                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <div>
-                    <p className="text-secondary-500 dark:text-secondary-400">Cleanliness</p>
-                    <p className="font-medium">{area.cleanlinessScore}%</p>
-                  </div>
-                  <div>
-                    <p className="text-secondary-500 dark:text-secondary-400">Last Cleaned</p>
-                    <p className="font-medium">{area.lastCleaned}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-secondary-500 dark:text-secondary-400">Next Due</p>
-                    <p className={`font-medium ${
-                      area.status === 'overdue' ? 'text-red-500' : 
-                      area.status === 'due' ? 'text-yellow-500' : ''
-                    }`}>{area.nextDue}</p>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
-            </div>
-          ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-secondary-50 dark:bg-secondary-800">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                  Area
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                      Cleanliness Score
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                      Last Cleaned
-                </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                      Next Due
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-secondary-200 dark:divide-secondary-700">
-                  {getFilteredAreaStats().map((area) => (
-                    <tr key={area.area} className="hover:bg-secondary-50 dark:hover:bg-secondary-800/50 cursor-pointer" onClick={() => handleAreaClick(area)}>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white font-medium">
-                        {area.area}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          area.status === 'clean' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                          area.status === 'due' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                          'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                        }`}>
-                          {area.status.charAt(0).toUpperCase() + area.status.slice(1)}
-                        </span>
-                    </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm">
-                        <span className={`font-medium ${
-                          area.cleanlinessScore >= 90 ? 'text-green-600 dark:text-green-400' :
-                          area.cleanlinessScore >= 75 ? 'text-yellow-600 dark:text-yellow-400' :
-                          'text-red-600 dark:text-red-400'
-                        }`}>
-                          {area.cleanlinessScore}%
-                        </span>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                        {area.lastCleaned}
-                    </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm">
-                        <span className={`${
-                          area.status === 'overdue' ? 'text-red-600 dark:text-red-400 font-medium' : 
-                          area.status === 'due' ? 'text-yellow-600 dark:text-yellow-400 font-medium' : 
-                          'text-secondary-900 dark:text-white'
-                        }`}>
-                          {area.nextDue}
-                        </span>
-                    </td>
-                  </tr>
-                  ))}
-            </tbody>
-          </table>
-        </div>
-          )}
-      </Card>
-      </motion.div>
-      
-      {/* Cleansing Entries Section */}
-      <motion.div 
-        className="w-full rounded-lg overflow-hidden"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.4 }}
+      {/* Cleansing entries list */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.3 }}
       >
-        <Card>
-          <div className="p-6 border-b border-secondary-200 dark:border-secondary-700 flex justify-between items-center">
-            <div>
-              <h2 className="text-xl font-display font-semibold">Cleansing Records</h2>
-              <p className="text-secondary-600 dark:text-secondary-400 text-sm mt-1">
-                View and manage cleansing inspection records
-              </p>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="relative">
-                <RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-secondary-400" />
-                <input
-                  type="text"
-                  placeholder="Search records..."
-                  className="pl-10 pr-4 py-2 border border-secondary-300 dark:border-secondary-600 rounded-lg bg-white dark:bg-secondary-700 text-secondary-900 dark:text-white"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-          
-          <div className="overflow-x-auto">
-            {loading ? (
-              <div className="p-8 text-center">
-                <RiLoader4Line className="animate-spin text-3xl mx-auto mb-4 text-secondary-400" />
-                <p className="text-secondary-600 dark:text-secondary-400">Loading cleansing records...</p>
-              </div>
-            ) : filteredEntries.length > 0 ? (
-              <table className="w-full">
-                <thead className="bg-secondary-50 dark:bg-secondary-800">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                      Project
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                      Area
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                      Submitter
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                      Score
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-secondary-200 dark:divide-secondary-700">
-                  {filteredEntries.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-secondary-50 dark:hover:bg-secondary-800/50">
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                        {entry.date}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                        {entry.project}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                        {entry.area}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                        {entry.submitter}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm">
-                        <span className={`font-medium ${
-                          entry.cleanliness_score >= 90 ? 'text-green-600 dark:text-green-400' :
-                          entry.cleanliness_score >= 75 ? 'text-yellow-600 dark:text-yellow-400' :
-                          'text-red-600 dark:text-red-400'
-                        }`}>
-                          {entry.cleanliness_score}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        {getWorkflowStatusBadge(entry)}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          leftIcon={<RiEyeLine />}
-                          onClick={() => handleViewDetails(entry)}
-                        >
-                          View
-                        </Button>
-                        {canUserEditEntry(entry) && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            leftIcon={<RiFileTextLine />}
-                            onClick={() => handleViewForm(entry)}
-                          >
-                            Edit
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="p-8 text-center">
-                <RiDropLine className="text-4xl mx-auto mb-4 text-secondary-400" />
-                <p className="text-secondary-600 dark:text-secondary-400">No cleansing records found</p>
-                <p className="text-sm text-secondary-500 dark:text-secondary-500 mt-1">
-                  Create your first cleansing record to get started
-                </p>
-              </div>
-            )}
-          </div>
-        </Card>
-      </motion.div>
-      
-      {/* Process Flow Modal */}
-      <AnimatePresence>
-        {showProcessFlow && (
-          <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-            onClick={handleCancelProcessFlow}
-          >
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {filteredEntries.map((entry, index) => (
             <motion.div
-              className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
-              onClick={(e) => e.stopPropagation()}
+              key={entry.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 * index }}
             >
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Setup Workflow</h2>
-                    <p className="text-gray-600 dark:text-gray-400 mt-1">Configure the approval process for this cleansing record</p>
-                  </div>
-                  <button 
-                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                    onClick={handleCancelProcessFlow}
-                  >
-                    <RiCloseLine className="text-2xl" />
-                  </button>
-                </div>
-                
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Process Flow Builder */}
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Workflow Steps</h3>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        leftIcon={<RiAddLine />}
-                        onClick={addNewNode}
-                      >
-                        Add Step
-                      </Button>
+              <Card 
+                className="p-0 overflow-hidden hover:shadow-xl transition-all duration-300 border border-secondary-100 dark:border-dark-700"
+              >
+                <div className="bg-gradient-to-r from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 p-4">
+                  <div className="flex justify-between mb-2">
+                    <div className="flex items-center">
+                      <RiCalendarCheckLine className="text-green-600 dark:text-green-400 mr-2" />
+                      <span className="font-medium text-green-900 dark:text-green-300">{entry.date}</span>
                     </div>
-                    
-                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 max-h-96 overflow-y-auto">
-                      <ProcessFlowBuilder
-                        nodes={processNodes}
-                        selectedNodeId={selectedNode?.id || null}
-                        onSelectNode={setSelectedNode}
-                      />
+                    <div className="flex items-center space-x-2">
+                      {getWorkflowStatusBadge(entry)}
                     </div>
                   </div>
                   
-                  {/* Node Configuration */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {selectedNode ? `Configure: ${selectedNode.name}` : 'Select a step to configure'}
-                    </h3>
-                    
-                    {selectedNode && selectedNode.type === 'node' && (
-                      <div className="space-y-4 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Step Name
-                          </label>
-                          <input
-                            type="text"
-                            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            value={selectedNode.name}
-                            onChange={(e) => {
-                              const updatedNodes = processNodes.map(node => 
-                                node.id === selectedNode.id 
-                                  ? { ...node, name: e.target.value }
-                                  : node
-                              );
-                              setProcessNodes(updatedNodes);
-                              setSelectedNode({ ...selectedNode, name: e.target.value });
-                            }}
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Executor
-                          </label>
-                          <div className="flex space-x-2">
-                            <input
-                              type="text"
-                              className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                              value={selectedNode.executor || ''}
-                              placeholder="Select executor..."
-                              readOnly
-                            />
-                            <Button
-                              variant="outline"
-                              onClick={() => openPeopleSelector('executor')}
-                            >
-                              Select
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Expire Time Configuration */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Task Expiration
-                          </label>
-                          <div className="space-y-3">
-                            <div className="flex items-center space-x-2">
-                              <select 
-                                value={selectedNode.expireTime === 'unlimited' || !selectedNode.expireTime ? 'unlimited' : 'custom'}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  const updatedNode = { 
-                                    ...selectedNode, 
-                                    expireTime: value === 'unlimited' ? 'unlimited' : '',
-                                    expireDuration: value === 'unlimited' ? null : (selectedNode.expireDuration || 24)
-                                  };
-                                  const updatedNodes = processNodes.map(node => 
-                                    node.id === selectedNode.id ? updatedNode : node
-                                  );
-                                  setProcessNodes(updatedNodes);
-                                  setSelectedNode(updatedNode);
-                                }}
-                                className="flex-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
-                              >
-                                <option value="unlimited">Unlimited</option>
-                                <option value="custom">Custom Date & Time</option>
-                              </select>
-                            </div>
-                            
-                            {(selectedNode.expireTime !== 'unlimited' && selectedNode.expireTime !== undefined) && (
-                              <div className="space-y-2">
-                                <div className="flex items-center space-x-2">
-                                  <input
-                                    type="datetime-local"
-                                    value={selectedNode.expireTime && selectedNode.expireTime !== 'unlimited' ? 
-                                      (selectedNode.expireTime.includes('T') ? selectedNode.expireTime.slice(0, 16) : '') : ''}
-                                    onChange={(e) => {
-                                      const updatedNode = { 
-                                        ...selectedNode, 
-                                        expireTime: e.target.value ? new Date(e.target.value).toISOString() : '',
-                                        expireDuration: null
-                                      };
-                                      const updatedNodes = processNodes.map(node => 
-                                        node.id === selectedNode.id ? updatedNode : node
-                                      );
-                                      setProcessNodes(updatedNodes);
-                                      setSelectedNode(updatedNode);
-                                    }}
-                                    min={new Date().toISOString().slice(0, 16)}
-                                    className="flex-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white"
-                                  />
-                                </div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                  Select the date and time when this task should expire
-                                </p>
-                              </div>
-                            )}
-                            
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {selectedNode.expireTime === 'unlimited' 
-                                ? 'This task will not expire automatically.'
-                                : selectedNode.expireTime && selectedNode.expireTime !== 'unlimited'
-                                  ? `This task will expire on ${new Date(selectedNode.expireTime).toLocaleString()}`
-                                  : 'Select a custom expiration date and time above.'
-                              }
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* CC Recipients */}
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h4 className="text-md font-medium text-gray-900 dark:text-white">CC Recipients</h4>
-                        <Button
-                          variant="outline"
+                  <h3 className="font-display font-semibold text-lg text-secondary-900 dark:text-white mb-1">
+                    {entry.area} - {entry.submitter}
+                  </h3>
+                  
+                  <div className="flex items-center text-sm text-secondary-600 dark:text-secondary-400">
+                    <RiMapPinLine className="mr-1" />
+                    <span className="ml-1">{entry.project}</span>
+                  </div>
+                </div>
+                
+                <div className="p-4">
+                  <div className="mb-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide">
+                        Cleanliness Score
+                      </h4>
+                      <span className={`text-lg font-bold ${
+                        entry.cleanliness_score >= 90 ? 'text-green-600 dark:text-green-400' :
+                        entry.cleanliness_score >= 75 ? 'text-yellow-600 dark:text-yellow-400' :
+                        'text-red-600 dark:text-red-400'
+                      }`}>
+                        {entry.cleanliness_score}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-secondary-200 dark:bg-dark-700 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full ${
+                          entry.cleanliness_score >= 90 ? 'bg-green-500' :
+                          entry.cleanliness_score >= 75 ? 'bg-yellow-500' :
+                          'bg-red-500'
+                        }`}
+                        style={{ width: `${entry.cleanliness_score}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
+                        Status:
+                      </h4>
+                      <p className="text-secondary-600 dark:text-secondary-400 text-sm line-clamp-1">
+                        {entry.cleaning_status}
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
+                        Notes:
+                      </h4>
+                      <p className="text-secondary-600 dark:text-secondary-400 text-sm line-clamp-1">
+                        {entry.notes || t('common.none')}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end mt-4">
+                    <div className="flex space-x-2">
+                      {canUserViewEntry(entry) && (
+                        <Button 
+                          variant="outline" 
                           size="sm"
-                          leftIcon={<RiUserLine />}
-                          onClick={() => openPeopleSelector('cc')}
+                          onClick={() => handleViewDetails(entry)}
+                          rightIcon={<RiArrowRightLine />}
+                          className="hover:bg-green-50 dark:hover:bg-green-900/20"
                         >
-                          Add People
+                          {t('common.viewDetails')}
                         </Button>
-                      </div>
-                      
-                      {selectedCcs.length > 0 && (
-                        <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 max-h-32 overflow-y-auto">
-                          <div className="space-y-2">
-                            {selectedCcs.map(cc => (
-                              <div key={cc.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 rounded-md p-2">
-                                <div className="flex items-center">
-                                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 flex items-center justify-center font-medium mr-2">
-                                    {cc.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                                  </div>
-                                  <div>
-                                    <div className="text-sm font-medium text-gray-900 dark:text-white">{cc.name}</div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400">{cc.email}</div>
-                                  </div>
-                                </div>
-                                <button
-                                  className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                  onClick={() => removeUserFromCc(cc.id)}
-                                >
-                                  <RiCloseLine />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                      )}
+                      {/* Admin delete button */}
+                      {user?.role === 'admin' && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleDeleteEntry(entry)}
+                          leftIcon={<RiDeleteBinLine />}
+                          className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
+                        >
+                          Delete
+                        </Button>
                       )}
                     </div>
                   </div>
                 </div>
-                
-                <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <Button
-                    variant="outline"
-                    onClick={handleCancelProcessFlow}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onClick={handleFinalSave}
-                    disabled={!processNodes.some(node => node.type === 'node' && node.executor)}
-                  >
-                    Create Record
-                  </Button>
-                </div>
-              </div>
+              </Card>
             </motion.div>
-          </div>
+          ))}
+        </div>
+        
+        {filteredEntries.length === 0 && (
+          <Card className="p-8 text-center bg-white/80 dark:bg-dark-800/80 backdrop-blur-sm shadow-md">
+            <div className="text-6xl mx-auto mb-4 text-green-500 opacity-70">
+              <RiBrushLine />
+            </div>
+            {!selectedProject ? (
+              <>
+                <h2 className="text-xl font-display font-semibold mb-2">No Project Selected</h2>
+                <p className="text-secondary-600 dark:text-secondary-400 mb-6 max-w-lg mx-auto">
+                  Please select a project from the sidebar to view and manage cleansing records for that project.
+                </p>
+              </>
+            ) : cleansingEntries.length === 0 ? (
+              <>
+                <h2 className="text-xl font-display font-semibold mb-2">No Cleansing Records Found</h2>
+                <p className="text-secondary-600 dark:text-secondary-400 mb-6 max-w-lg mx-auto">
+                  No cleansing records have been created for <span className="font-semibold">{selectedProject.name}</span> yet.
+                  {user?.role === 'admin' && ' Create the first record to get started.'}
+                </p>
+                {user?.role === 'admin' && (
+                  <Button 
+                    variant="primary" 
+                    leftIcon={<RiAddLine />}
+                    onClick={() => setShowNewRecord(true)}
+                    className="shadow-md hover:shadow-lg transition-all duration-300"
+                  >
+                    Create First Record
+                  </Button>
+                )}
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-display font-semibold mb-2">No Records Match Your Search</h2>
+                <p className="text-secondary-600 dark:text-secondary-400 mb-6 max-w-lg mx-auto">
+                  No cleansing records found matching "{searchQuery}" in <span className="font-semibold">{selectedProject.name}</span>.
+                  Try adjusting your search terms.
+                </p>
+                <Button 
+                  variant="outline"
+                  onClick={() => setSearchQuery('')}
+                  className="shadow-md hover:shadow-lg transition-all duration-300"
+                >
+                  Clear Search
+                </Button>
+              </>
+            )}
+          </Card>
         )}
-      </AnimatePresence>
+      </motion.div>
       
-      {/* ISO19650 Cleansing Record Form Modal */}
-      <AnimatePresence>
-        {showNewRecord && (
+      {/* New Cleansing Record Modal */}
+      {showNewRecord && (
+        <AnimatePresence>
           <div 
             className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
             onClick={() => setShowNewRecord(false)}
           >
             <motion.div
-              className="w-full max-6xl max-h-[90vh] overflow-auto"
+              className="bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl w-full max-w-6xl max-h-[90vh] overflow-auto"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1878,278 +1053,578 @@ const CleansingPage: React.FC = () => {
             >
               <DailyCleaningInspectionTemplate
                 onClose={() => setShowNewRecord(false)}
-                onSave={handleSubmitRecord}
+                onSave={handleCreateRecord}
               />
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
-
-      {/* People Selector Modal */}
-      <AnimatePresence>
-        {showPeopleSelector && (
-          <PeopleSelectorModal
-            isOpen={showPeopleSelector}
-            onClose={() => setShowPeopleSelector(false)}
-            onSelect={handleUserSelection}
-            title={peopleSelectorType === 'executor' ? 'Select Executor' : 'Add People to CC'}
-            users={users}
-            loading={loadingUsers}
-          />
-        )}
-      </AnimatePresence>
-
+        </AnimatePresence>
+      )}
+      
       {/* Entry Details Dialog */}
-      <AnimatePresence>
-        {showDetails && selectedCleansingEntry && (
+      <Dialog
+        isOpen={showDetails}
+        onClose={() => setShowDetails(false)}
+        title={t('cleansing.entryDetails', 'Cleansing Record Details')}
+      >
+        {selectedCleansingEntry && (
+          <div className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+              <div className="text-lg font-bold text-green-900 dark:text-green-300 flex items-center">
+                <RiCalendarCheckLine className="mr-2 text-green-600 dark:text-green-400" />
+                {selectedCleansingEntry.date}
+              </div>
+              <div className="px-3 py-1 bg-white dark:bg-dark-800 rounded-full text-sm font-medium text-secondary-700 dark:text-secondary-300 shadow-sm">
+                {selectedCleansingEntry.project}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <RiUserLine className="mr-2 text-green-600 dark:text-green-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Submitter</span>
+                </div>
+                <div className="font-medium">{selectedCleansingEntry.submitter}</div>
+              </div>
+              
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <RiMapPinLine className="mr-2 text-green-600 dark:text-green-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Area</span>
+                </div>
+                <div className="font-medium">{selectedCleansingEntry.area}</div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <RiTaskLine className="mr-2 text-green-600 dark:text-green-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Cleaning Status</span>
+                </div>
+                <div className="font-medium">{selectedCleansingEntry.cleaning_status}</div>
+              </div>
+              
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                  <RiPercentLine className="mr-2 text-green-600 dark:text-green-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Cleanliness Score</span>
+                </div>
+                <div className={`font-bold ${
+                  selectedCleansingEntry.cleanliness_score >= 90 ? 'text-green-600 dark:text-green-400' :
+                  selectedCleansingEntry.cleanliness_score >= 75 ? 'text-yellow-600 dark:text-yellow-400' :
+                  'text-red-600 dark:text-red-400'
+                }`}>
+                  {selectedCleansingEntry.cleanliness_score}%
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
+                <RiFileTextLine className="mr-2 text-green-600 dark:text-green-400" />
+                <span className="text-sm font-medium uppercase tracking-wide">Notes</span>
+              </div>
+              <div className="whitespace-pre-line">{selectedCleansingEntry.notes || t('common.none')}</div>
+            </div>
+            
+            {/* Workflow Status Section */}
+            {selectedCleansingEntry.cleansing_workflow_nodes && selectedCleansingEntry.cleansing_workflow_nodes.length > 0 && (
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
+                  <RiFlowChart className="mr-2 text-green-600 dark:text-green-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
+                </div>
+                
+                <div className="space-y-3">
+                  {selectedCleansingEntry.cleansing_workflow_nodes
+                    .sort((a: any, b: any) => a.node_order - b.node_order)
+                    .map((node: any, index: number) => (
+                      <div key={node.id} className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-dark-700 rounded-lg">
+                        <div className="flex items-center">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                            node.status === 'completed' ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400' :
+                            node.status === 'pending' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                            node.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400' :
+                            'bg-gray-100 text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'
+                          }`}>
+                            {node.status === 'completed' ? <RiCheckLine /> :
+                             node.status === 'pending' ? <RiNotificationLine /> :
+                             node.status === 'rejected' ? <RiCloseLine /> :
+                             <RiSettings4Line />}
+                          </div>
+                          <div>
+                            <div className="font-medium text-secondary-900 dark:text-white">{node.node_name}</div>
+                            {node.executor_name && (
+                              <div className="text-sm text-secondary-600 dark:text-secondary-400">
+                                Assigned to: {node.executor_name}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                          node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                          node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                          'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+                        }`}>
+                          {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Comments Section */}
+            {selectedCleansingEntry.cleansing_comments && selectedCleansingEntry.cleansing_comments.length > 0 && (
+              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+                <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
+                  <RiNotificationLine className="mr-2 text-green-600 dark:text-green-400" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
+                </div>
+                
+                <div className="space-y-3">
+                  {selectedCleansingEntry.cleansing_comments
+                    .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                    .map((comment: any) => (
+                      <div key={comment.id} className="p-3 bg-secondary-50 dark:bg-dark-700 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-medium text-secondary-900 dark:text-white">{comment.user_name}</div>
+                          <div className="flex items-center space-x-2">
+                            {comment.action && (
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                                comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                                'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+                              }`}>
+                                {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
+                              </span>
+                            )}
+                            <span className="text-xs text-secondary-500 dark:text-secondary-400">
+                              {new Date(comment.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-secondary-700 dark:text-secondary-300">{comment.comment}</div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="pt-6 mt-6 border-t border-white/10">
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
+                {/* Left side: Utility actions */}
+                <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
+                   <Button 
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<RiDownload2Line />}
+                    className="text-secondary-400 hover:text-white hover:bg-white/5"
+                  >
+                    {t('common.export')}
+                  </Button>
+                  <Button 
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<RiPrinterLine />}
+                    className="text-secondary-400 hover:text-white hover:bg-white/5"
+                  >
+                    {t('common.print')}
+                  </Button>
+                  
+                  {/* Admin delete button */}
+                  {user?.role === 'admin' && (
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={<RiDeleteBinLine />}
+                      onClick={() => {
+                        setShowDetails(false);
+                        handleDeleteEntry(selectedCleansingEntry);
+                      }}
+                      className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+
+                {/* Right side: Workflow actions */}
+                <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-end">
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDetails(false)}
+                    className="border-white/10 hover:bg-white/5"
+                  >
+                    {t('common.close')}
+                  </Button>
+
+                  {/* View/Edit Form Button */}
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    leftIcon={canUserUpdateForm(selectedCleansingEntry) ? <RiFileWarningLine /> : <RiFileListLine />}
+                    onClick={() => {
+                      setShowDetails(false);
+                      handleViewForm(selectedCleansingEntry);
+                    }}
+                    className="hover:bg-white/5"
+                  >
+                    {canUserUpdateForm(selectedCleansingEntry) ? 'Edit Form' : 'View Form'}
+                  </Button>
+
+                  {/* Workflow Action Buttons */}
+                  {(selectedCleansingEntry.status === 'pending' || selectedCleansingEntry.status === 'rejected') && (
+                    <>
+                      {/* Send Back (if applicable) */}
+                      {canUserApproveEntry(selectedCleansingEntry) && selectedCleansingEntry.current_node_index > 0 && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<RiArrowLeftLine />}
+                          onClick={() => handleWorkflowAction('back')}
+                          className="text-orange-500 border-orange-500/30 hover:bg-orange-500/10 hover:border-orange-500"
+                        >
+                          Send Back
+                        </Button>
+                      )}
+                      
+                      {/* Reject */}
+                      {canUserApproveEntry(selectedCleansingEntry) && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<RiCloseLine />}
+                          onClick={() => handleWorkflowAction('reject')}
+                          className="text-red-500 border-red-500/30 hover:bg-red-500/10 hover:border-red-500"
+                        >
+                          Reject
+                        </Button>
+                      )}
+
+                      {/* Approve/Complete */}
+                      {canUserApproveEntry(selectedCleansingEntry) && (
+                        <Button 
+                          variant="primary"
+                          size="sm"
+                          leftIcon={<RiCheckLine />}
+                          onClick={() => handleWorkflowAction('approve')}
+                          className="bg-green-600 hover:bg-green-700 text-white border-none shadow-lg shadow-green-600/20"
+                        >
+                          {selectedCleansingEntry.current_node_index === 1 ? 'Complete' : 'Approve'}
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </Dialog>
+      
+      {/* Process Flow Configuration Modal */}
+      {showProcessFlow && (
+        <AnimatePresence>
           <div 
             className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-            onClick={() => setShowDetails(false)}
+            onClick={handleCancelProcessFlow}
           >
             <motion.div
-              className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl"
+              className="w-full max-w-7xl max-h-[90vh] overflow-auto bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6 space-y-6">
-                <div className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-                  <div className="text-lg font-bold text-green-900 dark:text-green-300 flex items-center">
-                    <RiDropLine className="mr-2 text-green-600 dark:text-green-400" />
-                    Cleansing Record - {selectedCleansingEntry.date}
+              {/* Header */}
+              <div className="bg-gradient-to-r from-green-600 to-green-700 p-6 text-white">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-display font-bold flex items-center">
+                      <RiFlowChart className="mr-3" />
+                      Process Configuration
+                    </h2>
+                    <p className="text-green-100 mt-1">
+                      Configure the workflow process for this cleansing record before saving.
+                    </p>
                   </div>
-                  <div className="px-3 py-1 bg-white dark:bg-gray-700 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
-                    {selectedCleansingEntry.project}
-                  </div>
+                  <Button 
+                    variant="outline"
+                    onClick={handleCancelProcessFlow}
+                    className="text-white border-white hover:bg-white/10"
+                  >
+                    <RiCloseLine className="text-xl" />
+                  </Button>
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiUserLine className="mr-2 text-green-600 dark:text-green-400" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Submitter</span>
-                    </div>
-                    <div className="font-medium">{selectedCleansingEntry.submitter}</div>
+              </div>
+              
+              {/* Content */}
+              <div className="p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Left panel - Flow chart */}
+                  <div className="lg:col-span-5">
+                    <Card className="p-4 h-full">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-semibold text-secondary-900 dark:text-white">Process Flow</h3>
+                        <Button 
+                          variant="primary" 
+                          size="sm"
+                          leftIcon={<RiAddLine />}
+                          onClick={addNewNode}
+                        >
+                          Add Node
+                        </Button>
+                      </div>
+                      
+                      <ProcessFlowBuilder 
+                        nodes={processNodes}
+                        onSelectNode={setSelectedNode}
+                        selectedNodeId={selectedNode?.id || null}
+                      />
+                    </Card>
                   </div>
                   
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiMapPinLine className="mr-2 text-green-600 dark:text-green-400" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Area</span>
-                    </div>
-                    <div className="font-medium">{selectedCleansingEntry.area}</div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiDropLine className="mr-2 text-green-600 dark:text-green-400" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Cleaning Status</span>
-                    </div>
-                    <div className="font-medium">{selectedCleansingEntry.cleaning_status}</div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                      <RiPercentLine className="mr-2 text-green-600 dark:text-green-400" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Cleanliness Score</span>
-                    </div>
-                    <div className="font-medium">{selectedCleansingEntry.cleanliness_score}%</div>
-                  </div>
-                </div>
-                
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center text-gray-600 dark:text-gray-400 mb-2">
-                    <RiSettings4Line className="mr-2 text-green-600 dark:text-green-400" />
-                    <span className="text-sm font-medium uppercase tracking-wide">Notes</span>
-                  </div>
-                  <div className="whitespace-pre-line">{selectedCleansingEntry.notes || 'None'}</div>
-                </div>
-                
-                {/* Workflow Status Section */}
-                {selectedCleansingEntry.cleansing_workflow_nodes && selectedCleansingEntry.cleansing_workflow_nodes.length > 0 && (
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-4">
-                      <RiFlowChart className="mr-2 text-green-600 dark:text-green-400" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      {selectedCleansingEntry.cleansing_workflow_nodes
-                        .sort((a: any, b: any) => a.node_order - b.node_order)
-                        .map((node: any) => (
-                          <div key={node.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                            <div className="flex items-center">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                                node.status === 'completed' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
-                                node.status === 'pending' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                                node.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' :
-                                'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400'
-                              }`}>
-                                {node.status === 'completed' ? <RiCheckLine /> :
-                                 node.status === 'pending' ? <RiNotificationLine /> :
-                                 node.status === 'rejected' ? <RiCloseLine /> :
-                                 <RiSettings4Line />}
-                              </div>
-                              <div>
-                                <div className="font-medium text-gray-900 dark:text-white">{node.node_name}</div>
-                                {node.executor_name && (
-                                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                                    Assigned to: {node.executor_name}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                              node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                              node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                              'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-                            }`}>
-                              {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Comments Section */}
-                {selectedCleansingEntry.cleansing_comments && selectedCleansingEntry.cleansing_comments.length > 0 && (
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center text-gray-600 dark:text-gray-400 mb-4">
-                      <RiNotificationLine className="mr-2 text-green-600 dark:text-green-400" />
-                      <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      {selectedCleansingEntry.cleansing_comments
-                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                        .map((comment: any) => (
-                          <div key={comment.id} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="font-medium text-gray-900 dark:text-white">{comment.user_name}</div>
-                              <div className="flex items-center space-x-2">
-                                {comment.action && (
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                    comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                                  }`}>
-                                    {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
-                                  </span>
-                                )}
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                  {new Date(comment.created_at).toLocaleDateString()}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-gray-700 dark:text-gray-300">{comment.comment}</div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-                
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                  {/* First row - Export and Delete buttons */}
-                  <div className="flex justify-end space-x-3 mb-3">
-                    <Button 
-                      variant="outline"
-                      leftIcon={<RiDownload2Line />}
-                    >
-                      Export
-                    </Button>
-                    <Button 
-                      variant="outline"
-                      leftIcon={<RiPrinterLine />}
-                    >
-                      Print
-                    </Button>
-                    
-                    {/* Admin delete button */}
-                    {user?.role === 'admin' && (
-                      <Button 
-                        variant="outline"
-                        leftIcon={<RiDeleteBinLine />}
-                        onClick={() => {
-                          setShowDetails(false);
-                          handleDeleteEntry(selectedCleansingEntry);
-                        }}
-                        className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      >
-                        Delete Entry
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Second row - Workflow action buttons */}
-                  <div className="flex justify-end space-x-3">
-                    {/* Workflow Action Buttons - show for pending entries and rejected entries where user has permissions */}
-                    {(selectedCleansingEntry.status === 'pending' || selectedCleansingEntry.status === 'rejected') && (
-                      <>
-                        {canUserEditEntry(selectedCleansingEntry) && (
-                          <Button 
-                            variant="outline"
-                            leftIcon={<RiFileWarningLine />}
-                            onClick={() => {
-                              setShowDetails(false);
-                              handleViewForm(selectedCleansingEntry);
+                  {/* Right panel - Node settings */}
+                  <div className="lg:col-span-7">
+                    <Card className="p-4 h-full">
+                      <h3 className="font-semibold text-secondary-900 dark:text-white mb-4">Process Settings</h3>
+                      
+                      {selectedNode ? (
+                        <div className="space-y-4">
+                          <Input
+                            label="Node name"
+                            value={selectedNode.name || ''}
+                            onChange={(e) => {
+                              const updatedNode = { ...selectedNode, name: e.target.value };
+                              const updatedNodes = processNodes.map(node => 
+                                node.id === selectedNode.id ? updatedNode : node
+                              );
+                              setProcessNodes(updatedNodes);
+                              setSelectedNode(updatedNode);
                             }}
-                          >
-                            Edit Form
-                          </Button>
-                        )}
-                        
-                        {canUserApproveEntry(selectedCleansingEntry) && (
-                          <>
-                            {/* Back to previous node button (only if not first node) */}
-                            {selectedCleansingEntry.current_node_index > 0 && (
-                              <Button 
-                                variant="outline"
-                                leftIcon={<RiArrowLeftLine />}
-                                onClick={() => handleWorkflowAction('back')}
-                                className="text-orange-600 border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                              >
-                                Send Back
-                              </Button>
-                            )}
-                            
-                            <Button 
-                              variant="outline"
-                              leftIcon={<RiCloseLine />}
-                              onClick={() => handleWorkflowAction('reject')}
-                              className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            >
-                              Reject
-                            </Button>
-                            <Button 
-                              variant="primary"
-                              leftIcon={<RiCheckLine />}
-                              onClick={() => handleWorkflowAction('approve')}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              {selectedCleansingEntry.current_node_index === 1 ? 'Complete' : 'Approve'}
-                            </Button>
-                          </>
-                        )}
-                      </>
-                    )}
-                    
+                            className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10"
+                          />
+                          
+                          {selectedNode.type === 'node' && (
+                            <>
+                              <div>
+                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                  Executor
+                                </label>
+                                <div className="flex items-center space-x-2">
+                                  <div className="flex-grow bg-secondary-50 dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-3 text-secondary-600 dark:text-secondary-400">
+                                    {selectedNode.executor || 'Select executor'}
+                                  </div>
+                                  <Button variant="outline" size="sm" onClick={() => openPeopleSelector('executor')}>
+                                    Select
+                                  </Button>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                  CC Recipients
+                                </label>
+                                <div className="flex flex-col space-y-2">
+                                  <div className="flex items-center space-x-2">
+                                    <div className="flex-grow bg-secondary-50 dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-3 min-h-[50px]">
+                                      {selectedNode.ccRecipients && selectedNode.ccRecipients.length > 0 ? (
+                                        <div className="flex flex-wrap gap-2">
+                                          {selectedNode.ccRecipients.map(cc => (
+                                            <div 
+                                              key={cc.id} 
+                                              className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-3 py-1 rounded-full flex items-center text-sm"
+                                            >
+                                              <span className="mr-2">{cc.name}</span>
+                                              <button
+                                                type="button"
+                                                className="text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-200"
+                                                onClick={() => removeUserFromCc(cc.id)}
+                                              >
+                                                <RiCloseLine />
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <span className="text-secondary-500 dark:text-secondary-400">No CCs selected</span>
+                                      )}
+                                    </div>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      onClick={() => openPeopleSelector('cc')}
+                                    >
+                                      Add CC
+                                    </Button>
+                                  </div>
+                                  
+                                  {selectedNode.ccRecipients && selectedNode.ccRecipients.length > 0 && (
+                                    <div className="text-xs text-secondary-500 dark:text-secondary-400 flex items-center">
+                                      <RiTeamLine className="mr-1" />
+                                      {selectedNode.ccRecipients.length} {selectedNode.ccRecipients.length === 1 ? 'person' : 'people'} will be notified
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                  Edit Access
+                                </label>
+                                <div className="flex items-center space-x-3">
+                                  <label className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedNode.editAccess !== false}
+                                      onChange={(e) => {
+                                        const updatedNode = { ...selectedNode, editAccess: e.target.checked };
+                                        const updatedNodes = processNodes.map(node => 
+                                          node.id === selectedNode.id ? updatedNode : node
+                                        );
+                                        setProcessNodes(updatedNodes);
+                                        setSelectedNode(updatedNode);
+                                      }}
+                                      className="mr-2 rounded border-secondary-300 dark:border-dark-600"
+                                    />
+                                    <span className="text-sm text-secondary-700 dark:text-secondary-300">
+                                      Allow editing when this node is active
+                                    </span>
+                                  </label>
+                                </div>
+                                <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-1">
+                                  When enabled, both executor and CC recipients can edit the form when this node is active
+                                </p>
+                              </div>
+
+                              {/* Expire Time Configuration */}
+                              <div>
+                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                  Task Expiration
+                                </label>
+                                <div className="space-y-3">
+                                  <div className="flex items-center space-x-2">
+                                    <select 
+                                      value={selectedNode.expireTime === 'unlimited' || !selectedNode.expireTime ? 'unlimited' : 'custom'}
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        const updatedNode = { 
+                                          ...selectedNode, 
+                                          expireTime: value === 'unlimited' ? 'unlimited' : '',
+                                          expireDuration: value === 'unlimited' ? null : (selectedNode.expireDuration || 24)
+                                        };
+                                        const updatedNodes = processNodes.map(node => 
+                                          node.id === selectedNode.id ? updatedNode : node
+                                        );
+                                        setProcessNodes(updatedNodes);
+                                        setSelectedNode(updatedNode);
+                                      }}
+                                      className="flex-1 bg-white dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-2 text-secondary-900 dark:text-white"
+                                    >
+                                      <option value="unlimited">Unlimited</option>
+                                      <option value="custom">Custom Date & Time</option>
+                                    </select>
+                                  </div>
+                                  
+                                  {(selectedNode.expireTime !== 'unlimited' && selectedNode.expireTime !== undefined) && (
+                                    <div className="space-y-2">
+                                      <div className="flex items-center space-x-2">
+                                        <input
+                                          type="datetime-local"
+                                          value={selectedNode.expireTime && selectedNode.expireTime !== 'unlimited' ? 
+                                            (selectedNode.expireTime.includes('T') ? selectedNode.expireTime.slice(0, 16) : '') : ''}
+                                          onChange={(e) => {
+                                            const updatedNode = { 
+                                              ...selectedNode, 
+                                              expireTime: e.target.value ? new Date(e.target.value).toISOString() : '',
+                                              expireDuration: null
+                                            };
+                                            const updatedNodes = processNodes.map(node => 
+                                              node.id === selectedNode.id ? updatedNode : node
+                                            );
+                                            setProcessNodes(updatedNodes);
+                                            setSelectedNode(updatedNode);
+                                          }}
+                                          min={new Date().toISOString().slice(0, 16)}
+                                          className="flex-1 bg-white dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-2 text-secondary-900 dark:text-white"
+                                        />
+                                      </div>
+                                      <p className="text-xs text-secondary-500 dark:text-secondary-400">
+                                        Select the date and time when this task should expire
+                                      </p>
+                                    </div>
+                                  )}
+                                  
+                                  <p className="text-xs text-secondary-500 dark:text-secondary-400">
+                                    {selectedNode.expireTime === 'unlimited' 
+                                      ? 'This task will not expire automatically.'
+                                      : selectedNode.expireTime && selectedNode.expireTime !== 'unlimited'
+                                        ? `This task will expire on ${new Date(selectedNode.expireTime).toLocaleString()}`
+                                        : 'Select a custom expiration date and time above.'
+                                    }
+                                  </p>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-secondary-500 dark:text-secondary-400">
+                          <RiFlowChart className="text-4xl mx-auto mb-2 opacity-50" />
+                          <p>Select a node to configure its settings</p>
+                        </div>
+                      )}
+                    </Card>
+                  </div>
+                </div>
+                
+                {/* Footer Actions */}
+                <div className="flex justify-between items-center mt-6 pt-6 border-t border-secondary-200 dark:border-dark-700">
+                  <Button 
+                    variant="outline"
+                    leftIcon={<RiArrowLeftLine />}
+                    onClick={handleCancelProcessFlow}
+                  >
+                    Back to Form
+                  </Button>
+                  
+                  <div className="flex space-x-3">
+                    <Button 
+                      variant="outline"
+                      onClick={handleCancelProcessFlow}
+                    >
+                      Cancel
+                    </Button>
                     <Button 
                       variant="primary"
-                      onClick={() => setShowDetails(false)}
+                      leftIcon={<RiCheckLine />}
+                      onClick={handleFinalSave}
+                      className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
                     >
-                      Close
+                      Save Cleansing Record
                     </Button>
                   </div>
                 </div>
               </div>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
+        </AnimatePresence>
+      )}
+      
+      {/* People Selector Modal */}
+      <PeopleSelectorModal
+        isOpen={showPeopleSelector}
+        onClose={() => setShowPeopleSelector(false)}
+        onSelect={handleUserSelection}
+        title={peopleSelectorType === 'executor' ? 'Select Executor' : 'Add CC Recipient'}
+        users={users}
+        loading={loadingUsers}
+      />
 
       {/* Form View Modal */}
       {showFormView && selectedCleansingEntry && (
@@ -2169,6 +1644,14 @@ const CleansingPage: React.FC = () => {
               <DailyCleaningInspectionTemplate
                 onClose={() => setShowFormView(false)}
                 onSave={handleFormUpdate}
+                initialData={selectedCleansingEntry.form_data}
+                isEditMode={canUserEditEntry(selectedCleansingEntry) || canUserUpdateForm(selectedCleansingEntry)}
+                readOnly={!canUserEditEntry(selectedCleansingEntry) && !canUserUpdateForm(selectedCleansingEntry)}
+                title={`${
+                  canUserEditEntry(selectedCleansingEntry) ? 'Edit' : 
+                  canUserUpdateForm(selectedCleansingEntry) ? 'Update' : 
+                  'View'
+                } Cleansing Record - ${selectedCleansingEntry.date}`}
               />
             </motion.div>
           </div>
@@ -2178,4 +1661,4 @@ const CleansingPage: React.FC = () => {
   );
 };
 
-export default CleansingPage; 
+export default CleansingPage;
