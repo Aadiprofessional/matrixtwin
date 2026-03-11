@@ -231,6 +231,7 @@
   },
   "labour": {
     "title": "Labour Return",
+    "history": "Update History",
     "date": "Date",
     "employee": "Employee",
     "role": "Role",

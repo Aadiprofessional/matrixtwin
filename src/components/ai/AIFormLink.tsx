@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RiFileListLine, RiShieldCheckLine, RiSurveyLine, RiToolsLine, RiArrowRightLine } from 'react-icons/ri';
+import { RiBookmarkLine, RiBrushLine, RiFileList3Line, RiGroupLine, RiShieldCheckLine, RiToolsLine, RiArrowRightLine } from 'react-icons/ri';
 
 interface AIFormLinkProps {
   forms: Array<{
@@ -25,9 +25,14 @@ export const AIFormLink: React.FC<AIFormLinkProps> = ({ forms }) => {
 
   const getIcon = (module: string) => {
     switch (module) {
-      case 'diary': return <RiFileListLine className="text-xl" />;
+      case 'diary': return <RiBookmarkLine className="text-xl" />;
+      case 'rfi':
+      case 'inspection':
+      case 'survey':
+        return <RiFileList3Line className="text-xl" />;
       case 'safety': return <RiShieldCheckLine className="text-xl" />;
-      case 'survey': return <RiSurveyLine className="text-xl" />;
+      case 'labour': return <RiGroupLine className="text-xl" />;
+      case 'cleansing': return <RiBrushLine className="text-xl" />;
       default: return <RiToolsLine className="text-xl" />;
     }
   };

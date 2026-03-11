@@ -11,19 +11,96 @@ import {
   RiPhoneLine,
   RiUserLine,
   RiSendPlaneFill,
-  RiDeleteBinLine
+  RiDeleteBinLine,
+  RiUpload2Line,
+  RiSearchLine,
+  RiFileCopyLine,
+  RiShareLine,
+  RiDownload2Line,
+  RiLinksLine
 } from 'react-icons/ri';
 import { IconContext } from 'react-icons';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import html2canvas from 'html2canvas';
 
 import { useProjects } from '../contexts/ProjectContext';
 import { useAIChat, Message as ChatMessage } from '../contexts/AIChatContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { Dialog } from '../components/ui/Dialog';
 import { ChartBlock } from '../components/ai/ChartBlock';
 import { AIFormLink } from '../components/ai/AIFormLink';
+
+const extractLinkUrls = (content: string): string[] => {
+  const blockRegex = /```linkurl\s*([\s\S]*?)```/gi;
+  const urls: string[] = [];
+  let blockMatch: RegExpExecArray | null;
+  while ((blockMatch = blockRegex.exec(content)) !== null) {
+    const block = blockMatch[1] || '';
+    const urlRegex = /(https?:\/\/[^\s`"']+)/g;
+    let urlMatch: RegExpExecArray | null;
+    while ((urlMatch = urlRegex.exec(block)) !== null) {
+      urls.push(urlMatch[1]);
+    }
+  }
+  return Array.from(new Set(urls));
+};
+
+const stripLinkUrlBlocks = (content: string): string => {
+  return content.replace(/```linkurl\s*[\s\S]*?```/gi, '').trim();
+};
+
+const TableWithActions: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  const exportPng = async (): Promise<Blob | null> => {
+    if (!tableRef.current) return null;
+    const canvas = await html2canvas(tableRef.current, { backgroundColor: '#111827', scale: 2, useCORS: true });
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  };
+
+  const onDownload = async () => {
+    const blob = await exportPng();
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `table-${Date.now()}.png`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const onShare = async () => {
+    const blob = await exportPng();
+    if (!blob) return;
+    const file = new File([blob], `table-${Date.now()}.png`, { type: 'image/png' });
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Table Snapshot' });
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    await navigator.clipboard.writeText(url);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  return (
+    <div className="my-4">
+      <div className="mb-2 flex items-center justify-end gap-2">
+        <button onClick={onDownload} className="text-xs px-2 py-1 rounded border border-white/15 text-gray-300 hover:bg-white/10 inline-flex items-center gap-1">
+          <RiDownload2Line />
+          Download
+        </button>
+        <button onClick={onShare} className="text-xs px-2 py-1 rounded border border-white/15 text-gray-300 hover:bg-white/10 inline-flex items-center gap-1">
+          <RiShareLine />
+          Share
+        </button>
+      </div>
+      <div ref={tableRef}>{children}</div>
+    </div>
+  );
+};
 
 // Helper component to render message content with mixed types (Text, Chart, Forms)
 const MessageContentRenderer: React.FC<{ message: ChatMessage }> = ({ message }) => {
@@ -31,17 +108,12 @@ const MessageContentRenderer: React.FC<{ message: ChatMessage }> = ({ message })
     return <>{message.content}</>;
   }
 
-  // Preprocess content to ensure code blocks are properly formatted for Markdown
-  // This fixes issues where code fences might be malformed or lack necessary newlines
-  let content = message.content
-    // Convert form comments to code blocks
+  let content = stripLinkUrlBlocks(message.content)
     .replace(
       /<!--FORMS_JSON_START-->([\s\S]*?)<!--FORMS_JSON_END-->/g,
       '\n```forms-json\n$1\n```\n'
     )
-    // Fix chartjs blocks that might have spaces (e.g. ``` chartjs)
     .replace(/```\s*chartjs/gi, '\n```chartjs')
-    // Fix broken newlines before code blocks
     .replace(/([^\n])```/g, '$1\n```');
 
   if (message.isStreaming) {
@@ -64,7 +136,13 @@ const MessageContentRenderer: React.FC<{ message: ChatMessage }> = ({ message })
           li: ({node, ...props}) => <li className="pl-1" {...props} />,
           blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-portfolio-orange/50 pl-4 py-1 my-4 bg-white/5 rounded-r italic text-gray-400" {...props} />,
           hr: ({node, ...props}) => <hr className="border-white/10 my-6" {...props} />,
-          table: ({node, ...props}) => <div className="overflow-x-auto my-4 rounded-lg border border-white/10"><table className="min-w-full divide-y divide-white/10" {...props} /></div>,
+          table: ({node, ...props}) => (
+            <TableWithActions>
+              <div className="overflow-x-auto rounded-lg border border-white/10">
+                <table className="min-w-full divide-y divide-white/10" {...props} />
+              </div>
+            </TableWithActions>
+          ),
           thead: ({node, ...props}) => <thead className="bg-white/5" {...props} />,
           th: ({node, ...props}) => <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" {...props} />,
           tbody: ({node, ...props}) => <tbody className="divide-y divide-white/5 bg-transparent" {...props} />,
@@ -145,8 +223,16 @@ const AskAIPage: React.FC = () => {
   } = useAIChat();
   
   const [input, setInput] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedUploadMode, setSelectedUploadMode] = useState<'image' | 'document' | 'pdf_vision' | null>(null);
+  const [isSearchEnabled, setIsSearchEnabled] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [showChatHistory, setShowChatHistory] = useState(false);
   const [activeReasoningId, setActiveReasoningId] = useState<string | null>(null);
+  const [activeLinksMessageId, setActiveLinksMessageId] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const pdfVisionInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -179,11 +265,17 @@ const AskAIPage: React.FC = () => {
   };
 
   const handleSendMessage = async (messageText: string = input) => {
-    if (!messageText.trim()) return;
+    if (!messageText.trim() && !selectedFile) return;
+    const fileToSend = selectedFile;
+    const mode = isSearchEnabled && !fileToSend ? 'search' : 'text';
+    const uploadMode = fileToSend ? selectedUploadMode || (fileToSend.type.startsWith('image/') ? 'image' : 'document') : undefined;
     setInput('');
+    setSelectedFile(null);
+    setSelectedUploadMode(null);
+    setIsSearchEnabled(false);
     
     try {
-      await sendMessage(messageText, selectedProject?.id);
+      await sendMessage(messageText, selectedProject?.id, { mode, file: fileToSend, uploadMode });
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -199,7 +291,53 @@ const AskAIPage: React.FC = () => {
   const handleNewChat = () => {
     startNewChat(selectedProject?.id ? String(selectedProject.id) : undefined);
     setInput('');
+    setSelectedFile(null);
+    setSelectedUploadMode(null);
+    setIsSearchEnabled(false);
     setShowChatHistory(false);
+  };
+
+  const handleFileSelected = (file: File | null, uploadMode: 'image' | 'document' | 'pdf_vision') => {
+    setSelectedFile(file);
+    setSelectedUploadMode(file ? uploadMode : null);
+    setIsSearchEnabled(false);
+  };
+
+  const handleImageFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    handleFileSelected(file, 'image');
+    event.target.value = '';
+  };
+
+  const handleDocumentFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    handleFileSelected(file, 'document');
+    event.target.value = '';
+  };
+
+  const handlePdfVisionFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    handleFileSelected(file, 'pdf_vision');
+    event.target.value = '';
+  };
+
+  const openUploadModal = () => {
+    setShowUploadModal(true);
+  };
+
+  const openImagePicker = () => {
+    setShowUploadModal(false);
+    imageInputRef.current?.click();
+  };
+
+  const openDocumentPicker = () => {
+    setShowUploadModal(false);
+    documentInputRef.current?.click();
+  };
+
+  const openPdfVisionPicker = () => {
+    setShowUploadModal(false);
+    pdfVisionInputRef.current?.click();
   };
   
   const toggleChatHistory = () => {
@@ -220,6 +358,25 @@ const AskAIPage: React.FC = () => {
 
   const handleSwitchToVoice = () => {
     navigate('/voice-call');
+  };
+
+  const copyAiMessage = async (content: string) => {
+    const clean = stripLinkUrlBlocks(content);
+    await navigator.clipboard.writeText(clean);
+  };
+
+  const shareAiMessage = async (content: string) => {
+    const clean = stripLinkUrlBlocks(content);
+    if (navigator.share) {
+      try {
+        await navigator.share({ text: clean, title: 'MatrixTwin AI' });
+        return;
+      } catch (error) {
+        await navigator.clipboard.writeText(clean);
+        return;
+      }
+    }
+    await navigator.clipboard.writeText(clean);
   };
 
   const toggleReasoning = (messageId: string) => {
@@ -386,9 +543,10 @@ const AskAIPage: React.FC = () => {
               )}
               
               {currentChat.messages.map((message) => {
-                // Get reasoning for this specific message if it exists
                 const messageReasoning = window.sessionStorage.getItem(`reasoning-${message.id}`);
                 const isReasoningActive = activeReasoningId === message.id;
+                const links = message.sender === 'ai' ? extractLinkUrls(message.content) : [];
+                const isLinksPanelOpen = activeLinksMessageId === message.id;
                 
                 return (
                   <div
@@ -413,15 +571,40 @@ const AskAIPage: React.FC = () => {
                           ? 'bg-portfolio-orange text-white shadow-md'
                           : 'bg-transparent text-gray-200 pl-0 border-none shadow-none'
                       }`}>
-                        <div className={`mb-1 text-[10px] opacity-70 flex items-center ${message.sender === 'user' ? 'text-white/80' : 'text-gray-400'}`}>
+                        <div className={`mb-1 text-[10px] opacity-80 flex items-center ${message.sender === 'user' ? 'text-white/80' : 'text-portfolio-orange'}`}>
                           <IconContext.Provider value={{ className: "mr-1" }}>
                             <RiLightbulbLine />
                           </IconContext.Provider>
-                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {message.sender === 'user' ? message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'MatrixTwin AI'}
                         </div>
                         
                         {/* Display uploaded image in user message */}
-                        {message.imageUrl && (
+                        {message.attachments && message.attachments.length > 0 && (
+                          <div className="mb-3 space-y-2">
+                            {message.attachments.map((attachment, index) => (
+                              <div key={`${attachment.url}-${index}`} className="rounded-lg overflow-hidden border border-white/15 bg-black/30">
+                                {attachment.fileType === 'image' ? (
+                                  <img
+                                    src={attachment.url}
+                                    alt={attachment.originalName}
+                                    className="max-w-full h-auto max-h-60 object-contain bg-black/50"
+                                  />
+                                ) : (
+                                  <a
+                                    href={attachment.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block px-3 py-2 text-xs text-white/90 hover:text-white hover:bg-white/5 transition-colors break-all"
+                                  >
+                                    {attachment.originalName}
+                                  </a>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {(!message.attachments || message.attachments.length === 0) && message.imageUrl && (
                           <div className="mb-3 rounded-lg overflow-hidden">
                             <img 
                               src={message.imageUrl} 
@@ -443,6 +626,53 @@ const AskAIPage: React.FC = () => {
                             </div>
                           )}
                         </div>
+                        {message.sender === 'ai' && (
+                          <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2">
+                            <span className="text-[10px] text-gray-500">
+                              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {links.length > 0 && (
+                                <button
+                                  onClick={() => setActiveLinksMessageId(isLinksPanelOpen ? null : message.id)}
+                                  className={`w-6 h-6 rounded-full border text-[10px] inline-flex items-center justify-center ${isLinksPanelOpen ? 'border-portfolio-orange text-portfolio-orange bg-portfolio-orange/10' : 'border-white/20 text-gray-300 hover:bg-white/10'}`}
+                                  title="Sources"
+                                >
+                                  <RiLinksLine className="text-xs" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => copyAiMessage(message.content)}
+                                className="w-6 h-6 rounded-full border border-white/20 text-gray-300 hover:bg-white/10 inline-flex items-center justify-center"
+                                title="Copy"
+                              >
+                                <RiFileCopyLine className="text-xs" />
+                              </button>
+                              <button
+                                onClick={() => shareAiMessage(message.content)}
+                                className="w-6 h-6 rounded-full border border-white/20 text-gray-300 hover:bg-white/10 inline-flex items-center justify-center"
+                                title="Share"
+                              >
+                                <RiShareLine className="text-xs" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {message.sender === 'ai' && links.length > 0 && isLinksPanelOpen && (
+                          <div className="mt-2 rounded-lg border border-white/10 bg-black/40 p-2 space-y-1">
+                            {links.map((url, linkIndex) => (
+                              <a
+                                key={`${message.id}-link-${linkIndex}`}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block text-xs text-portfolio-orange hover:text-white break-all"
+                              >
+                                {url}
+                              </a>
+                            ))}
+                          </div>
+                        )}
                         
                         {/* Update the reasoning toggle button */}
                         {message.sender === 'ai' && messageReasoning && !message.isStreaming && (
@@ -475,7 +705,50 @@ const AskAIPage: React.FC = () => {
           {/* Fixed Input area at bottom */}
           <div className="border-t border-white/10 py-4 px-6 bg-black/20 backdrop-blur-md flex-shrink-0">
             <div className="w-full max-w-none">
+              {selectedFile && (
+                <div className="mb-2 inline-flex items-center rounded-lg border border-white/15 bg-black/40 px-3 py-1.5 text-xs text-gray-200 max-w-full">
+                  <span className="truncate">{selectedUploadMode ? `${selectedUploadMode.toUpperCase()} · ${selectedFile.name}` : selectedFile.name}</span>
+                  <button
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setSelectedUploadMode(null);
+                    }}
+                    className="ml-2 text-gray-400 hover:text-white"
+                  >
+                    <RiCloseCircleLine className="text-sm" />
+                  </button>
+                </div>
+              )}
               <div className="flex items-end gap-2 bg-black/40 border border-white/10 rounded-xl p-2 focus-within:ring-1 focus-within:ring-portfolio-orange focus-within:border-portfolio-orange transition-all">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleImageFileSelect}
+                />
+                <input
+                  ref={documentInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".doc,.docx,.txt,.csv,.xlsx,.xls,.ppt,.pptx"
+                  onChange={handleDocumentFileSelect}
+                />
+                <input
+                  ref={pdfVisionInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="application/pdf"
+                  onChange={handlePdfVisionFileSelect}
+                />
+                <Button
+                  onClick={openUploadModal}
+                  variant="outline"
+                  className="rounded-lg w-10 h-10 p-0 flex items-center justify-center border-white/15 text-gray-300 hover:bg-white/10"
+                  title="Attach file"
+                >
+                  <RiUpload2Line className="text-base" />
+                </Button>
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -485,10 +758,19 @@ const AskAIPage: React.FC = () => {
                   rows={1}
                   style={{ height: 'auto', minHeight: '44px' }}
                 />
+                <Button
+                  onClick={() => setIsSearchEnabled(prev => !prev)}
+                  variant={isSearchEnabled ? 'ai' : 'outline'}
+                  className={`rounded-lg h-10 px-3 flex items-center justify-center transition-all ${isSearchEnabled ? 'shadow-lg shadow-portfolio-orange/30' : 'border-white/15 text-gray-300 hover:bg-white/10'}`}
+                  title="Search mode"
+                >
+                  <RiSearchLine className="mr-1" />
+                  Search
+                </Button>
                 <Button 
                   onClick={() => handleSendMessage()}
                   className="rounded-lg w-10 h-10 p-0 flex items-center justify-center bg-portfolio-orange hover:bg-portfolio-orange/80 transition-all shadow-md text-white disabled:opacity-50 disabled:cursor-not-allowed mb-0.5"
-                  disabled={!input.trim()}
+                  disabled={!input.trim() && !selectedFile}
                 >
                   <RiSendPlaneFill className="text-lg" />
                 </Button>
@@ -502,6 +784,38 @@ const AskAIPage: React.FC = () => {
           </div>
         </div>
       </div>
+      {showUploadModal && (
+        <Dialog
+          isOpen={showUploadModal}
+          onClose={() => setShowUploadModal(false)}
+          title="Choose Upload Type"
+          maxWidth="420px"
+        >
+          <div className="space-y-3">
+            <Button
+              onClick={openImagePicker}
+              variant="outline"
+              className="w-full justify-start border-white/15 text-gray-200 hover:bg-white/10"
+            >
+              Image Upload
+            </Button>
+            <Button
+              onClick={openPdfVisionPicker}
+              variant="outline"
+              className="w-full justify-start border-white/15 text-gray-200 hover:bg-white/10"
+            >
+              PDF Vision Upload
+            </Button>
+            <Button
+              onClick={openDocumentPicker}
+              variant="outline"
+              className="w-full justify-start border-white/15 text-gray-200 hover:bg-white/10"
+            >
+              Document Upload
+            </Button>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 };

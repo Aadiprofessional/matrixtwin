@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
@@ -15,10 +15,27 @@ import { UserSelectionModal } from '../components/modals/UserSelectionModal';
 import { generateFormPdf } from '../utils/pdfUtils';
 import { API_BASE_URL } from '../utils/api';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
+import { ReportModal } from '../components/common/ReportModal';
+import { FullReportContent } from '../components/common/FullReportContent';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement
+} from 'chart.js';
 
 // Import only the template components we need
 import { InspectionCheckFormTemplate } from '../components/forms/InspectionCheckFormTemplate';
 import { SurveyCheckFormTemplate } from '../components/forms/SurveyCheckFormTemplate';
+
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, BarElement);
 
 // Add interfaces for process flow (similar to diary page)
 interface ProcessNode {
@@ -40,6 +57,21 @@ interface User {
   email: string;
   role?: string;
   avatar_url?: string;
+}
+
+interface HistoryEntry {
+  id: string;
+  changed_at: string;
+  form_data: any;
+  users?: {
+    name: string;
+    email: string;
+  };
+  // Compatibility fields
+  action?: string;
+  changes?: string;
+  performed_by?: string;
+  timestamp?: string;
 }
 
 // Types
@@ -70,6 +102,9 @@ interface RfiItem {
   project_id?: string;
   pdf_url?: string;
   form_assignments?: any[];
+  active?: boolean;
+  expires_at?: string;
+  expiresAt?: string;
 }
 
 // People selector modal component (similar to diary page)
@@ -157,7 +192,7 @@ const PeopleSelectorModal: React.FC<{
                       className="w-10 h-10 rounded-full mr-3"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 flex items-center justify-center font-medium mr-3">
+                    <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-medium mr-3">
                       {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                     </div>
                   )}
@@ -193,6 +228,9 @@ const RfiPage: React.FC = () => {
   const [showResponseForm, setShowResponseForm] = useState(false);
   const [responseText, setResponseText] = useState('');
   const [showFormSelector, setShowFormSelector] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  const reportContentRef = useRef<HTMLDivElement | null>(null);
 
   const [inspectionTemplateVisible, setInspectionTemplateVisible] = useState(false);
   const [surveyTemplateVisible, setSurveyTemplateVisible] = useState(false);
@@ -204,6 +242,85 @@ const RfiPage: React.FC = () => {
 
   // Mock RFI data
   const [rfiItems, setRfiItems] = useState<RfiItem[]>([]);
+  
+  // History states
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyData, setHistoryData] = useState<HistoryEntry[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showHistoryForm, setShowHistoryForm] = useState(false);
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<HistoryEntry | null>(null);
+  const [expiryDrafts, setExpiryDrafts] = useState<Record<string, string>>({});
+  const [savingExpiry, setSavingExpiry] = useState<Record<string, boolean>>({});
+  const [updatingExpiryStatus, setUpdatingExpiryStatus] = useState<Record<string, boolean>>({});
+  const [sendingNodeReminder, setSendingNodeReminder] = useState<Record<string, boolean>>({});
+  const [renamingRfi, setRenamingRfi] = useState<Record<string, boolean>>({});
+
+  const fetchHistory = async (rfiId: string, formType?: 'inspection' | 'survey') => {
+    try {
+      setLoadingHistory(true);
+      // Default to inspection if undefined, or handle generic RFIs if they have history
+      const endpointType = formType === 'survey' ? 'survey' : 'inspection';
+      
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/${endpointType}/${rfiId}/history`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setHistoryData(data);
+      } else {
+        console.error('Failed to fetch history');
+        setHistoryData([]);
+      }
+    } catch (error) {
+      console.error('Error fetching history:', error);
+      setHistoryData([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleRestore = async (history: HistoryEntry) => {
+    if (!selectedRfi) return;
+    
+    if (!window.confirm('Are you sure you want to restore this version? This will create a new history entry with the current state.')) {
+      return;
+    }
+
+    try {
+      const endpointType = selectedRfi.form_type === 'survey' ? 'survey' : 'inspection';
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/${endpointType}/${selectedRfi.id}/restore`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ historyId: history.id })
+      });
+
+      if (response.ok) {
+        alert(`${endpointType === 'survey' ? 'Survey' : 'Inspection'} entry restored successfully!`);
+        setShowHistory(false);
+        loadRfis(); // Refresh the list
+        setSelectedRfi(null);
+        setShowRfiDetails(false);
+      } else {
+        const error = await response.json();
+        alert(`Failed to restore entry: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error restoring entry:', error);
+      alert('Failed to restore entry. Please try again.');
+    }
+  };
+
+  const handleViewHistory = async (rfi: RfiItem) => {
+    setSelectedRfi(rfi);
+    setShowHistory(true);
+    await fetchHistory(rfi.id, rfi.form_type);
+  };
+
   const [loading, setLoading] = useState(false);
   
   const [users, setUsers] = useState<User[]>([]);
@@ -439,6 +556,60 @@ const RfiPage: React.FC = () => {
   };
   
   // Filter RFIs based on search and status
+  const toDatetimeLocalValue = (date: Date) => {
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+  };
+
+  const getDefaultExpiryDate = (rfi: RfiItem) => {
+    const baseDate = new Date(rfi.created_at || rfi.submittedDate);
+    const resolvedBaseDate = Number.isNaN(baseDate.getTime()) ? new Date() : baseDate;
+    const defaultExpiryDate = new Date(resolvedBaseDate);
+    defaultExpiryDate.setDate(defaultExpiryDate.getDate() + 10);
+    return defaultExpiryDate;
+  };
+
+  const getEntryExpiryDate = (rfi: RfiItem) => {
+    const expirySource = rfi.expires_at || rfi.expiresAt;
+    const parsedExpiry = expirySource ? new Date(expirySource) : getDefaultExpiryDate(rfi);
+    return Number.isNaN(parsedExpiry.getTime()) ? getDefaultExpiryDate(rfi) : parsedExpiry;
+  };
+
+  const isEntryExpired = (rfi: RfiItem) => {
+    return rfi.active === false || getEntryExpiryDate(rfi).getTime() <= Date.now();
+  };
+
+  const getRfiDisplayName = (rfi: RfiItem) => {
+    const preferredName = (rfi.name || rfi.title || '').trim();
+    if (!preferredName || preferredName.toLowerCase() === 'unknown project') {
+      return rfi.form_type === 'survey' ? 'New Survey' : 'New Inspection';
+    }
+    return preferredName;
+  };
+
+  const getExpirySummary = (rfi: RfiItem) => {
+    const expiryDate = getEntryExpiryDate(rfi);
+    const now = new Date();
+    const msLeft = expiryDate.getTime() - now.getTime();
+    const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+    if (isEntryExpired(rfi)) {
+      const daysOverdue = Math.max(1, Math.abs(daysLeft));
+      return {
+        text: `Expired ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} ago`,
+        className: 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300'
+      };
+    }
+    return {
+      text: `Expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+      className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-300'
+    };
+  };
+
+  const canSendNodeReminder = (node: any) => {
+    const nodeName = String(node?.node_name || node?.name || '').toLowerCase();
+    return nodeName !== 'start' && nodeName !== 'complete';
+  };
+
   const filteredRfis = rfiItems.filter((rfi) => {
     // Status filter
     if (statusFilter !== 'all' && rfi.status !== statusFilter) return false;
@@ -450,7 +621,7 @@ const RfiPage: React.FC = () => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
-        rfi.title.toLowerCase().includes(query) ||
+        getRfiDisplayName(rfi).toLowerCase().includes(query) ||
         rfi.description.toLowerCase().includes(query) ||
         rfi.submittedBy.toLowerCase().includes(query)
       );
@@ -458,6 +629,175 @@ const RfiPage: React.FC = () => {
     
     return true;
   });
+
+  const reportBaseRfis = useMemo(() => {
+    return rfiItems.filter((rfi) => {
+      if (statusFilter !== 'all' && rfi.status !== statusFilter) return false;
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          getRfiDisplayName(rfi).toLowerCase().includes(query) ||
+          rfi.description.toLowerCase().includes(query) ||
+          rfi.submittedBy.toLowerCase().includes(query)
+        );
+      }
+      return true;
+    });
+  }, [rfiItems, statusFilter, searchQuery]);
+
+  const inspectionReportRows = useMemo(() => (
+    reportBaseRfis
+      .filter((rfi) => rfi.form_type === 'inspection')
+      .map((rfi) => ({
+        id: rfi.id,
+        date: rfi.submittedDate || (rfi.created_at ? new Date(rfi.created_at).toLocaleDateString() : '-'),
+        title: rfi.title || '-',
+        submittedBy: rfi.submittedBy || '-',
+        description: rfi.description || '-',
+        priority: rfi.priority || '-',
+        status: rfi.status || 'pending',
+        type: 'Inspection'
+      }))
+  ), [reportBaseRfis]);
+
+  const surveyReportRows = useMemo(() => (
+    reportBaseRfis
+      .filter((rfi) => rfi.form_type === 'survey')
+      .map((rfi) => ({
+        id: rfi.id,
+        date: rfi.submittedDate || (rfi.created_at ? new Date(rfi.created_at).toLocaleDateString() : '-'),
+        title: rfi.title || '-',
+        submittedBy: rfi.submittedBy || '-',
+        description: rfi.description || '-',
+        priority: rfi.priority || '-',
+        status: rfi.status || 'pending',
+        type: 'Survey'
+      }))
+  ), [reportBaseRfis]);
+
+  const buildSectionReportData = useCallback((rows: Array<Record<string, any>>) => {
+    const statusCounts = {
+      pending: rows.filter((row) => row.status === 'pending').length,
+      completed: rows.filter((row) => row.status === 'completed' || row.status === 'answered' || row.status === 'closed').length,
+      rejected: rows.filter((row) => row.status === 'rejected').length,
+      permanentlyRejected: rows.filter((row) => row.status === 'permanently_rejected').length
+    };
+
+    const highlights = [
+      `Total listed records: ${rows.length}`,
+      `Open requests: ${statusCounts.pending}`,
+      `Resolved requests: ${statusCounts.completed}`,
+      `Rejected requests: ${statusCounts.rejected + statusCounts.permanentlyRejected}`
+    ];
+
+    const statusChartData = {
+      labels: ['Open', 'Resolved', 'Rejected', 'Permanently Rejected'],
+      datasets: [{
+        data: [statusCounts.pending, statusCounts.completed, statusCounts.rejected, statusCounts.permanentlyRejected],
+        backgroundColor: ['#818cf8', '#3b82f6', '#6366f1', '#3730a3'],
+        borderColor: ['#a5b4fc', '#93c5fd', '#818cf8', '#4f46e5'],
+        borderWidth: 1
+      }]
+    };
+
+    const timelineMap = rows.reduce<Record<string, number>>((acc, row) => {
+      const key = row.date || 'Unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const timelineLabels = Object.keys(timelineMap).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    const trendChartData = {
+      labels: timelineLabels,
+      datasets: [{
+        label: 'Requests',
+        data: timelineLabels.map((label) => timelineMap[label]),
+        borderColor: '#4f46e5',
+        backgroundColor: 'rgba(79, 70, 229, 0.2)',
+        tension: 0.3,
+        fill: true
+      }]
+    };
+
+    const contributorMap = rows.reduce<Record<string, number>>((acc, row) => {
+      const key = row.submittedBy || 'Unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const contributors = Object.entries(contributorMap).sort((a, b) => b[1] - a[1]).slice(0, 7);
+    const contributorChartData = {
+      labels: contributors.map(([name]) => name),
+      datasets: [{
+        label: 'Requests',
+        data: contributors.map(([, count]) => count),
+        backgroundColor: '#4338ca'
+      }]
+    };
+
+    const priorityMap = rows.reduce<Record<string, number>>((acc, row) => {
+      const key = row.priority || 'unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const priorities = Object.entries(priorityMap).sort((a, b) => b[1] - a[1]);
+    const priorityChartData = {
+      labels: priorities.map(([priority]) => priority),
+      datasets: [{
+        label: 'Requests',
+        data: priorities.map(([, count]) => count),
+        backgroundColor: '#6366f1'
+      }]
+    };
+
+    const issueRows = rows.filter((row) => row.status === 'pending' || row.status === 'rejected' || row.status === 'permanently_rejected');
+
+    return {
+      statusCounts,
+      highlights,
+      statusChartData,
+      trendChartData,
+      contributorChartData,
+      priorityChartData,
+      issueRows
+    };
+  }, []);
+
+  const inspectionReportData = useMemo(() => buildSectionReportData(inspectionReportRows), [inspectionReportRows, buildSectionReportData]);
+  const surveyReportData = useMemo(() => buildSectionReportData(surveyReportRows), [surveyReportRows, buildSectionReportData]);
+
+  const chartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#4338ca' } } },
+    scales: {
+      x: { ticks: { color: '#4338ca' }, grid: { color: 'rgba(99, 102, 241, 0.2)' } },
+      y: { ticks: { color: '#4338ca', precision: 0 }, grid: { color: 'rgba(99, 102, 241, 0.2)' } }
+    }
+  }), []);
+
+  const handleDownloadReportPdf = useCallback(async () => {
+    if (!reportContentRef.current) return;
+    setIsDownloadingReport(true);
+    try {
+      const canvas = await html2canvas(reportContentRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imageData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const width = pdf.internal.pageSize.getWidth();
+      const height = (canvas.height * width) / canvas.width;
+      let position = 0;
+      let remaining = height;
+      pdf.addImage(imageData, 'PNG', 0, position, width, height);
+      remaining -= pdf.internal.pageSize.getHeight();
+      while (remaining > 0) {
+        position = remaining - height;
+        pdf.addPage();
+        pdf.addImage(imageData, 'PNG', 0, position, width, height);
+        remaining -= pdf.internal.pageSize.getHeight();
+      }
+      pdf.save(`rfi-rics-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } finally {
+      setIsDownloadingReport(false);
+    }
+  }, []);
 
   const getWorkflowStatusBadge = (rfi: RfiItem) => {
     const statusColors = {
@@ -858,6 +1198,153 @@ const RfiPage: React.FC = () => {
     }
   };
 
+  const handleSetExpiry = async (rfi: RfiItem) => {
+    if (!user?.id || user.role !== 'admin') return;
+    const draftValue = expiryDrafts[rfi.id];
+    if (!draftValue) {
+      alert('Please select an expiry date and time.');
+      return;
+    }
+    const parsedExpiry = new Date(draftValue);
+    if (Number.isNaN(parsedExpiry.getTime())) {
+      alert('Invalid expiry date.');
+      return;
+    }
+    const endpointType = rfi.form_type === 'survey' ? 'survey' : 'inspection';
+    try {
+      setSavingExpiry((prev) => ({ ...prev, [rfi.id]: true }));
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/${endpointType}/${rfi.id}/expiry`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          expiresAt: parsedExpiry.toISOString()
+        })
+      });
+      if (response.ok) {
+        alert('Expiry date updated successfully.');
+        await loadRfis();
+      } else {
+        const error = await response.json();
+        alert(`Failed to set expiry date: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error setting expiry date:', error);
+      alert('Failed to set expiry date. Please try again.');
+    } finally {
+      setSavingExpiry((prev) => ({ ...prev, [rfi.id]: false }));
+    }
+  };
+
+  const handleSetExpiryStatus = async (rfi: RfiItem, nextActive: boolean) => {
+    if (!user?.id || user.role !== 'admin') return;
+    const endpointType = rfi.form_type === 'survey' ? 'survey' : 'inspection';
+    try {
+      setUpdatingExpiryStatus((prev) => ({ ...prev, [rfi.id]: true }));
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/${endpointType}/${rfi.id}/expiry-status`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          active: nextActive
+        })
+      });
+      if (response.ok) {
+        alert(nextActive ? 'Entry reactivated.' : 'Entry marked as expired.');
+        await loadRfis();
+      } else {
+        const error = await response.json();
+        alert(`Failed to update expiry status: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error updating expiry status:', error);
+      alert('Failed to update expiry status. Please try again.');
+    } finally {
+      setUpdatingExpiryStatus((prev) => ({ ...prev, [rfi.id]: false }));
+    }
+  };
+
+  const handleNodeReminder = async (rfi: RfiItem, node: any) => {
+    if (!user?.id || user.role !== 'admin') return;
+    const endpointType = rfi.form_type === 'survey' ? 'survey' : 'inspection';
+    const defaultMessage = `Reminder: Please action "${node.node_name}" step.`;
+    const messageInput = prompt('Enter reminder message for this step:', defaultMessage);
+    if (messageInput === null) return;
+    const message = messageInput.trim() || defaultMessage;
+    const reminderKey = `${rfi.id}-${node.node_order}`;
+    try {
+      setSendingNodeReminder((prev) => ({ ...prev, [reminderKey]: true }));
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/${endpointType}/${rfi.id}/nodes/${node.node_order}/delay-notify`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          message
+        })
+      });
+      if (response.ok) {
+        alert('Reminder sent successfully.');
+      } else {
+        const error = await response.json();
+        alert(`Failed to send reminder: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error sending reminder:', error);
+      alert('Failed to send reminder. Please try again.');
+    } finally {
+      setSendingNodeReminder((prev) => ({ ...prev, [reminderKey]: false }));
+    }
+  };
+
+  const handleRenameRfi = async (rfi: RfiItem) => {
+    if (!user?.id || user.role !== 'admin') return;
+    const currentName = getRfiDisplayName(rfi);
+    const nextNamePrompt = prompt('Enter new form name:', currentName);
+    if (nextNamePrompt === null) return;
+    const nextName = nextNamePrompt.trim();
+    if (!nextName) {
+      alert('Name cannot be empty.');
+      return;
+    }
+    if (nextName === currentName) return;
+    const endpointType = rfi.form_type === 'survey' ? 'survey' : 'inspection';
+    try {
+      setRenamingRfi((prev) => ({ ...prev, [rfi.id]: true }));
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/${endpointType}/${rfi.id}/name`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          name: nextName
+        })
+      });
+      if (response.ok) {
+        alert('Form renamed successfully.');
+        await loadRfis();
+      } else {
+        const error = await response.json();
+        alert(`Failed to rename form: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error renaming form:', error);
+      alert('Failed to rename form. Please try again.');
+    } finally {
+      setRenamingRfi((prev) => ({ ...prev, [rfi.id]: false }));
+    }
+  };
+
   // Handle inspection form submission
   const handleInspectionFormSubmit = (data: any) => {
     if (selectedRfi) {
@@ -1195,163 +1682,123 @@ const RfiPage: React.FC = () => {
 
 
   return (
-    <div className="max-w-7xl mx-auto pb-12">
-      {/* Enhanced Header with gradient and pattern */}
-      <div className="relative overflow-hidden rounded-xl mb-8 bg-gradient-to-r from-indigo-900 via-purple-800 to-violet-900">
-        <div className="absolute inset-0 bg-ai-dots opacity-20"></div>
-        <div className="absolute right-0 top-0 w-1/3 h-full">
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
-            <motion.path 
-              d="M0,0 L100,0 L100,100 Q60,80 30,100 L0,100 Z"
-              fill="url(#gradient)" 
-              className="opacity-30"
-              initial={{ x: 100 }}
-              animate={{ x: 0 }}
-              transition={{ duration: 1.5 }}
-            />
-            <defs>
-              <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#6366f1" />
-                <stop offset="100%" stopColor="#a855f7" />
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        
-        <div className="p-8 relative z-10">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-            <div>
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                <h1 className="text-3xl md:text-4xl font-display font-bold text-white flex items-center">
-                  <RiIcons.RiBellLine className="mr-3 text-purple-300" />
-                  Requests for Information
-                </h1>
-                <p className="text-purple-200 mt-2 max-w-2xl">
-                  Manage information requests, track responses, and streamline communication for your construction project
-                </p>
-              </motion.div>
+    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative mb-8 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-900 p-6 md:p-8"
+      >
+        <div className="absolute inset-0 bg-ai-dots opacity-20" />
+        <div className="relative z-10">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <h1 className="flex items-center text-3xl font-display font-bold text-white md:text-4xl">
+                <RiIcons.RiFileList3Line className="mr-3 text-indigo-200" />
+                Requests for Information
+              </h1>
+              <p className="max-w-3xl text-sm text-white/75 md:text-base">
+                Manage information requests with faster scanning, stronger status visibility, and cleaner workflow context.
+              </p>
             </div>
-            
-            <motion.div
-              className="mt-4 md:mt-0 flex space-x-3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              <Button 
-                variant="futuristic" 
+            <div className="mt-2 flex flex-nowrap items-center gap-3 lg:mt-0">
+              <Button
+                variant="primary"
                 leftIcon={<RiIcons.RiAddLine />}
                 onClick={() => {
                   setSelectedRfi(null);
                   setShowFormSelector(true);
                 }}
-                animated
-                pulseEffect
-                glowing
+                className="whitespace-nowrap bg-gradient-to-r from-indigo-700 to-blue-700 hover:from-indigo-800 hover:to-blue-800"
               >
                 New Request
               </Button>
-              <Button 
-                variant="futuristic"
+              <Button
+                variant="outline"
                 leftIcon={<RiIcons.RiFileTextLine />}
-                animated
-                glowing
+                className="whitespace-nowrap border-white/30 bg-white/10 text-white hover:bg-white/20"
+                onClick={() => setShowReport(true)}
               >
                 Generate Report
               </Button>
-            </motion.div>
+            </div>
           </div>
-
-          {/* Statistics Section */}
-          <motion.div 
-            className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-indigo-500/20 rounded-full mr-4">
-                <RiIcons.RiFileTextLine className="text-2xl text-indigo-300" />
-              </div>
-              <div>
-                <div className="text-sm text-purple-200">Total Requests</div>
-                <div className="text-2xl font-bold text-white">{rfiItems.length}</div>
-              </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Total Requests</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{rfiItems.length}</div>
             </div>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-purple-500/20 rounded-full mr-4">
-                <RiIcons.RiTimeLine className="text-2xl text-purple-300" />
-              </div>
-              <div>
-                <div className="text-sm text-purple-200">Pending Responses</div>
-                <div className="text-2xl font-bold text-white">{rfiItems.filter(item => item.status === 'pending').length}</div>
-              </div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Pending Responses</div>
+              <div className="mt-1 text-2xl font-semibold text-indigo-100">{rfiItems.filter(item => item.status === 'pending').length}</div>
             </div>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-violet-500/20 rounded-full mr-4">
-                <RiIcons.RiCheckLine className="text-2xl text-violet-300" />
-              </div>
-              <div>
-                <div className="text-sm text-purple-200">Closed Requests</div>
-                <div className="text-2xl font-bold text-white">{rfiItems.filter(item => item.status === 'closed').length}</div>
-              </div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Closed Requests</div>
+              <div className="mt-1 text-2xl font-semibold text-blue-100">{rfiItems.filter(item => item.status === 'closed').length}</div>
             </div>
-          </motion.div>
+          </div>
         </div>
-      </div>
+      </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className="mb-6"
-      >
-        <Card variant="ai" className="p-4">
-          <div className="flex flex-col gap-4">
-            {/* Search and Data Type Filters */}
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-grow">
-                <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400">
-                  <div><RiIcons.RiSearchLine /></div>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search RFIs..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="input-ai pl-10 w-full"
-                />
-              </div>
-              
-              <div className="flex gap-4">
-                <select
-                  value={formTypeFilter}
-                  onChange={(e) => setFormTypeFilter(e.target.value as any)}
-                  className="input-ai py-2 px-4 rounded-lg bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-700"
-                >
-                  <option value="all">All Forms</option>
-                  <option value="inspection">Inspections</option>
-                  <option value="survey">Surveys</option>
-                </select>
-
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="input-ai py-2 px-4 rounded-lg bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-700"
-                >
-                  <option value="all">All Status</option>
-                  <option value="pending">Pending</option>
-                  <option value="answered">Answered</option>
-                  <option value="closed">Closed</option>
-                </select>
-              </div>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Card variant="glass" className="space-y-4 border border-secondary-200/60 p-4 md:p-5 dark:border-dark-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center text-sm font-semibold text-secondary-800 dark:text-secondary-200">
+              <RiIcons.RiFilter3Line className="mr-2 text-indigo-700 dark:text-indigo-300" />
+              Search & Filter
             </div>
+            {(searchQuery || formTypeFilter !== 'all' || statusFilter !== 'all') && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery('');
+                  setFormTypeFilter('all');
+                  setStatusFilter('all');
+                }}
+              >
+                Reset
+              </Button>
+            )}
+          </div>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),200px,190px]">
+            <div className="relative">
+              <RiIcons.RiSearchLine className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-secondary-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by title, submitter, description"
+                className="h-11 w-full rounded-xl border border-secondary-200 bg-white py-2.5 pl-10 pr-10 text-sm text-secondary-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-indigo-500/20"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-500 hover:text-secondary-700 dark:hover:text-secondary-300"
+                >
+                  <RiIcons.RiCloseLine />
+                </button>
+              )}
+            </div>
+            <select
+              value={formTypeFilter}
+              onChange={(e) => setFormTypeFilter(e.target.value as any)}
+              className="h-11 rounded-xl border border-secondary-200 bg-white px-3 text-sm text-secondary-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-indigo-500/20"
+            >
+              <option value="all">All forms</option>
+              <option value="inspection">Inspections</option>
+              <option value="survey">Surveys</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-11 rounded-xl border border-secondary-200 bg-white px-3 text-sm text-secondary-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-indigo-500/20"
+            >
+              <option value="all">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="answered">Answered</option>
+              <option value="closed">Closed</option>
+            </select>
           </div>
         </Card>
       </motion.div>
@@ -1378,14 +1825,12 @@ const RfiPage: React.FC = () => {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <Card 
-                className="p-0 overflow-hidden hover:shadow-xl transition-all duration-300 border border-secondary-100 dark:border-dark-700"
-              >
-                <div className="bg-gradient-to-r from-primary-50 to-primary-100 dark:from-primary-900/20 dark:to-primary-800/20 p-4">
+              <Card className="h-full border border-indigo-200/60 bg-gradient-to-b from-white to-indigo-50/80 p-0 dark:border-dark-700 dark:from-dark-900 dark:to-dark-800/80">
+                <div className="border-b border-indigo-200/60 bg-gradient-to-r from-indigo-100/60 via-indigo-50/70 to-white p-4 dark:border-dark-700 dark:from-indigo-900/20 dark:via-dark-800 dark:to-dark-900">
                   <div className="flex justify-between mb-2">
                     <div className="flex items-center">
-                      <RiIcons.RiCalendarLine className="text-primary-600 dark:text-primary-400 mr-2" />
-                      <span className="font-medium text-primary-900 dark:text-primary-300">
+                      <RiIcons.RiCalendarLine className="text-indigo-700 dark:text-indigo-300 mr-2" />
+                      <span className="font-medium text-indigo-900 dark:text-indigo-200">
                         {new Date(rfi.submittedDate).toLocaleDateString()}
                       </span>
                     </div>
@@ -1395,16 +1840,20 @@ const RfiPage: React.FC = () => {
                   </div>
                   
                   <h3 className="font-display font-semibold text-lg text-secondary-900 dark:text-white mb-1">
-                    {rfi.title}
+                    {getRfiDisplayName(rfi)}
                   </h3>
                   
-                  <div className="flex items-center text-sm text-secondary-600 dark:text-secondary-400">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-secondary-600 dark:text-secondary-400">
                     <RiIcons.RiUserLine className="mr-1" />
                     <span className="ml-1">From: {rfi.submittedBy}</span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${getExpirySummary(rfi).className}`}>
+                      <RiIcons.RiTimeLine className="mr-1" />
+                      {getExpirySummary(rfi).text}
+                    </span>
                   </div>
                 </div>
                 
-                <div className="p-4">
+                <div className="space-y-4 p-4">
                   <div className="mb-4">
                     <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-2">
                       Description:
@@ -1414,8 +1863,8 @@ const RfiPage: React.FC = () => {
                     </p>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="rounded-lg border border-indigo-200/60 bg-indigo-50/70 p-3 dark:border-dark-700 dark:bg-dark-800/70">
                       <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
                         Type:
                       </h4>
@@ -1423,7 +1872,7 @@ const RfiPage: React.FC = () => {
                         {rfi.form_type ? rfi.form_type.charAt(0).toUpperCase() + rfi.form_type.slice(1) : 'RFI'}
                       </p>
                     </div>
-                    <div>
+                    <div className="rounded-lg border border-indigo-200/60 bg-indigo-50/70 p-3 dark:border-dark-700 dark:bg-dark-800/70">
                       <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
                         Assigned To:
                       </h4>
@@ -1432,9 +1881,59 @@ const RfiPage: React.FC = () => {
                       </p>
                     </div>
                   </div>
+                  {user?.role === 'admin' && (
+                    <div className="rounded-lg border border-indigo-200/60 bg-indigo-50/70 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+                      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                        {isEntryExpired(rfi) ? 'Activation' : 'Expiry Controls'}
+                      </div>
+                      {isEntryExpired(rfi) ? (
+                        <div className="flex justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSetExpiryStatus(rfi, true)}
+                            isLoading={!!updatingExpiryStatus[rfi.id]}
+                            leftIcon={<RiIcons.RiCheckLine />}
+                            className="h-9"
+                          >
+                            Set Active
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr),auto,auto]">
+                          <input
+                            type="datetime-local"
+                            value={expiryDrafts[rfi.id] || toDatetimeLocalValue(getEntryExpiryDate(rfi))}
+                            onChange={(e) => setExpiryDrafts((prev) => ({ ...prev, [rfi.id]: e.target.value }))}
+                            className="h-9 rounded-lg border border-secondary-200 bg-white px-3 text-xs text-secondary-900 outline-none transition [color-scheme:light] [&::-webkit-calendar-picker-indicator]:cursor-pointer dark:border-dark-600 dark:bg-white dark:text-secondary-900 dark:focus:ring-indigo-500/20 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSetExpiry(rfi)}
+                            isLoading={!!savingExpiry[rfi.id]}
+                            leftIcon={<RiIcons.RiCalendarCheckLine />}
+                            className="h-9"
+                          >
+                            Set Expiry
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSetExpiryStatus(rfi, false)}
+                            isLoading={!!updatingExpiryStatus[rfi.id]}
+                            leftIcon={<RiIcons.RiCloseLine />}
+                            className="h-9"
+                          >
+                            Set Expired
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   
-                  <div className="flex justify-end mt-4">
-                    <div className="flex space-x-2">
+                  <div className="flex flex-wrap justify-end gap-2 pt-1">
+                    <div className="flex flex-wrap gap-2">
                       <Button 
                         variant="outline" 
                         size="sm"
@@ -1443,10 +1942,31 @@ const RfiPage: React.FC = () => {
                           setShowRfiDetails(true);
                         }}
                         rightIcon={<RiIcons.RiArrowRightLine />}
-                        className="hover:bg-primary-50 dark:hover:bg-primary-900/20"
                       >
                         View Details
                       </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewHistory(rfi);
+                        }}
+                        leftIcon={<RiIcons.RiHistoryLine />}
+                      >
+                        History
+                      </Button>
+                      {user?.role === 'admin' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRenameRfi(rfi)}
+                          isLoading={!!renamingRfi[rfi.id]}
+                          leftIcon={<RiIcons.RiEditLine />}
+                        >
+                          Rename
+                        </Button>
+                      )}
                       {/* Admin delete button */}
                       {user?.role === 'admin' && (
                         <Button 
@@ -1454,7 +1974,7 @@ const RfiPage: React.FC = () => {
                           size="sm"
                           onClick={() => handleDeleteRfi(rfi)}
                           leftIcon={<RiIcons.RiDeleteBinLine />}
-                          className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
+                          className="border-indigo-200 text-indigo-700 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
                         >
                           Delete
                         </Button>
@@ -1476,7 +1996,7 @@ const RfiPage: React.FC = () => {
             <h3 className="text-xl font-medium mb-2">No RFIs found</h3>
             <p className="text-gray-500 mb-6">Try adjusting your search criteria or create a new RFI</p>
             <Button 
-              variant="ai-gradient" 
+              variant="primary" 
               onClick={() => {
                 setSelectedRfi(null);
                 setShowFormSelector(true);
@@ -1493,20 +2013,20 @@ const RfiPage: React.FC = () => {
       <AnimatePresence>
         {showFormSelector && (
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-indigo-950/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={() => setShowFormSelector(false)}
           >
             <motion.div
-              className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-xl"
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-indigo-200/40 bg-gradient-to-b from-white to-indigo-50/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-4xl sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="sticky top-0 z-20 border-b border-indigo-200/60 bg-gradient-to-r from-indigo-900 to-violet-900 px-6 py-5 text-white dark:border-dark-700">
                 <h2 className="text-xl font-semibold">Select Form Template</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <p className="mt-1 text-sm text-indigo-100">
                   Choose the type of request form you need
                 </p>
               </div>
@@ -1536,7 +2056,7 @@ const RfiPage: React.FC = () => {
                 ))}
               </div>
               
-              <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+              <div className="sticky bottom-0 flex justify-end border-t border-indigo-200/60 bg-white/95 p-4 backdrop-blur-sm dark:border-dark-700 dark:bg-dark-900/95">
                 <Button variant="ghost" onClick={() => setShowFormSelector(false)}>
                   Cancel
                 </Button>
@@ -1550,25 +2070,33 @@ const RfiPage: React.FC = () => {
       <AnimatePresence>
         {inspectionTemplateVisible && (
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-indigo-950/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={() => setInspectionTemplateVisible(false)}
           >
             <motion.div
-              className="bg-dark-900/80 backdrop-blur-md border border-white/10 shadow-lg rounded-xl overflow-hidden w-full max-w-6xl max-h-[90vh] overflow-auto"
+              className="h-[95dvh] w-full overflow-auto rounded-t-2xl border border-indigo-200/40 bg-gradient-to-b from-white to-indigo-50/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <InspectionCheckFormTemplate
-                onClose={() => {
-                  setInspectionTemplateVisible(false);
-                  setSelectedRfi(null);
-                }}
-                onSave={handleInspectionFormSubmit}
-                initialData={selectedRfi?.form_data}
-              />
+              <div className="sticky top-0 z-20 flex items-center justify-between border-b border-indigo-200/60 bg-gradient-to-r from-indigo-900 to-violet-900 px-4 py-3 text-white dark:border-dark-700">
+                <div className="text-sm font-semibold">Inspection Form</div>
+                <Button variant="ghost" size="sm" onClick={() => setInspectionTemplateVisible(false)} leftIcon={<RiIcons.RiCloseLine />}>
+                  Close
+                </Button>
+              </div>
+              <div className="max-h-[calc(95dvh-56px)] overflow-y-auto sm:max-h-[calc(92vh-56px)]">
+                <InspectionCheckFormTemplate
+                  onClose={() => {
+                    setInspectionTemplateVisible(false);
+                    setSelectedRfi(null);
+                  }}
+                  onSave={handleInspectionFormSubmit}
+                  initialData={selectedRfi?.form_data}
+                />
+              </div>
             </motion.div>
           </div>
         )}
@@ -1578,25 +2106,33 @@ const RfiPage: React.FC = () => {
       <AnimatePresence>
         {surveyTemplateVisible && (
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-indigo-950/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={() => setSurveyTemplateVisible(false)}
           >
             <motion.div
-              className="w-full max-w-6xl max-h-[90vh] overflow-auto"
+              className="h-[95dvh] w-full overflow-auto rounded-t-2xl border border-indigo-200/40 bg-gradient-to-b from-white to-indigo-50/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <SurveyCheckFormTemplate
-                onClose={() => {
-                  setSurveyTemplateVisible(false);
-                  setSelectedRfi(null);
-                }}
-                onSave={handleSurveyFormSubmit}
-                initialData={selectedRfi?.form_data}
-              />
+              <div className="sticky top-0 z-20 flex items-center justify-between border-b border-indigo-200/60 bg-gradient-to-r from-indigo-900 to-violet-900 px-4 py-3 text-white dark:border-dark-700">
+                <div className="text-sm font-semibold">Survey Form</div>
+                <Button variant="ghost" size="sm" onClick={() => setSurveyTemplateVisible(false)} leftIcon={<RiIcons.RiCloseLine />}>
+                  Close
+                </Button>
+              </div>
+              <div className="max-h-[calc(95dvh-56px)] overflow-y-auto sm:max-h-[calc(92vh-56px)]">
+                <SurveyCheckFormTemplate
+                  onClose={() => {
+                    setSurveyTemplateVisible(false);
+                    setSelectedRfi(null);
+                  }}
+                  onSave={handleSurveyFormSubmit}
+                  initialData={selectedRfi?.form_data}
+                />
+              </div>
             </motion.div>
           </div>
         )}
@@ -1607,12 +2143,14 @@ const RfiPage: React.FC = () => {
         isOpen={showRfiDetails}
         onClose={() => setShowRfiDetails(false)}
         title="RFI Details"
+        className="w-full max-w-5xl border border-secondary-200/80 bg-white/95 shadow-2xl dark:border-dark-700 dark:bg-dark-900/95"
+        disablePadding
       >
         {selectedRfi && (
-          <div className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center bg-primary-50 dark:bg-primary-900/20 p-3 rounded-lg">
-              <div className="text-lg font-bold text-primary-900 dark:text-primary-300 flex items-center">
-                <RiIcons.RiCalendarCheckLine className="mr-2 text-primary-600 dark:text-primary-400" />
+          <div className="max-h-[80vh] space-y-5 overflow-y-auto p-5">
+            <div className="flex items-center justify-between rounded-xl border border-secondary-200 bg-secondary-50 p-3 dark:border-dark-700 dark:bg-dark-800/80">
+              <div className="flex items-center text-lg font-bold text-indigo-900 dark:text-indigo-300">
+                <RiIcons.RiCalendarCheckLine className="mr-2 text-indigo-600 dark:text-indigo-400" />
                 {new Date(selectedRfi.submittedDate).toLocaleDateString()}
               </div>
               <div className="flex items-center space-x-2">
@@ -1621,17 +2159,17 @@ const RfiPage: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                  <RiIcons.RiUserLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <RiIcons.RiUserLine className="mr-2 text-indigo-600 dark:text-indigo-400" />
                   <span className="text-sm font-medium uppercase tracking-wide">Submitted By</span>
                 </div>
                 <div className="font-medium">{selectedRfi.submittedBy}</div>
               </div>
               
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                  <div className="mr-2 text-primary-600 dark:text-primary-400">
+                  <div className="mr-2 text-indigo-600 dark:text-indigo-400">
                     <RiIcons.RiFlagLine />
                   </div>
                   <span className="text-sm font-medium uppercase tracking-wide">Priority</span>
@@ -1642,25 +2180,25 @@ const RfiPage: React.FC = () => {
               </div>
             </div>
             
-            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+            <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                <RiIcons.RiFileTextLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <RiIcons.RiFileTextLine className="mr-2 text-indigo-600 dark:text-indigo-400" />
                 <span className="text-sm font-medium uppercase tracking-wide">Description</span>
               </div>
               <div className="whitespace-pre-line">{selectedRfi.description}</div>
             </div>
             
-            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+            <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                <RiIcons.RiUserFollowLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <RiIcons.RiUserFollowLine className="mr-2 text-indigo-600 dark:text-indigo-400" />
                 <span className="text-sm font-medium uppercase tracking-wide">Assigned To</span>
               </div>
               <div>{selectedRfi.assignedTo || 'Unassigned'}</div>
             </div>
             
-            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+            <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                <RiIcons.RiChat3Line className="mr-2 text-primary-600 dark:text-primary-400" />
+                <RiIcons.RiChat3Line className="mr-2 text-indigo-600 dark:text-indigo-400" />
                 <span className="text-sm font-medium uppercase tracking-wide">Response</span>
               </div>
               <div>{selectedRfi.response || 'No response yet'}</div>
@@ -1668,9 +2206,9 @@ const RfiPage: React.FC = () => {
             
             {/* Workflow Status Section */}
             {selectedRfi.rfi_workflow_nodes && selectedRfi.rfi_workflow_nodes.length > 0 && (
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
-                  <RiIcons.RiFlowChart className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <RiIcons.RiFlowChart className="mr-2 text-indigo-600 dark:text-indigo-400" />
                   <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
                 </div>
                 
@@ -1700,14 +2238,28 @@ const RfiPage: React.FC = () => {
                             )}
                           </div>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-                          node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
-                          node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
-                          'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
-                        }`}>
-                          {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                            node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                            node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                            'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+                          }`}>
+                            {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
+                          </span>
+                          {user?.role === 'admin' && canSendNodeReminder(node) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleNodeReminder(selectedRfi, node)}
+                              isLoading={!!sendingNodeReminder[`${selectedRfi.id}-${node.node_order}`]}
+                              leftIcon={<RiIcons.RiNotificationLine />}
+                              className="h-8"
+                            >
+                              Reminder
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                 </div>
@@ -1716,9 +2268,9 @@ const RfiPage: React.FC = () => {
             
             {/* Comments Section */}
             {selectedRfi.rfi_comments && selectedRfi.rfi_comments.length > 0 && (
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
-                  <RiIcons.RiChat3Line className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <RiIcons.RiChat3Line className="mr-2 text-indigo-600 dark:text-indigo-400" />
                   <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
                 </div>
                 
@@ -1751,7 +2303,7 @@ const RfiPage: React.FC = () => {
               </div>
             )}
             
-            <div className="pt-6 mt-6 border-t border-white/10">
+            <div className="mt-6 border-t border-secondary-200 pt-6 dark:border-dark-700">
               <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
                 {/* Left side: Utility actions */}
                 <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
@@ -1859,7 +2411,7 @@ const RfiPage: React.FC = () => {
                           size="sm"
                           leftIcon={<RiIcons.RiCheckLine />}
                           onClick={() => handleWorkflowAction('approve')}
-                          className="bg-portfolio-orange hover:bg-portfolio-orange/80 text-white border-none shadow-lg shadow-portfolio-orange/20"
+                          className="bg-gradient-to-r from-indigo-700 to-violet-700 hover:from-indigo-800 hover:to-violet-800 text-white border-none shadow-lg shadow-indigo-800/30"
                         >
                           {(selectedRfi.current_node_index === 1) ? 'Complete' : 'Approve'}
                         </Button>
@@ -1870,7 +2422,7 @@ const RfiPage: React.FC = () => {
                   {/* Keep old Respond button for fallback if workflow not active */}
                   {selectedRfi.status === 'pending' && !selectedRfi.rfi_workflow_nodes?.length && (
                      <Button 
-                        variant="ai-secondary"
+                        variant="outline"
                         onClick={() => {
                           setShowResponseForm(true);
                           setShowRfiDetails(false);
@@ -1890,28 +2442,28 @@ const RfiPage: React.FC = () => {
       <AnimatePresence>
         {showResponseForm && selectedRfi && (
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-indigo-950/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={() => {
               setShowResponseForm(false);
               setShowRfiDetails(true);
             }}
           >
             <motion.div
-              className="bg-dark-950 rounded-xl shadow-ai-glow border border-ai-blue/20 max-w-2xl w-full"
+              className="w-full max-w-2xl rounded-2xl border border-indigo-200/40 bg-gradient-to-b from-white to-indigo-50/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800"
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-4 border-b border-dark-800 flex justify-between items-center">
+              <div className="flex items-center justify-between border-b border-indigo-200/60 bg-gradient-to-r from-indigo-900 to-violet-900 p-4 text-white dark:border-dark-700">
                 <h2 className="text-xl font-display font-semibold text-white">Respond to RFI</h2>
                 <button 
                   onClick={() => {
                     setShowResponseForm(false);
                     setShowRfiDetails(true);
                   }}
-                  className="text-gray-400 hover:text-white"
+                  className="text-indigo-200 hover:text-white"
                 >
                   <div><RiIcons.RiCloseLine className="text-xl" /></div>
                 </button>
@@ -1920,11 +2472,11 @@ const RfiPage: React.FC = () => {
               <div className="p-6">
                 <div className="mb-4">
                   <h3 className="font-semibold mb-1">{selectedRfi.title}</h3>
-                  <p className="text-sm text-gray-500">{selectedRfi.description}</p>
+                  <p className="text-sm text-secondary-600 dark:text-secondary-300">{selectedRfi.description}</p>
                 </div>
                 
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                  <label className="mb-1 block text-sm font-medium text-secondary-700 dark:text-secondary-300">
                     Your Response
                   </label>
                   <textarea
@@ -1932,13 +2484,13 @@ const RfiPage: React.FC = () => {
                     value={responseText}
                     onChange={(e) => setResponseText(e.target.value)}
                     placeholder="Type your response here..."
-                    className="input-ai bg-dark-800/50 border-ai-blue/30 text-white w-full"
+                    className="w-full rounded-xl border border-secondary-200 bg-white p-3 text-secondary-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-indigo-500/20"
                   />
                 </div>
                 
                 <div className="flex justify-end gap-3">
                   <Button 
-                    variant="ai-secondary"
+                    variant="outline"
                     onClick={() => {
                       setShowResponseForm(false);
                       setShowRfiDetails(true);
@@ -1947,10 +2499,10 @@ const RfiPage: React.FC = () => {
                     Cancel
                   </Button>
                   <Button 
-                    variant="ai-gradient"
+                    variant="primary"
                     onClick={handleResponseSubmit}
                     disabled={!responseText.trim()}
-                    glowing
+                    className="bg-gradient-to-r from-indigo-700 to-violet-700 hover:from-indigo-800 hover:to-violet-800"
                   >
                     Submit Response
                   </Button>
@@ -1975,11 +2527,11 @@ const RfiPage: React.FC = () => {
       {showProcessFlow && (
         <AnimatePresence>
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-indigo-950/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={handleCancelProcessFlow}
           >
             <motion.div
-              className="bg-dark-900/80 backdrop-blur-md border border-white/10 shadow-lg rounded-xl overflow-hidden w-full max-w-7xl max-h-[90vh] overflow-auto"
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-indigo-200/40 bg-gradient-to-b from-white to-indigo-50/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-7xl sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1987,21 +2539,21 @@ const RfiPage: React.FC = () => {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="bg-gradient-to-r from-primary-600 to-primary-700 p-6 text-white">
-                <div className="flex justify-between items-center">
+              <div className="sticky top-0 z-20 border-b border-indigo-200/60 bg-gradient-to-r from-indigo-900 to-violet-900 px-6 py-5 text-white dark:border-dark-700">
+                <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-2xl font-display font-bold flex items-center">
                       <RiIcons.RiFlowChart className="mr-3" />
                       Process Configuration
                     </h2>
-                    <p className="text-primary-100 mt-1">
+                    <p className="text-indigo-100 mt-1">
                       Configure the workflow process for this RFI before saving.
                     </p>
                   </div>
                   <Button 
                     variant="outline"
                     onClick={handleCancelProcessFlow}
-                    className="text-white border-white hover:bg-white/10"
+                    className="border-white/30 bg-white/10 text-white hover:bg-white/20"
                   >
                     <RiIcons.RiCloseLine className="text-xl" />
                   </Button>
@@ -2009,7 +2561,7 @@ const RfiPage: React.FC = () => {
               </div>
               
               {/* Content */}
-              <div className="p-6">
+              <div className="max-h-[calc(95dvh-78px)] overflow-y-auto p-6 sm:max-h-[calc(92vh-86px)]">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   {/* Left panel - Flow chart */}
                   <div className="lg:col-span-5">
@@ -2083,12 +2635,12 @@ const RfiPage: React.FC = () => {
                                           {selectedNode.ccRecipients.map(cc => (
                                             <div 
                                               key={cc.id} 
-                                              className="bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-3 py-1 rounded-full flex items-center text-sm"
+                                              className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-3 py-1 rounded-full flex items-center text-sm"
                                             >
                                               <span className="mr-2">{cc.name}</span>
                                               <button
                                                 type="button"
-                                                className="text-primary-500 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-200"
+                                                className="text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-200"
                                                 onClick={() => removeUserFromCc(cc.id)}
                                               >
                                                 <RiIcons.RiCloseLine />
@@ -2124,7 +2676,7 @@ const RfiPage: React.FC = () => {
                 </div>
                 
                 {/* Footer Actions */}
-                <div className="flex justify-between items-center mt-6 pt-6 border-t border-secondary-200 dark:border-dark-700">
+                <div className="sticky bottom-0 mt-6 flex items-center justify-between border-t border-indigo-200/60 bg-white/95 pt-6 backdrop-blur-sm dark:border-dark-700 dark:bg-dark-900/95">
                   <Button 
                     variant="outline"
                     leftIcon={<RiIcons.RiArrowLeftLine />}
@@ -2144,13 +2696,151 @@ const RfiPage: React.FC = () => {
                       variant="primary"
                       leftIcon={<RiIcons.RiCheckLine />}
                       onClick={handleFinalSave}
-                      className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800"
+                      className="bg-gradient-to-r from-indigo-700 to-violet-700 hover:from-indigo-800 hover:to-violet-800"
                     >
                       Save RFI
                     </Button>
                   </div>
                 </div>
               </div>
+            </motion.div>
+          </div>
+        </AnimatePresence>
+      )}
+
+      {/* History Dialog */}
+      <Dialog
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+        title="Update History"
+        size="lg"
+      >
+        {loadingHistory ? (
+            <div className="flex justify-center p-8">
+              <RiIcons.RiLoader4Line className="animate-spin text-3xl text-indigo-600" />
+            </div>
+         ) : (
+           <div className="space-y-4 max-h-[70vh] overflow-y-auto p-2">
+             {historyData.length === 0 ? (
+               <p className="text-center text-gray-500 py-8">No history available for this entry.</p>
+             ) : (
+               historyData.map((history) => (
+                 <div key={history.id} className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50 hover:shadow-md transition-shadow">
+                   <div className="flex justify-between items-start mb-3">
+                     <div className="flex items-center">
+                       <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mr-3">
+                          <RiIcons.RiUserLine />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-indigo-900 dark:text-indigo-100">
+                            {history.performed_by || history.users?.name || 'Unknown User'}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {history.action || history.users?.email}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {new Date(history.timestamp || history.changed_at || '').toLocaleDateString()}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {new Date(history.timestamp || history.changed_at || '').toLocaleTimeString()}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Summary of changes if available */}
+                    <div className="mb-4 space-y-2 bg-white dark:bg-gray-900 p-3 rounded border border-gray-100 dark:border-gray-700">
+                      <div className="text-sm text-gray-700 dark:text-gray-300">
+                        <span className="font-medium text-gray-500 dark:text-gray-400">Changes: </span>
+                        <span>{history.changes || 'Form updated'}</span>
+                      </div>
+                    </div>
+ 
+                   <div className="flex justify-end space-x-2">
+                     {user?.role === 'admin' && (
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={() => handleRestore(history)}
+                         leftIcon={<RiIcons.RiHistoryLine />}
+                         className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:text-orange-300 dark:hover:bg-orange-900/20"
+                       >
+                         Restore
+                       </Button>
+                     )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedHistoryEntry(history);
+                          setShowHistoryForm(true);
+                          setShowHistory(false); // Close history dialog to show form
+                        }}
+                        leftIcon={<RiIcons.RiFileListLine />}
+                        className="w-full sm:w-auto"
+                      >
+                        View Form Snapshot
+                      </Button>
+                    </div>
+                 </div>
+               ))
+             )}
+           </div>
+         )}
+       </Dialog>
+
+      {/* History Form View Modal */}
+      {showHistoryForm && selectedHistoryEntry && selectedRfi && (
+        <AnimatePresence>
+          <div 
+            className="fixed inset-0 z-50 flex items-end justify-center bg-indigo-950/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
+            onClick={() => {
+              setShowHistoryForm(false);
+              setShowHistory(true); // Reopen history dialog
+            }}
+          >
+            <motion.div
+              className="h-[95dvh] w-full overflow-auto rounded-t-2xl border border-indigo-200/40 bg-gradient-to-b from-white to-indigo-50/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {selectedRfi.form_type === 'inspection' ? (
+                <InspectionCheckFormTemplate
+                    onClose={() => {
+                    setShowHistoryForm(false);
+                    setShowHistory(true);
+                    }}
+                    onSave={() => {}} // Read-only
+                    initialData={selectedHistoryEntry.form_data}
+                />
+              ) : selectedRfi.form_type === 'survey' ? (
+                <SurveyCheckFormTemplate
+                    onClose={() => {
+                    setShowHistoryForm(false);
+                    setShowHistory(true);
+                    }}
+                    onSave={() => {}} // Read-only
+                    initialData={selectedHistoryEntry.form_data}
+                />
+              ) : (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg">
+                    <h3 className="text-lg font-semibold mb-4">Form Snapshot</h3>
+                    <pre className="bg-gray-100 dark:bg-gray-900 p-4 rounded overflow-auto max-h-[60vh]">
+                        {JSON.stringify(selectedHistoryEntry.form_data, null, 2)}
+                    </pre>
+                    <div className="flex justify-end mt-4">
+                        <Button onClick={() => {
+                            setShowHistoryForm(false);
+                            setShowHistory(true);
+                        }}>Close</Button>
+                    </div>
+                </div>
+              )}
             </motion.div>
           </div>
         </AnimatePresence>
@@ -2165,6 +2855,126 @@ const RfiPage: React.FC = () => {
         users={users}
         loading={isLoadingUsers}
       />
+
+      <ReportModal
+        isOpen={showReport}
+        onClose={() => setShowReport(false)}
+        title="RFI / RICS Full Report"
+        subtitle="Combined report with separate Inspection and Survey sections."
+        downloadLabel="Download PDF"
+        onDownload={handleDownloadReportPdf}
+        isDownloading={isDownloadingReport}
+        contentRef={reportContentRef}
+        maxWidthClassName="max-w-[1750px]"
+        theme={{
+          headerGradient: 'from-indigo-900 to-blue-800',
+          bodyBackground: 'bg-indigo-50/60 dark:bg-dark-800/20'
+        }}
+      >
+        <div className="rounded-xl border border-indigo-200 bg-white/70 p-4 text-indigo-900 dark:border-dark-700 dark:bg-dark-900/40 dark:text-indigo-100">
+          <div className="text-lg font-semibold">Inspection Section</div>
+          <div className="text-sm opacity-80">Inspection-based RFIs from current filters.</div>
+        </div>
+        <FullReportContent
+          generatedOn={new Date().toLocaleString()}
+          projectName={selectedProject?.name || 'All Projects'}
+          summaryCards={[
+            { label: 'Total Listed', value: inspectionReportRows.length },
+            { label: 'Open', value: inspectionReportData.statusCounts.pending },
+            { label: 'Resolved', value: inspectionReportData.statusCounts.completed },
+            { label: 'Rejected', value: inspectionReportData.statusCounts.rejected },
+            { label: 'Permanent Rejected', value: inspectionReportData.statusCounts.permanentlyRejected },
+            { label: 'High Priority', value: inspectionReportRows.filter((row) => row.priority === 'high').length }
+          ]}
+          reportHighlights={inspectionReportData.highlights}
+          statusChartTitle="Status Distribution"
+          trendChartTitle="Requests Over Time"
+          contributorChartTitle="Top Submitters"
+          weatherChartTitle="Priority Distribution"
+          statusChartData={inspectionReportData.statusChartData}
+          trendChartData={inspectionReportData.trendChartData}
+          contributorChartData={inspectionReportData.contributorChartData}
+          weatherChartData={inspectionReportData.priorityChartData}
+          chartOptions={chartOptions}
+          issueSectionTitle="Open / Rejected Details"
+          issueColumns={[
+            { key: 'date', label: 'Date' },
+            { key: 'submittedBy', label: 'Submitted By' },
+            { key: 'title', label: 'Title' },
+            { key: 'status', label: 'Status' }
+          ]}
+          issueRows={inspectionReportData.issueRows}
+          issueEmptyText="No open/rejected inspection requests in the listed data."
+          listSectionTitle="Inspection Requests List"
+          listColumns={[
+            { key: 'date', label: 'Date' },
+            { key: 'title', label: 'Title' },
+            { key: 'submittedBy', label: 'Submitted By' },
+            { key: 'priority', label: 'Priority' },
+            { key: 'status', label: 'Status' },
+            { key: 'description', label: 'Description' }
+          ]}
+          listRows={inspectionReportRows}
+          theme={{
+            cardBorder: 'border-indigo-200 dark:border-dark-700',
+            cardSurface: 'bg-indigo-50/40 dark:bg-dark-800',
+            accentText: 'text-indigo-700',
+            numberText: 'text-indigo-950 dark:text-indigo-100'
+          }}
+        />
+
+        <div className="rounded-xl border border-blue-200 bg-white/70 p-4 text-blue-900 dark:border-dark-700 dark:bg-dark-900/40 dark:text-blue-100">
+          <div className="text-lg font-semibold">Survey Section</div>
+          <div className="text-sm opacity-80">Survey-based RFIs from current filters.</div>
+        </div>
+        <FullReportContent
+          generatedOn={new Date().toLocaleString()}
+          projectName={selectedProject?.name || 'All Projects'}
+          summaryCards={[
+            { label: 'Total Listed', value: surveyReportRows.length },
+            { label: 'Open', value: surveyReportData.statusCounts.pending },
+            { label: 'Resolved', value: surveyReportData.statusCounts.completed },
+            { label: 'Rejected', value: surveyReportData.statusCounts.rejected },
+            { label: 'Permanent Rejected', value: surveyReportData.statusCounts.permanentlyRejected },
+            { label: 'High Priority', value: surveyReportRows.filter((row) => row.priority === 'high').length }
+          ]}
+          reportHighlights={surveyReportData.highlights}
+          statusChartTitle="Status Distribution"
+          trendChartTitle="Requests Over Time"
+          contributorChartTitle="Top Submitters"
+          weatherChartTitle="Priority Distribution"
+          statusChartData={surveyReportData.statusChartData}
+          trendChartData={surveyReportData.trendChartData}
+          contributorChartData={surveyReportData.contributorChartData}
+          weatherChartData={surveyReportData.priorityChartData}
+          chartOptions={chartOptions}
+          issueSectionTitle="Open / Rejected Details"
+          issueColumns={[
+            { key: 'date', label: 'Date' },
+            { key: 'submittedBy', label: 'Submitted By' },
+            { key: 'title', label: 'Title' },
+            { key: 'status', label: 'Status' }
+          ]}
+          issueRows={surveyReportData.issueRows}
+          issueEmptyText="No open/rejected survey requests in the listed data."
+          listSectionTitle="Survey Requests List"
+          listColumns={[
+            { key: 'date', label: 'Date' },
+            { key: 'title', label: 'Title' },
+            { key: 'submittedBy', label: 'Submitted By' },
+            { key: 'priority', label: 'Priority' },
+            { key: 'status', label: 'Status' },
+            { key: 'description', label: 'Description' }
+          ]}
+          listRows={surveyReportRows}
+          theme={{
+            cardBorder: 'border-blue-200 dark:border-dark-700',
+            cardSurface: 'bg-blue-50/40 dark:bg-dark-800',
+            accentText: 'text-blue-700',
+            numberText: 'text-blue-950 dark:text-blue-100'
+          }}
+        />
+      </ReportModal>
     </div>
   );
 };

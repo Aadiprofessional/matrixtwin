@@ -856,7 +856,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
     <div className="w-full max-w-[95vw] mx-auto bg-[#1e293b] rounded-xl shadow-2xl flex flex-col h-[90vh] overflow-hidden border border-[#334155]">
       <div className="px-6 py-4 flex justify-between items-center bg-gradient-to-r from-[#0f172a] to-[#1e293b] border-b border-[#334155]">
         <h2 className="text-xl font-semibold text-white flex items-center">
-          <RiFileTextLine className="mr-2 text-blue-400" />
+          <RiFileTextLine className="mr-2 text-[#f2cd6f]" />
           {title || (currentPage <= 2 ? "Safety Inspection Checklist" : "Safety Environmental Photo Record")}
         </h2>
         <div className="flex gap-3">
@@ -870,7 +870,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
             onClick={handleDownloadPDF}
             className="px-4 py-2 bg-[#334155] hover:bg-[#475569] text-gray-100 rounded-md shadow-md text-sm font-medium flex items-center gap-1 transition-all duration-200 hover:scale-105"
           >
-            <RiFilePdf2Line className="text-blue-400" />
+            <RiFilePdf2Line className="text-[#f2cd6f]" />
             Download PDF
           </button>
           <div className="flex gap-2">
@@ -878,7 +878,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
               <button
                 key={`page-${page}`}
                 className={`w-8 h-8 rounded-full flex items-center justify-center
-                  ${currentPage === page ? 'bg-blue-600 text-white' : 'bg-[#334155] text-gray-200 hover:bg-[#475569]'}`}
+                  ${currentPage === page ? 'bg-[#8a4b14] text-white' : 'bg-[#334155] text-gray-200 hover:bg-[#475569]'}`}
                 onClick={() => changePage(page as 1 | 2 | 3 | 4)}
               >
                 {page}
@@ -887,7 +887,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
           </div>
           {!readOnly && (
             <button
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-md text-sm font-medium transition-all duration-200 hover:scale-105 flex items-center gap-2"
+              className="flex items-center gap-2 rounded-md bg-gradient-to-r from-[#8a4b14] to-[#c27a1b] px-5 py-2 text-sm font-medium text-white shadow-md transition-all duration-200 hover:scale-105 hover:from-[#7a410f] hover:to-[#a56a1f]"
               onClick={handleSave}
             >
               Save
@@ -1006,13 +1006,13 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                                   <div className="flex space-x-1">
                                     <button
                                       onClick={() => handleRemoveItem(category.id, item.id)}
-                                      className="text-red-500 hover:text-red-700"
+                                      className="text-[#9f5818] hover:text-[#7a410f]"
                                     >
                                       <RiDeleteBin6Line className="w-4 h-4" />
                                     </button>
                                     <button
                                       onClick={() => handleAddItem(category.id)}
-                                      className="text-blue-500 hover:text-blue-700"
+                                      className="text-[#a56a1f] hover:text-[#8a4b14]"
                                     >
                                       <RiAddLine className="w-4 h-4" />
                                     </button>
@@ -1154,13 +1154,13 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                             <div className="flex space-x-1">
                               <button
                                 onClick={() => handleRemovePhotoTableItem(item.id)}
-                                className="text-red-500 hover:text-red-700"
+                                className="text-[#9f5818] hover:text-[#7a410f]"
                               >
                                 <RiDeleteBin6Line className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={handleAddPhotoTableItem}
-                                className="text-blue-500 hover:text-blue-700"
+                                className="text-[#a56a1f] hover:text-[#8a4b14]"
                               >
                                 <RiAddLine className="w-4 h-4" />
                               </button>

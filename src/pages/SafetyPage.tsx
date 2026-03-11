@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
-import { RiAddLine, RiShieldCheckLine, RiAlarmWarningLine, RiFileWarningLine, RiPercentLine, RiArrowUpLine, RiArrowDownLine, RiFilter3Line, RiBellLine, RiErrorWarningLine, RiArrowLeftLine, RiArrowRightLine, RiCheckLine, RiFlowChart, RiSettings4Line, RiNotificationLine, RiUserLine, RiCloseLine, RiTeamLine, RiListCheck, RiLayoutGridLine, RiDownload2Line, RiPrinterLine, RiDeleteBinLine, RiEditLine, RiFileListLine, RiMoreLine, RiChat3Line } from 'react-icons/ri';
+import { RiAddLine, RiShieldCheckLine, RiAlarmWarningLine, RiFileWarningLine, RiPercentLine, RiFilter3Line, RiErrorWarningLine, RiArrowLeftLine, RiArrowRightLine, RiCheckLine, RiFlowChart, RiSettings4Line, RiNotificationLine, RiUserLine, RiCloseLine, RiTeamLine, RiListCheck, RiDownload2Line, RiPrinterLine, RiDeleteBinLine, RiEditLine, RiFileListLine, RiMoreLine, RiChat3Line, RiHistoryLine, RiLoader4Line, RiSearchLine, RiBuilding4Line, RiAlertLine, RiTimeLine } from 'react-icons/ri';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { SafetyInspectionChecklistTemplate } from '../components/forms/SafetyInspectionChecklistTemplate';
@@ -13,6 +13,23 @@ import { Input } from '../components/ui/Input';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
 import { projectService } from '../services/projectService';
 import { PeopleSelectorModal } from '../components/ui/PeopleSelectorModal';
+import { ReportModal } from '../components/common/ReportModal';
+import { FullReportContent } from '../components/common/FullReportContent';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement
+} from 'chart.js';
+
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, BarElement);
 
 // Define UserSelection interface
 interface User {
@@ -41,6 +58,7 @@ interface SafetyEntry {
   id: string;
   date: string;
   project: string;
+  name?: string;
   project_id?: string;
   inspector: string;
   inspection_type: string;
@@ -59,6 +77,9 @@ interface SafetyEntry {
   created_by: string;
   created_at: string;
   updated_at?: string;
+  active?: boolean;
+  expires_at?: string;
+  expiresAt?: string;
 }
 
 interface SafetyInspection {
@@ -82,6 +103,21 @@ interface SafetyIncident {
   project: string;
 }
 
+interface HistoryEntry {
+  id: string;
+  changed_at: string;
+  form_data: any;
+  users?: {
+    name: string;
+    email: string;
+  };
+  // Compatibility fields
+  action?: string;
+  changes?: string;
+  performed_by?: string;
+  timestamp?: string;
+}
+
 const SafetyPage: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
@@ -91,6 +127,9 @@ const SafetyPage: React.FC = () => {
   const [selectedSafetyEntry, setSelectedSafetyEntry] = useState<SafetyEntry | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showFormView, setShowFormView] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  const reportContentRef = useRef<HTMLDivElement | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   
@@ -109,65 +148,83 @@ const SafetyPage: React.FC = () => {
   // Safety entries from API
   const [safetyEntries, setSafetyEntries] = useState<SafetyEntry[]>([]);
 
-  // View and filter states
-  const [showGridView, setShowGridView] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [showIncidents, setShowIncidents] = useState(false);
-  const [chartTimeframe, setChartTimeframe] = useState('week');
-  const [activeFilterTab, setActiveFilterTab] = useState('status');
-  const [filter, setFilter] = useState('all');
-  const [filterType, setFilterType] = useState('all');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
+  // History states
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyData, setHistoryData] = useState<HistoryEntry[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showHistoryForm, setShowHistoryForm] = useState(false);
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<HistoryEntry | null>(null);
+  const [expiryDrafts, setExpiryDrafts] = useState<Record<string, string>>({});
+  const [savingExpiry, setSavingExpiry] = useState<Record<string, boolean>>({});
+  const [updatingExpiryStatus, setUpdatingExpiryStatus] = useState<Record<string, boolean>>({});
+  const [sendingNodeReminder, setSendingNodeReminder] = useState<Record<string, boolean>>({});
+  const [renamingSafety, setRenamingSafety] = useState<Record<string, boolean>>({});
 
-  // Mock safety alerts for now
-  const [safetyAlerts] = useState([
-    {
-      id: 1,
-      message: 'High wind alert: Take precautions with scaffolding',
-      type: 'weather',
-      timestamp: new Date().getTime() - 1000 * 60 * 30 // 30 minutes ago
-    },
-    {
-      id: 2,
-      message: 'PPE compliance dropping below threshold (84%)',
-      type: 'compliance',
-      timestamp: new Date().getTime() - 1000 * 60 * 60 * 2 // 2 hours ago
-    }
-  ]);
-
-  // Inspection types
-  const inspectionTypes = [
-    'Daily Site Safety Check',
-    'Fire Safety Inspection',
-    'Equipment Safety Check',
-    'Personal Protective Equipment (PPE) Compliance',
-    'Electrical Safety Inspection',
-    'Hazardous Materials Check',
-    'Fall Protection Audit',
-    'Emergency Preparedness Review'
-  ];
-
-  // Format timestamp to relative time
-  const formatRelativeTime = (timestamp: number) => {
-    const diff = new Date().getTime() - timestamp;
-    const minutes = Math.floor(diff / (1000 * 60));
-    const hours = Math.floor(minutes / 60);
-    
-    if (hours > 0) {
-      return `${hours}h ago`;
-    } else {
-      return `${minutes}m ago`;
+  const fetchHistory = async (safetyId: string) => {
+    try {
+      setLoadingHistory(true);
+      const response = await fetch(`https://server.matrixtwin.com/api/safety/${safetyId}/history`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setHistoryData(data);
+      } else {
+        console.error('Failed to fetch history');
+        setHistoryData([]);
+      }
+    } catch (error) {
+      console.error('Error fetching history:', error);
+      setHistoryData([]);
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
-  // Fetch safety entries on component mount and when project changes
-  useEffect(() => {
-    if (user?.id) {
-      fetchSafetyEntries();
-      fetchUsers();
+  const handleRestore = async (history: HistoryEntry) => {
+    if (!selectedSafetyEntry) return;
+    
+    if (!window.confirm('Are you sure you want to restore this version? This will create a new history entry with the current state.')) {
+      return;
     }
-  }, [user?.id, selectedProject?.id]);
+
+    try {
+      const response = await fetch(`https://server.matrixtwin.com/api/safety/${selectedSafetyEntry.id}/restore`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ historyId: history.id })
+      });
+
+      if (response.ok) {
+        alert('Safety entry restored successfully!');
+        setShowHistory(false);
+        fetchSafetyEntries();
+        setSelectedSafetyEntry(null);
+        setShowDetails(false);
+      } else {
+        const error = await response.json();
+        alert(`Failed to restore safety entry: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error restoring safety entry:', error);
+      alert('Failed to restore safety entry. Please try again.');
+    }
+  };
+
+  const handleViewHistory = async (entry: SafetyEntry) => {
+    setSelectedSafetyEntry(entry);
+    setShowHistory(true);
+    await fetchHistory(entry.id);
+  };
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed' | 'rejected' | 'permanently_rejected'>('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest'>('newest');
 
   // Handle URL query parameters for direct navigation
   useEffect(() => {
@@ -239,8 +296,13 @@ const SafetyPage: React.FC = () => {
     }
   }, [selectedProject?.id, user]);
 
-  // Filtered entries based on search - Simplified since search is removed
-  const filteredEntries = safetyEntries;
+  // Fetch safety entries on component mount and when project changes
+  useEffect(() => {
+    if (user?.id) {
+      fetchSafetyEntries();
+      fetchUsers();
+    }
+  }, [user?.id, selectedProject?.id, fetchSafetyEntries, fetchUsers]);
 
   const addNewNode = () => {
     const newNode: ProcessNode = {
@@ -461,7 +523,8 @@ const SafetyPage: React.FC = () => {
         },
         body: JSON.stringify({
           formData: formData,
-          updatedBy: user.id
+          action: 'update',
+          userId: user.id
         })
       });
 
@@ -658,55 +721,282 @@ const SafetyPage: React.FC = () => {
     return false;
   };
 
-  const getStats = () => {
+  const stats = useMemo(() => {
     const totalInspections = safetyEntries.length;
-    const averageScore = totalInspections > 0 
+    const averageScore = totalInspections > 0
       ? Math.round(safetyEntries.reduce((sum, entry) => sum + (entry.safety_score || 0), 0) / totalInspections)
       : 0;
-    const pendingInspections = safetyEntries.filter(entry => entry.status === 'pending').length;
-    const completedInspections = safetyEntries.filter(entry => entry.status === 'completed').length;
-    
+    const pendingInspections = safetyEntries.filter((entry) => entry.status === 'pending').length;
+    const completedInspections = safetyEntries.filter((entry) => entry.status === 'completed').length;
+    const thisWeekInspections = safetyEntries.filter((entry) => {
+      const createdDate = new Date(entry.created_at || entry.date);
+      const now = new Date();
+      const sevenDaysAgo = new Date(now);
+      sevenDaysAgo.setDate(now.getDate() - 7);
+      return createdDate >= sevenDaysAgo && createdDate <= now;
+    }).length;
+    const uniqueInspectors = new Set(safetyEntries.map((entry) => entry.inspector).filter(Boolean)).size;
+
     return {
       totalInspections,
       averageScore,
       pendingInspections,
-      completedInspections
+      completedInspections,
+      thisWeekInspections,
+      uniqueInspectors
+    };
+  }, [safetyEntries]);
+
+  const statusCounts = useMemo(() => ({
+    all: safetyEntries.length,
+    pending: safetyEntries.filter((entry) => entry.status === 'pending').length,
+    completed: safetyEntries.filter((entry) => entry.status === 'completed').length,
+    rejected: safetyEntries.filter((entry) => entry.status === 'rejected').length,
+    permanently_rejected: safetyEntries.filter((entry) => entry.status === 'permanently_rejected').length
+  }), [safetyEntries]);
+
+  const toDatetimeLocalValue = (date: Date) => {
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+  };
+
+  const getDefaultExpiryDate = (entry: SafetyEntry) => {
+    const baseDate = new Date(entry.created_at || entry.date);
+    const resolvedBaseDate = Number.isNaN(baseDate.getTime()) ? new Date() : baseDate;
+    const defaultExpiryDate = new Date(resolvedBaseDate);
+    defaultExpiryDate.setDate(defaultExpiryDate.getDate() + 10);
+    return defaultExpiryDate;
+  };
+
+  const getEntryExpiryDate = (entry: SafetyEntry) => {
+    const expirySource = entry.expires_at || entry.expiresAt;
+    const parsedExpiry = expirySource ? new Date(expirySource) : getDefaultExpiryDate(entry);
+    return Number.isNaN(parsedExpiry.getTime()) ? getDefaultExpiryDate(entry) : parsedExpiry;
+  };
+
+  const isEntryExpired = (entry: SafetyEntry) => {
+    return entry.active === false || getEntryExpiryDate(entry).getTime() <= Date.now();
+  };
+
+  const getSafetyDisplayName = (entry: SafetyEntry) => {
+    const preferredName = (entry.name || entry.project || '').trim();
+    if (!preferredName || preferredName.toLowerCase() === 'unknown project') {
+      return 'New Safety';
+    }
+    return preferredName;
+  };
+
+  const getExpirySummary = (entry: SafetyEntry) => {
+    const expiryDate = getEntryExpiryDate(entry);
+    const now = new Date();
+    const msLeft = expiryDate.getTime() - now.getTime();
+    const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+    if (isEntryExpired(entry)) {
+      const daysOverdue = Math.max(1, Math.abs(daysLeft));
+      return {
+        text: `Expired ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} ago`,
+        className: 'bg-[#ffe9b8] text-[#8a4b14] dark:bg-[#8a4b14]/30 dark:text-[#ffd978]'
+      };
+    }
+    return {
+      text: `Expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+      className: 'bg-[#fff4cc] text-[#a56a1f] dark:bg-[#8a4b14]/25 dark:text-[#f2cd6f]'
     };
   };
 
-  const getTrendData = () => {
-    // Mock trend data for now - in a real app this would come from API
-    return {
-      labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-      scores: [88, 92, 85, 90, 94, 89, 91],
-      incidents: [1, 0, 1, 0, 0, 0, 0]
-    };
+  const canSendNodeReminder = (node: any) => {
+    const nodeName = String(node?.node_name || node?.name || '').toLowerCase();
+    return nodeName !== 'start' && nodeName !== 'complete';
   };
 
-  const getTrend = () => {
-    const data = getTrendData().scores;
-    const currentAvg = data.slice(-3).reduce((sum, score) => sum + score, 0) / 3;
-    const prevAvg = data.slice(0, 3).reduce((sum, score) => sum + score, 0) / 3;
-    const change = ((currentAvg - prevAvg) / prevAvg) * 100;
-    
+  const filteredEntries = useMemo(() => {
+    let entries = [...safetyEntries];
+    const query = searchQuery.trim().toLowerCase();
+
+    if (query) {
+      entries = entries.filter((entry) =>
+        getSafetyDisplayName(entry).toLowerCase().includes(query) ||
+        entry.inspector?.toLowerCase().includes(query) ||
+        entry.inspection_type?.toLowerCase().includes(query) ||
+        entry.notes?.toLowerCase().includes(query)
+      );
+    }
+
+    if (statusFilter !== 'all') {
+      entries = entries.filter((entry) => entry.status === statusFilter);
+    }
+
+    entries.sort((a, b) => {
+      const dateA = new Date(a.created_at || a.date).getTime();
+      const dateB = new Date(b.created_at || b.date).getTime();
+      return sortBy === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+
+    return entries;
+  }, [safetyEntries, searchQuery, statusFilter, sortBy]);
+
+  const reportRows = useMemo(() => (
+    filteredEntries.map((entry) => ({
+      id: entry.id,
+      date: entry.date || (entry.created_at ? new Date(entry.created_at).toLocaleDateString() : '-'),
+      project: entry.project || '-',
+      inspector: entry.inspector || '-',
+      inspection_type: entry.inspection_type || '-',
+      safety_score: entry.safety_score ?? 0,
+      findings_count: entry.findings_count ?? 0,
+      incidents_reported: entry.incidents_reported || '-',
+      corrective_actions: entry.corrective_actions || '-',
+      notes: entry.notes || '-',
+      status: entry.status || 'pending'
+    }))
+  ), [filteredEntries]);
+
+  const reportStatusCounts = useMemo(() => ({
+    pending: reportRows.filter((row) => row.status === 'pending').length,
+    completed: reportRows.filter((row) => row.status === 'completed').length,
+    rejected: reportRows.filter((row) => row.status === 'rejected').length,
+    permanentlyRejected: reportRows.filter((row) => row.status === 'permanently_rejected').length
+  }), [reportRows]);
+
+  const reportHighlights = useMemo(() => {
+    const avg = reportRows.length
+      ? Math.round(reportRows.reduce((sum, row) => sum + Number(row.safety_score || 0), 0) / reportRows.length)
+      : 0;
+    const topType = Object.entries(
+      reportRows.reduce<Record<string, number>>((acc, row) => {
+        const key = row.inspection_type || 'Unknown';
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {})
+    ).sort((a, b) => b[1] - a[1])[0];
+    return [
+      `Average safety score: ${avg}%`,
+      `Total findings in filtered inspections: ${reportRows.reduce((sum, row) => sum + Number(row.findings_count || 0), 0)}`,
+      `Inspections with incidents: ${reportRows.filter((row) => row.incidents_reported && row.incidents_reported !== '-').length}`,
+      `Most frequent inspection type: ${topType ? `${topType[0]} (${topType[1]})` : 'N/A'}`
+    ];
+  }, [reportRows]);
+
+  const statusChartData = useMemo(() => ({
+    labels: ['Pending', 'Completed', 'Rejected', 'Permanently Rejected'],
+    datasets: [{
+      data: [
+        reportStatusCounts.pending,
+        reportStatusCounts.completed,
+        reportStatusCounts.rejected,
+        reportStatusCounts.permanentlyRejected
+      ],
+      backgroundColor: ['#ffd978', '#c27a1b', '#9f5818', '#7a410f'],
+      borderColor: ['#ffe9b8', '#d8a126', '#c27a1b', '#8a4b14'],
+      borderWidth: 1
+    }]
+  }), [reportStatusCounts]);
+
+  const trendChartData = useMemo(() => {
+    const map = reportRows.reduce<Record<string, number>>((acc, row) => {
+      const key = row.date || 'Unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const labels = Object.keys(map).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
     return {
-      direction: change >= 0 ? 'up' : 'down',
-      percentage: Math.abs(change).toFixed(1)
+      labels,
+      datasets: [{
+        label: 'Inspections',
+        data: labels.map((label) => map[label]),
+        borderColor: '#a56a1f',
+        backgroundColor: 'rgba(197, 122, 27, 0.2)',
+        tension: 0.3,
+        fill: true
+      }]
     };
-  };
+  }, [reportRows]);
+
+  const contributorChartData = useMemo(() => {
+    const map = reportRows.reduce<Record<string, number>>((acc, row) => {
+      const key = row.inspector || 'Unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 7);
+    return {
+      labels: sorted.map(([name]) => name),
+      datasets: [{
+        label: 'Inspections',
+        data: sorted.map(([, count]) => count),
+        backgroundColor: '#c27a1b'
+      }]
+    };
+  }, [reportRows]);
+
+  const inspectionTypeChartData = useMemo(() => {
+    const map = reportRows.reduce<Record<string, number>>((acc, row) => {
+      const key = row.inspection_type || 'Unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 7);
+    return {
+      labels: sorted.map(([type]) => type),
+      datasets: [{
+        label: 'Count',
+        data: sorted.map(([, count]) => count),
+        backgroundColor: '#8a4b14'
+      }]
+    };
+  }, [reportRows]);
+
+  const chartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#8a4b14' } } },
+    scales: {
+      x: { ticks: { color: '#8a4b14' }, grid: { color: 'rgba(197, 122, 27, 0.2)' } },
+      y: { ticks: { color: '#8a4b14', precision: 0 }, grid: { color: 'rgba(197, 122, 27, 0.2)' } }
+    }
+  }), []);
+
+  const issueRows = useMemo(() => (
+    reportRows.filter((row) => row.incidents_reported && row.incidents_reported !== '-')
+  ), [reportRows]);
+
+  const handleDownloadReportPdf = useCallback(async () => {
+    if (!reportContentRef.current) return;
+    setIsDownloadingReport(true);
+    try {
+      const canvas = await html2canvas(reportContentRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imageData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const width = pdf.internal.pageSize.getWidth();
+      const height = (canvas.height * width) / canvas.width;
+      let position = 0;
+      let remaining = height;
+      pdf.addImage(imageData, 'PNG', 0, position, width, height);
+      remaining -= pdf.internal.pageSize.getHeight();
+      while (remaining > 0) {
+        position = remaining - height;
+        pdf.addPage();
+        pdf.addImage(imageData, 'PNG', 0, position, width, height);
+        remaining -= pdf.internal.pageSize.getHeight();
+      }
+      pdf.save(`safety-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } finally {
+      setIsDownloadingReport(false);
+    }
+  }, []);
 
   const getScoreColorClass = (score: number) => {
-    if (score >= 90) return 'text-green-600';
-    if (score >= 75) return 'text-yellow-600';
-    return 'text-red-600';
+    if (score >= 90) return 'text-[#8a4b14]';
+    if (score >= 75) return 'text-[#c27a1b]';
+    return 'text-[#d8a126]';
   };
 
   const getWorkflowStatusBadge = (entry: SafetyEntry) => {
     const statusColors = {
-      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
-      completed: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
-      rejected: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
-      permanently_rejected: 'bg-red-200 text-red-900 dark:bg-red-900/40 dark:text-red-300'
+      pending: 'bg-[#fff4cc] text-[#a56a1f] dark:bg-[#8a4b14]/25 dark:text-[#f2cd6f]',
+      completed: 'bg-[#ffe9b8] text-[#8a4b14] dark:bg-[#8a4b14]/35 dark:text-[#ffd978]',
+      rejected: 'bg-[#ffe4a8] text-[#9f5818] dark:bg-[#8a4b14]/30 dark:text-[#f2cd6f]',
+      permanently_rejected: 'bg-[#ffd978] text-[#7a410f] dark:bg-[#8a4b14]/45 dark:text-[#ffe9b8]'
     };
 
     // Get current node completion info
@@ -735,7 +1025,7 @@ const SafetyPage: React.FC = () => {
           {statusText}
         </span>
         {completionInfo && (
-          <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          <span className="text-xs text-[#a56a1f] dark:text-[#f2cd6f] mt-1">
             Completions{completionInfo}
           </span>
         )}
@@ -775,218 +1065,236 @@ const SafetyPage: React.FC = () => {
     }
   };
 
+  const handleSetExpiry = async (entry: SafetyEntry) => {
+    if (!user?.id || user.role !== 'admin') return;
+    const draftValue = expiryDrafts[entry.id];
+    if (!draftValue) {
+      alert('Please select an expiry date and time.');
+      return;
+    }
+    const parsedExpiry = new Date(draftValue);
+    if (Number.isNaN(parsedExpiry.getTime())) {
+      alert('Invalid expiry date.');
+      return;
+    }
+    try {
+      setSavingExpiry((prev) => ({ ...prev, [entry.id]: true }));
+      const response = await fetch(`https://server.matrixtwin.com/api/safety/${entry.id}/expiry`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          expiresAt: parsedExpiry.toISOString()
+        })
+      });
+      if (response.ok) {
+        alert('Expiry date updated successfully.');
+        await fetchSafetyEntries();
+        if (selectedSafetyEntry?.id === entry.id) {
+          await handleViewDetails(entry);
+        }
+      } else {
+        const error = await response.json();
+        alert(`Failed to set expiry date: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error setting expiry date:', error);
+      alert('Failed to set expiry date. Please try again.');
+    } finally {
+      setSavingExpiry((prev) => ({ ...prev, [entry.id]: false }));
+    }
+  };
+
+  const handleSetExpiryStatus = async (entry: SafetyEntry, nextActive: boolean) => {
+    if (!user?.id || user.role !== 'admin') return;
+    try {
+      setUpdatingExpiryStatus((prev) => ({ ...prev, [entry.id]: true }));
+      const response = await fetch(`https://server.matrixtwin.com/api/safety/${entry.id}/expiry-status`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          active: nextActive
+        })
+      });
+      if (response.ok) {
+        alert(nextActive ? 'Safety entry reactivated.' : 'Safety entry marked as expired.');
+        await fetchSafetyEntries();
+        if (selectedSafetyEntry?.id === entry.id) {
+          await handleViewDetails(entry);
+        }
+      } else {
+        const error = await response.json();
+        alert(`Failed to update expiry status: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error updating expiry status:', error);
+      alert('Failed to update expiry status. Please try again.');
+    } finally {
+      setUpdatingExpiryStatus((prev) => ({ ...prev, [entry.id]: false }));
+    }
+  };
+
+  const handleNodeReminder = async (entry: SafetyEntry, node: any) => {
+    if (!user?.id || user.role !== 'admin') return;
+    const defaultMessage = `Reminder: Please action "${node.node_name}" step.`;
+    const messageInput = prompt('Enter reminder message for this step:', defaultMessage);
+    if (messageInput === null) return;
+    const message = messageInput.trim() || defaultMessage;
+    const reminderKey = `${entry.id}-${node.node_order}`;
+    try {
+      setSendingNodeReminder((prev) => ({ ...prev, [reminderKey]: true }));
+      const response = await fetch(`https://server.matrixtwin.com/api/safety/${entry.id}/nodes/${node.node_order}/delay-notify`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          message
+        })
+      });
+      if (response.ok) {
+        alert('Reminder sent successfully.');
+      } else {
+        const error = await response.json();
+        alert(`Failed to send reminder: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error sending reminder:', error);
+      alert('Failed to send reminder. Please try again.');
+    } finally {
+      setSendingNodeReminder((prev) => ({ ...prev, [reminderKey]: false }));
+    }
+  };
+
+  const handleRenameSafety = async (entry: SafetyEntry) => {
+    if (!user?.id || user.role !== 'admin') return;
+    const currentName = getSafetyDisplayName(entry);
+    const nextNamePrompt = prompt('Enter new safety form name:', currentName);
+    if (nextNamePrompt === null) return;
+    const nextName = nextNamePrompt.trim();
+    if (!nextName) {
+      alert('Name cannot be empty.');
+      return;
+    }
+    if (nextName === currentName) return;
+    try {
+      setRenamingSafety((prev) => ({ ...prev, [entry.id]: true }));
+      const response = await fetch(`https://server.matrixtwin.com/api/safety/${entry.id}/name`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          name: nextName
+        })
+      });
+      if (response.ok) {
+        alert('Safety form renamed successfully.');
+        await fetchSafetyEntries();
+        if (selectedSafetyEntry?.id === entry.id) {
+          await handleViewDetails(entry);
+        }
+      } else {
+        const error = await response.json();
+        alert(`Failed to rename safety form: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error renaming safety form:', error);
+      alert('Failed to rename safety form. Please try again.');
+    } finally {
+      setRenamingSafety((prev) => ({ ...prev, [entry.id]: false }));
+    }
+  };
+
   return (
-    <div>
-      {/* Enhanced header with safety dashboard */}
-      <div className="relative overflow-hidden rounded-xl mb-8 bg-gradient-to-r from-red-800 via-red-700 to-orange-800">
-        <div className="absolute inset-0 bg-ai-dots opacity-20"></div>
-        <div className="absolute right-0 bottom-0 w-1/3 h-1/2">
-          <svg viewBox="0 0 200 200" className="absolute inset-0 h-full w-full">
-            <motion.path 
-              d="M50,0 L200,0 L200,200 L100,180 Q70,160 50,120 Q30,80 50,0"
-              fill="url(#safetyGradient)" 
-              className="opacity-30"
-              initial={{ x: 200 }}
-              animate={{ x: 0 }}
-              transition={{ duration: 1.5 }}
-            />
-            <defs>
-              <linearGradient id="safetyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#ef4444" />
-                <stop offset="100%" stopColor="#f97316" />
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        
-        <div className="p-8 relative z-10">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-            <div>
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                <h1 className="text-3xl md:text-4xl font-display font-bold text-white flex items-center">
-                  <RiShieldCheckLine className="mr-3 text-red-300" />
-                  {t('safety.title')}
-                </h1>
-                <p className="text-red-200 mt-2 max-w-2xl">
-                  Monitor safety compliance, track incidents, and identify potential hazards to maintain a safe construction environment
-                </p>
-              </motion.div>
+    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#5a2f0f] via-[#8a4b14] to-[#d8a126] p-6 md:p-8"
+      >
+        <div className="absolute inset-0 bg-ai-dots opacity-20" />
+        <div className="relative z-10">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <h1 className="flex items-center text-3xl font-display font-bold text-white md:text-4xl">
+                <RiShieldCheckLine className="mr-3 text-[#ffe9b8]" />
+                {t('safety.title')}
+              </h1>
+              <p className="max-w-3xl text-sm text-white/80 md:text-base">
+                Manage safety inspections with faster scanning, stronger status visibility, and cleaner project context.
+              </p>
+              <div className={`inline-flex items-center rounded-full border px-3 py-1 text-sm ${
+                selectedProject
+                  ? 'border-[#ffd978]/50 bg-[#ffd978]/20 text-[#fff2d1]'
+                  : 'border-[#ffe9b8]/40 bg-[#8a4b14]/30 text-[#fff2d1]'
+              }`}>
+                {selectedProject ? <RiBuilding4Line className="mr-2" /> : <RiAlertLine className="mr-2" />}
+                {selectedProject ? `Project: ${selectedProject.name}` : 'No project selected'}
+              </div>
             </div>
-            
-            <motion.div
-              className="mt-4 md:mt-0 flex space-x-3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              <Button 
-                variant="futuristic" 
-                leftIcon={<RiAddLine />}
-                onClick={() => setShowNewInspection(true)}
-                animated
-                pulseEffect
-                glowing
-              >
-                New Inspection
-              </Button>
-              <Button 
-                variant="futuristic"
-                leftIcon={<RiFileWarningLine />}
-                animated
-                glowing
-              >
+            <div className="mt-2 flex flex-nowrap items-center gap-3 lg:mt-0">
+              {user?.role === 'admin' && selectedProject && (
+                <Button
+                  variant="primary"
+                  leftIcon={<RiAddLine />}
+                  onClick={() => setShowNewInspection(true)}
+                  className="whitespace-nowrap"
+                  animated
+                >
+                  New Inspection
+                </Button>
+              )}
+              <Button variant="outline" leftIcon={<RiFileWarningLine />} onClick={() => setShowReport(true)} className="whitespace-nowrap">
                 Generate Report
               </Button>
-            </motion.div>
+            </div>
           </div>
-
-          {/* Safety Score Visualization */}
-          <motion.div 
-            className="mt-8 flex flex-col md:flex-row items-center gap-8"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <div className="relative h-40 w-40">
-              <svg className="w-full h-full" viewBox="0 0 100 100">
-                <circle 
-                  cx="50" 
-                  cy="50" 
-                  r="45" 
-                  fill="none" 
-                  stroke="rgba(255,255,255,0.2)" 
-                  strokeWidth="10" 
-                />
-                <motion.circle 
-                  cx="50" 
-                  cy="50" 
-                  r="45" 
-                  fill="none" 
-                  stroke="url(#safetyScoreGradient)" 
-                  strokeWidth="10" 
-                  strokeLinecap="round"
-                  strokeDasharray="283"
-                  initial={{ strokeDashoffset: 283 }}
-                  animate={{ strokeDashoffset: 283 - (283 * getStats().averageScore / 100) }}
-                  transition={{ duration: 1.5, delay: 0.3 }}
-                />
-                <defs>
-                  <linearGradient id="safetyScoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#ef4444" />
-                    <stop offset="50%" stopColor="#eab308" />
-                    <stop offset="100%" stopColor="#22c55e" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <motion.div 
-                  className="text-4xl font-bold text-white"
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 1, type: 'spring' }}
-                >
-                  {getStats().averageScore}%
-                </motion.div>
-                <div className="text-sm text-white/70">Safety Score</div>
-              </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Total</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{stats.totalInspections}</div>
             </div>
-
-            <div className="flex-1">
-              <div className="flex items-center mb-3">
-                <h3 className="text-xl font-semibold text-white">Safety Trend</h3>
-                <div className={`ml-3 flex items-center text-sm ${getTrend().direction === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                  {getTrend().direction === 'up' ? (
-                    <RiArrowUpLine className="mr-1" />
-                  ) : (
-                    <RiArrowDownLine className="mr-1" />
-                  )}
-                  {getTrend().percentage}%
-                </div>
-                <div className="ml-auto flex space-x-2">
-                  <button 
-                    className={`px-2 py-1 rounded-md text-xs ${chartTimeframe === 'week' ? 'bg-white/20 text-white' : 'text-red-200 hover:bg-white/10'}`}
-                    onClick={() => setChartTimeframe('week')}
-                  >
-                    Week
-                  </button>
-                  <button 
-                    className={`px-2 py-1 rounded-md text-xs ${chartTimeframe === 'month' ? 'bg-white/20 text-white' : 'text-red-200 hover:bg-white/10'}`}
-                    onClick={() => setChartTimeframe('month')}
-                  >
-                    Month
-                  </button>
-                  <button 
-                    className={`px-2 py-1 rounded-md text-xs ${chartTimeframe === 'quarter' ? 'bg-white/20 text-white' : 'text-red-200 hover:bg-white/10'}`}
-                    onClick={() => setChartTimeframe('quarter')}
-                  >
-                    Quarter
-                  </button>
-                </div>
-              </div>
-              
-              <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 h-32 flex items-end justify-between">
-                {getTrendData().labels.map((label, index) => (
-                  <div key={label} className="flex flex-col items-center">
-                    <div 
-                      className="w-8 bg-gradient-to-t from-red-500 to-green-500 rounded-t-sm"
-                      style={{ 
-                        height: `${getTrendData().scores[index] / 100 * 100}px`,
-                        background: `linear-gradient(to top, 
-                          ${getTrendData().scores[index] < 75 ? '#ef4444' : getTrendData().scores[index] < 90 ? '#eab308' : '#22c55e'}, 
-                          ${getTrendData().scores[index] < 75 ? '#f87171' : getTrendData().scores[index] < 90 ? '#fcd34d' : '#4ade80'}
-                        )` 
-                      }}
-                    />
-                    <div className="text-xs text-white/70 mt-1">{label}</div>
-                    {getTrendData().incidents[index] > 0 && (
-                      <div className="mt-1 px-1.5 py-0.5 bg-red-500 rounded-full text-[10px] text-white">
-                        {getTrendData().incidents[index]}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">This Week</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{stats.thisWeekInspections}</div>
             </div>
-          </motion.div>
-
-          {/* Safety Alerts Section */}
-          <motion.div
-            className="mt-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-          >
-            <div className="flex items-center mb-2">
-              <RiBellLine className="text-red-300 mr-2" />
-              <h3 className="text-lg font-semibold text-white">Safety Alerts</h3>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Pending</div>
+              <div className="mt-1 text-2xl font-semibold text-[#ffe9b8]">{stats.pendingInspections}</div>
             </div>
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
-              {safetyAlerts.map(alert => (
-                <div key={alert.id} className="min-w-[250px] bg-white/10 backdrop-blur-sm rounded-lg p-3 border-l-4 border-red-500">
-                  <div className="flex justify-between">
-                    <div className="text-sm font-medium text-white">{alert.message}</div>
-                    <div className="text-xs text-white/60">{formatRelativeTime(alert.timestamp)}</div>
-                  </div>
-                </div>
-              ))}
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Completed</div>
+              <div className="mt-1 text-2xl font-semibold text-[#ffd978]">{stats.completedInspections}</div>
             </div>
-          </motion.div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Inspectors</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{stats.uniqueInspectors}</div>
+            </div>
+          </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* ISO19650 Safety Inspection Form Modal */}
       <AnimatePresence>
         {showNewInspection && (
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-[#3a2009]/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={() => setShowNewInspection(false)}
           >
             <motion.div
-              className="bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl w-full max-w-6xl max-h-[90vh] overflow-auto"
+              className="h-[95dvh] w-full max-w-6xl overflow-hidden rounded-t-2xl border border-[#ffd978]/40 bg-gradient-to-b from-white to-[#fff7df] shadow-2xl dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1002,560 +1310,329 @@ const SafetyPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8"
-      >
-        <Card className="p-6 flex items-center">
-          <div className="rounded-full p-3 bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 mr-4">
-            <RiShieldCheckLine className="text-2xl" />
-          </div>
-          <div>
-            <div className="flex items-center">
-              <h3 className="text-2xl font-display font-semibold">
-                {getStats().completedInspections}
-              </h3>
-              <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 text-xs rounded-full">
-                Complete
-              </span>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Card variant="glass" className="space-y-4 border border-secondary-200/60 p-4 md:p-5 dark:border-dark-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center text-sm font-semibold text-secondary-800 dark:text-secondary-200">
+              <RiFilter3Line className="mr-2 text-[#a56a1f] dark:text-[#ffd978]" />
+              Search & Filter
             </div>
-            <p className="text-sm text-secondary-600 dark:text-secondary-400">{t('safety.completedInspections')}</p>
+            {(searchQuery || statusFilter !== 'all') && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                }}
+              >
+                Reset
+              </Button>
+            )}
           </div>
-        </Card>
-        
-        <Card className="p-6 flex items-center">
-          <div className="rounded-full p-3 bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400 mr-4">
-            <RiShieldCheckLine className="text-2xl" />
-          </div>
-          <div>
-            <div className="flex items-center">
-              <h3 className="text-2xl font-display font-semibold">
-                {getStats().pendingInspections}
-              </h3>
-              <span className="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400 text-xs rounded-full">
-                In Progress
-              </span>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),200px,190px]">
+            <div className="relative">
+              <RiSearchLine className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-secondary-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by project, inspector, inspection type"
+                className="h-11 w-full rounded-xl border border-secondary-200 bg-white py-2.5 pl-10 pr-10 text-sm text-secondary-900 outline-none transition focus:border-[#a56a1f] focus:ring-2 focus:ring-[#ffe9b8] dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-[#8a4b14]/30"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-500 hover:text-secondary-700 dark:hover:text-secondary-300"
+                >
+                  <RiCloseLine />
+                </button>
+              )}
             </div>
-            <p className="text-sm text-secondary-600 dark:text-secondary-400">{t('safety.pendingInspections')}</p>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              className="h-11 rounded-xl border border-secondary-200 bg-white px-3 text-sm text-secondary-900 outline-none transition focus:border-[#a56a1f] focus:ring-2 focus:ring-[#ffe9b8] dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-[#8a4b14]/30"
+            >
+              <option value="all">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+              <option value="rejected">Rejected</option>
+              <option value="permanently_rejected">Permanently Rejected</option>
+            </select>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'newest' | 'oldest')}
+              className="h-11 rounded-xl border border-secondary-200 bg-white px-3 text-sm text-secondary-900 outline-none transition focus:border-[#a56a1f] focus:ring-2 focus:ring-[#ffe9b8] dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-[#8a4b14]/30"
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+            </select>
           </div>
-        </Card>
-        
-        <Card className="p-6 flex items-center">
-          <div className="rounded-full p-3 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 mr-4">
-            <RiFileWarningLine className="text-2xl" />
-          </div>
-          <div>
-            <h3 className="text-2xl font-display font-semibold">
-              {safetyEntries.reduce((total, entry) => total + entry.findings_count, 0)}
-            </h3>
-            <p className="text-sm text-secondary-600 dark:text-secondary-400">{t('safety.totalFindings')}</p>
-          </div>
-        </Card>
-        
-        <Card className="p-6 flex items-center">
-          <div className="rounded-full p-3 bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 mr-4">
-            <RiPercentLine className="text-2xl" />
-          </div>
-          <div>
-            <h3 className={`text-2xl font-display font-semibold ${getScoreColorClass(getStats().averageScore)}`}>
-              {getStats().averageScore}%
-            </h3>
-            <p className="text-sm text-secondary-600 dark:text-secondary-400">{t('safety.averageSafetyScore')}</p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {[
+              { key: 'all', label: 'All' },
+              { key: 'pending', label: 'Pending' },
+              { key: 'completed', label: 'Completed' },
+              { key: 'rejected', label: 'Rejected' },
+              { key: 'permanently_rejected', label: 'Permanent' }
+            ].map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => setStatusFilter(filter.key as typeof statusFilter)}
+                className={`inline-flex min-w-max items-center rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  statusFilter === filter.key
+                    ? 'border-[#8a4b14] bg-[#8a4b14] text-white shadow-sm'
+                    : 'border-secondary-200 bg-white text-secondary-700 hover:border-[#d8a126] hover:text-[#8a4b14] dark:border-dark-600 dark:bg-dark-800 dark:text-secondary-300 dark:hover:border-[#c27a1b]/40'
+                }`}
+              >
+                <span>{filter.label}</span>
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] ${
+                  statusFilter === filter.key
+                    ? 'bg-white/20 text-white'
+                    : 'bg-secondary-100 text-secondary-600 dark:bg-dark-700 dark:text-secondary-300'
+                }`}>
+                  {statusCounts[filter.key as keyof typeof statusCounts]}
+                </span>
+              </button>
+            ))}
+            <div className="ml-auto inline-flex min-w-max items-center rounded-full border border-secondary-200 bg-secondary-50 px-3 py-1.5 text-xs text-secondary-700 dark:border-dark-600 dark:bg-dark-800 dark:text-secondary-200">
+              <RiListCheck className="mr-1.5" />
+              {filteredEntries.length} shown
+            </div>
           </div>
         </Card>
       </motion.div>
 
-      {/* Inspection Cards/Table */}
-      {!showIncidents && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <Card>
-            <div className="p-6 border-b border-secondary-200 dark:border-secondary-700 flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-display font-semibold">Safety Inspections</h2>
-                <p className="text-secondary-600 dark:text-secondary-400 text-sm mt-1">
-                  View recent safety inspections and compliance reports
-                </p>
-              </div>
-              <div className="flex space-x-2">
-                {/* View Toggle Button */}
-                <div className="bg-secondary-100 dark:bg-secondary-800 rounded-full flex p-1 shadow-sm">
-                  <button 
-                    className={`px-3 py-1.5 rounded-full flex items-center transition-all duration-200 ${
-                      !showGridView 
-                        ? 'bg-white dark:bg-secondary-700 text-secondary-900 dark:text-white shadow transform scale-105' 
-                        : 'text-secondary-600 dark:text-secondary-400 hover:bg-white/10'
-                    }`}
-                    onClick={() => setShowGridView(false)}
-                  >
-                    <RiListCheck className="text-lg mr-1" />
-                    <span className="text-sm font-medium">List</span>
-                  </button>
-                  <button 
-                    className={`px-3 py-1.5 rounded-full flex items-center transition-all duration-200 ${
-                      showGridView 
-                        ? 'bg-white dark:bg-secondary-700 text-secondary-900 dark:text-white shadow transform scale-105' 
-                        : 'text-secondary-600 dark:text-secondary-400 hover:bg-white/10'
-                    }`}
-                    onClick={() => setShowGridView(true)}
-                  >
-                    <RiLayoutGridLine className="text-lg mr-1" />
-                    <span className="text-sm font-medium">Grid</span>
-                  </button>
-                </div>
-                
-                {/* Filter Button */}
-                <button 
-                  className={`px-4 py-2 rounded-full flex items-center transition-all duration-200 ${
-                    showFilters
-                      ? 'bg-red-600 text-white shadow-lg shadow-red-600/30'
-                      : 'bg-secondary-100 dark:bg-secondary-800 hover:bg-secondary-200 dark:hover:bg-secondary-700'
-                  }`}
-                  onClick={() => setShowFilters(!showFilters)}
-                >
-                  <RiFilter3Line className={`text-lg ${showFilters ? 'mr-2' : 'mr-1'}`} />
-                  <span className="text-sm font-medium">{showFilters ? 'Hide Filters' : 'Filter'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Filters Section */}
-            <AnimatePresence>
-              {showFilters && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
-                  className="border-b border-secondary-200 dark:border-secondary-700 overflow-hidden backdrop-blur-md"
-                >
-                  <div className="p-4 bg-gradient-to-r from-secondary-50/90 to-secondary-100/90 dark:from-secondary-800/90 dark:to-secondary-900/90">
-                    {/* Filter tabs */}
-                    <div className="flex flex-wrap mb-4 border-b border-secondary-200 dark:border-secondary-700 gap-1">
-                      <button
-                        className={`px-4 py-2 rounded-t-lg text-sm font-medium transition duration-200 ${
-                          activeFilterTab === 'status'
-                            ? 'bg-white dark:bg-secondary-700 text-red-600 dark:text-red-400 border-b-2 border-red-600'
-                            : 'text-secondary-600 dark:text-secondary-400 hover:bg-white/50 dark:hover:bg-secondary-700/50'
-                        }`}
-                        onClick={() => setActiveFilterTab('status')}
-                      >
-                        Status
-                      </button>
-                      <button
-                        className={`px-4 py-2 rounded-t-lg text-sm font-medium transition duration-200 ${
-                          activeFilterTab === 'type'
-                            ? 'bg-white dark:bg-secondary-700 text-red-600 dark:text-red-400 border-b-2 border-red-600'
-                            : 'text-secondary-600 dark:text-secondary-400 hover:bg-white/50 dark:hover:bg-secondary-700/50'
-                        }`}
-                        onClick={() => setActiveFilterTab('type')}
-                      >
-                        Type
-                      </button>
-                      <button
-                        className={`px-4 py-2 rounded-t-lg text-sm font-medium transition duration-200 ${
-                          activeFilterTab === 'date'
-                            ? 'bg-white dark:bg-secondary-700 text-red-600 dark:text-red-400 border-b-2 border-red-600'
-                            : 'text-secondary-600 dark:text-secondary-400 hover:bg-white/50 dark:hover:bg-secondary-700/50'
-                        }`}
-                        onClick={() => setActiveFilterTab('date')}
-                      >
-                        Date Range
-                      </button>
-                      
-                      <div className="ml-auto">
-                        <button
-                          className="px-3 py-1.5 text-xs bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-full hover:bg-red-200 dark:hover:bg-red-900/50 transition duration-200 flex items-center"
-                          onClick={() => {
-                            setFilter('all');
-                            setFilterType('all');
-                            setFilterDateFrom('');
-                            setFilterDateTo('');
-                          }}
-                        >
-                          <RiCloseLine className="mr-1" />
-                          Reset All
-                        </button>
+      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
+        {filteredEntries.length > 0 ? (
+          <div className="grid gap-5 lg:grid-cols-2">
+            {filteredEntries.map((entry, index) => (
+              <motion.div
+                key={entry.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index * 0.06, 0.4) }}
+              >
+                <Card className="h-full border border-[#ffe9b8]/60 bg-gradient-to-b from-white to-[#fff9e8]/90 p-0 dark:border-dark-700 dark:from-dark-900 dark:to-dark-800/80">
+                  <div className="border-b border-[#ffe9b8]/70 bg-gradient-to-r from-[#fff4cc]/80 via-[#fff9e8]/80 to-white p-4 dark:border-dark-700 dark:from-[#5a2f0f]/20 dark:via-dark-800 dark:to-dark-900">
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center text-sm text-secondary-600 dark:text-secondary-300">
+                          <RiShieldCheckLine className="mr-2 text-[#a56a1f] dark:text-[#ffd978]" />
+                          {entry.date}
+                        </div>
+                        <h3 className="mt-1 text-lg font-semibold text-secondary-900 dark:text-white">
+                          {getSafetyDisplayName(entry)}
+                        </h3>
+                      </div>
+                      {getWorkflowStatusBadge(entry)}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-secondary-600 dark:text-secondary-300">
+                      <span className="inline-flex items-center">
+                        <RiUserLine className="mr-1" />
+                        {entry.inspector}
+                      </span>
+                      <span className="inline-flex items-center">
+                        <RiFileWarningLine className="mr-1" />
+                        {entry.inspection_type}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${getExpirySummary(entry).className}`}>
+                        <RiAlarmWarningLine className="mr-1" />
+                        {getExpirySummary(entry).text}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-4 p-4">
+                    <div>
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                        Safety Score
+                      </div>
+                      <p className={`line-clamp-1 text-lg font-semibold ${getScoreColorClass(entry.safety_score)}`}>
+                        {entry.safety_score}%
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-lg border border-[#ffe9b8]/60 bg-[#fff9e8]/80 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+                        <div className="text-xs font-medium uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                          Incidents
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm text-secondary-700 dark:text-secondary-300">
+                          {entry.incidents_reported || 'None'}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-[#ffe9b8]/60 bg-[#fff9e8]/80 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+                        <div className="text-xs font-medium uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                          Findings
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm text-secondary-700 dark:text-secondary-300">
+                          {entry.findings_count} issues
+                        </p>
                       </div>
                     </div>
-                    
-                    {/* Filter content based on active tab */}
-                    <div className="bg-white/80 dark:bg-secondary-800/80 rounded-lg p-4 shadow-sm">
-                      <AnimatePresence mode="wait">
-                        {activeFilterTab === 'status' && (
-                          <motion.div
-                            key="status"
-                            initial={{ opacity: 0, y: 5 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -5 }}
-                            transition={{ duration: 0.2 }}
-                            className="flex flex-wrap gap-2"
-                          >
-                            {['all', 'complete', 'pending', 'failed'].map((status) => (
-                              <button
-                                key={status}
-                                className={`px-4 py-2 rounded-full text-sm font-medium transition duration-200 ${
-                                  filter === status
-                                    ? status === 'all'
-                                      ? 'bg-secondary-200 dark:bg-secondary-700 text-secondary-900 dark:text-white'
-                                      : status === 'complete'
-                                      ? 'bg-green-600 text-white'
-                                      : status === 'pending'
-                                      ? 'bg-yellow-600 text-white'
-                                      : 'bg-red-600 text-white'
-                                    : 'bg-white dark:bg-secondary-700 text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-600'
-                                }`}
-                                onClick={() => setFilter(status)}
-                              >
-                                {status === 'all' && 'All Status'}
-                                {status === 'complete' && 'Complete'}
-                                {status === 'pending' && 'Pending'}
-                                {status === 'failed' && 'Failed'}
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
-                        
-                        {activeFilterTab === 'type' && (
-                          <motion.div
-                            key="type"
-                            initial={{ opacity: 0, y: 5 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -5 }}
-                            transition={{ duration: 0.2 }}
-                            className="flex flex-wrap gap-2"
-                          >
-                            <button
-                              className={`px-4 py-2 rounded-full text-sm font-medium transition duration-200 ${
-                                filterType === 'all'
-                                  ? 'bg-secondary-200 dark:bg-secondary-700 text-secondary-900 dark:text-white'
-                                  : 'bg-white dark:bg-secondary-700 text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-600'
-                              }`}
-                              onClick={() => setFilterType('all')}
-                            >
-                              All Types
-                            </button>
-                            {inspectionTypes.map((type) => (
-                              <button
-                                key={type}
-                                className={`px-4 py-2 rounded-full text-sm font-medium transition duration-200 ${
-                                  filterType === type
-                                    ? 'bg-red-600 text-white'
-                                    : 'bg-white dark:bg-secondary-700 text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-600'
-                                }`}
-                                onClick={() => setFilterType(type)}
-                              >
-                                {type.length > 20 ? `${type.substring(0, 20)}...` : type}
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
-                        
-                        {activeFilterTab === 'date' && (
-                          <motion.div
-                            key="date"
-                            initial={{ opacity: 0, y: 5 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -5 }}
-                            transition={{ duration: 0.2 }}
-                          >
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-sm font-medium mb-1 text-secondary-600 dark:text-secondary-400">
-                                  From Date
-                                </label>
-                                <input 
-                                  type="date" 
-                                  className="w-full p-3 border border-secondary-300 dark:border-secondary-600 rounded-lg bg-white dark:bg-secondary-700 focus:ring-2 focus:ring-red-600/50 focus:border-red-600"
-                                  value={filterDateFrom}
-                                  onChange={(e) => setFilterDateFrom(e.target.value)}
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium mb-1 text-secondary-600 dark:text-secondary-400">
-                                  To Date
-                                </label>
-                                <input 
-                                  type="date" 
-                                  className="w-full p-3 border border-secondary-300 dark:border-secondary-600 rounded-lg bg-white dark:bg-secondary-700 focus:ring-2 focus:ring-red-600/50 focus:border-red-600"
-                                  value={filterDateTo}
-                                  onChange={(e) => setFilterDateTo(e.target.value)}
-                                />
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                    <div className="rounded-lg border border-[#ffe9b8]/60 bg-white/90 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+                      <div className="text-xs font-medium uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                        Notes
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-sm text-secondary-700 dark:text-secondary-300">
+                        {entry.notes || 'None'}
+                      </p>
                     </div>
-                    
-                    {/* Active filters display */}
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-secondary-500 dark:text-secondary-400">Active filters:</span>
-                      
-                      {filter !== 'all' && (
-                        <div className="px-2 py-1 rounded-full text-xs bg-secondary-100 dark:bg-secondary-700 flex items-center">
-                          <span className="mr-1">Status: </span>
-                          <span className={`font-medium ${
-                            filter === 'complete' ? 'text-green-600 dark:text-green-400' : 
-                            filter === 'pending' ? 'text-yellow-600 dark:text-yellow-400' :
-                            'text-red-600 dark:text-red-400'
-                          }`}>
-                            {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                          </span>
-                          <button 
-                            className="ml-1 text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-200"
-                            onClick={() => setFilter('all')}
-                          >
-                            ×
-                          </button>
+                    {user?.role === 'admin' && (
+                      <div className="rounded-lg border border-[#ffe9b8]/60 bg-[#fff9e8]/80 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+                        <div className="mb-2 text-xs font-medium uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                          {isEntryExpired(entry) ? 'Activation' : 'Expiry Controls'}
                         </div>
+                        {isEntryExpired(entry) ? (
+                          <div className="flex justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSetExpiryStatus(entry, true)}
+                              isLoading={!!updatingExpiryStatus[entry.id]}
+                              leftIcon={<RiCheckLine />}
+                              className="h-9"
+                            >
+                              Set Active
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr),auto,auto]">
+                            <input
+                              type="datetime-local"
+                              value={expiryDrafts[entry.id] || toDatetimeLocalValue(getEntryExpiryDate(entry))}
+                              onChange={(e) => setExpiryDrafts((prev) => ({ ...prev, [entry.id]: e.target.value }))}
+                              className="h-9 rounded-lg border border-secondary-200 bg-white px-3 text-xs text-secondary-900 outline-none transition [color-scheme:light] [&::-webkit-calendar-picker-indicator]:cursor-pointer dark:border-dark-600 dark:bg-white dark:text-secondary-900 dark:focus:ring-[#8a4b14]/25 focus:border-[#a56a1f] focus:ring-2 focus:ring-[#ffe9b8]"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSetExpiry(entry)}
+                              isLoading={!!savingExpiry[entry.id]}
+                              leftIcon={<RiAlarmWarningLine className="text-[#8a4b14] dark:text-[#ffd978]" />}
+                              className="h-9"
+                            >
+                              Set Expiry
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSetExpiryStatus(entry, false)}
+                              isLoading={!!updatingExpiryStatus[entry.id]}
+                              leftIcon={<RiTimeLine />}
+                              className="h-9"
+                            >
+                              Set Expired
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap justify-end gap-2 pt-1">
+                      {canUserViewEntry(entry) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewDetails(entry)}
+                          rightIcon={<RiArrowRightLine />}
+                        >
+                          View Details
+                        </Button>
                       )}
-                      
-                      {filterType !== 'all' && (
-                        <div className="px-2 py-1 rounded-full text-xs bg-secondary-100 dark:bg-secondary-700 flex items-center">
-                          <span className="mr-1">Type: </span>
-                          <span className="font-medium text-red-600 dark:text-red-400">{filterType.length > 15 ? `${filterType.substring(0, 15)}...` : filterType}</span>
-                          <button 
-                            className="ml-1 text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-200"
-                            onClick={() => setFilterType('all')}
-                          >
-                            ×
-                          </button>
-                        </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewHistory(entry)}
+                        leftIcon={<RiHistoryLine />}
+                      >
+                        History
+                      </Button>
+                      {user?.role === 'admin' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRenameSafety(entry)}
+                          isLoading={!!renamingSafety[entry.id]}
+                          leftIcon={<RiEditLine />}
+                          className="border-[#d8a126] text-[#8a4b14] hover:border-[#c27a1b] hover:bg-[#fff4cc] dark:hover:bg-[#8a4b14]/30"
+                        >
+                          Rename
+                        </Button>
                       )}
-                      
-                      {(filterDateFrom || filterDateTo) && (
-                        <div className="px-2 py-1 rounded-full text-xs bg-secondary-100 dark:bg-secondary-700 flex items-center">
-                          <span className="mr-1">Date: </span>
-                          <span className="font-medium text-red-600 dark:text-red-400">
-                            {filterDateFrom ? filterDateFrom : 'Any'} → {filterDateTo ? filterDateTo : 'Any'}
-                          </span>
-                          <button 
-                            className="ml-1 text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-200"
-                            onClick={() => {
-                              setFilterDateFrom('');
-                              setFilterDateTo('');
-                            }}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      )}
-                      
-                      {filter === 'all' && filterType === 'all' && !filterDateFrom && !filterDateTo && (
-                        <span className="text-xs italic text-secondary-500 dark:text-secondary-400">No active filters</span>
+                      {user?.role === 'admin' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteEntry(entry)}
+                          leftIcon={<RiDeleteBinLine />}
+                          className="border-[#d8a126] text-[#8a4b14] hover:border-[#c27a1b] hover:bg-[#fff4cc] dark:hover:bg-[#8a4b14]/30"
+                        >
+                          Delete
+                        </Button>
                       )}
                     </div>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Inspection Grid/List View */}
-            {showGridView ? (
-              <motion.div 
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-              >
-                {filteredEntries.map((entry) => {
-                  return (
-                    <Card 
-                      key={entry.id} 
-                      className="p-0 overflow-hidden hover:shadow-xl transition-all duration-300 border border-secondary-100 dark:border-dark-700"
-                    >
-                      <div className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-800/20 p-4">
-                        <div className="flex justify-between mb-2">
-                          <div className="flex items-center">
-                            <RiShieldCheckLine className="text-red-600 dark:text-red-400 mr-2" />
-                            <span className="font-medium text-red-900 dark:text-red-300">{entry.date}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            {getWorkflowStatusBadge(entry)}
-                          </div>
-                        </div>
-                        
-                        <h3 className="font-display font-semibold text-lg text-secondary-900 dark:text-white mb-1">
-                          {entry.inspection_type}
-                        </h3>
-                        
-                        <div className="flex items-center text-sm text-secondary-600 dark:text-secondary-400">
-                          <RiUserLine className="mr-1" />
-                          <span className="ml-1">Inspector: {entry.inspector}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="p-4">
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
-                              Safety Score:
-                            </h4>
-                            <p className={`font-medium text-lg ${getScoreColorClass(entry.safety_score)}`}>
-                              {entry.safety_score}%
-                            </p>
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
-                              Findings:
-                            </h4>
-                            <p className="text-secondary-600 dark:text-secondary-400 font-medium">
-                              {entry.findings_count} Issues
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="mb-4">
-                          <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-2">
-                            Project:
-                          </h4>
-                          <p className="text-secondary-600 dark:text-secondary-400 line-clamp-1">
-                            {entry.project}
-                          </p>
-                        </div>
-                        
-                        <div className="flex justify-end mt-4">
-                          <div className="flex space-x-2">
-                            {canUserViewEntry(entry) && (
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleViewDetails(entry)}
-                                rightIcon={<RiArrowRightLine />}
-                                className="hover:bg-red-50 dark:hover:bg-red-900/20"
-                              >
-                                View Details
-                              </Button>
-                            )}
-                            {/* Admin delete button */}
-                            {user?.role === 'admin' && (
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleDeleteEntry(entry)}
-                                leftIcon={<RiDeleteBinLine />}
-                                className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
-                              >
-                                Delete
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  );
-                })}
+                </Card>
               </motion.div>
+            ))}
+          </div>
+        ) : (
+          <Card className="border border-[#ffe9b8]/60 bg-gradient-to-b from-white to-[#fff9e8]/90 p-10 text-center dark:border-dark-700 dark:from-dark-900 dark:to-dark-800/80">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#fff4cc] text-[#a56a1f] dark:bg-[#8a4b14]/40 dark:text-[#ffd978]">
+              <RiShieldCheckLine className="text-3xl" />
+            </div>
+            {!selectedProject ? (
+              <>
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Project Selected</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
+                  Select a project to view and manage safety inspections in one place.
+                </p>
+              </>
+            ) : safetyEntries.length === 0 ? (
+              <>
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Safety Entries Yet</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
+                  {selectedProject.name} has no safety inspections yet. Start with your first inspection record.
+                </p>
+                {user?.role === 'admin' && (
+                  <div className="mt-5">
+                    <Button variant="primary" leftIcon={<RiAddLine />} onClick={() => setShowNewInspection(true)}>
+                      Create First Inspection
+                    </Button>
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-secondary-50 dark:bg-secondary-800">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                        Type
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                        Project
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                        Inspector
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                        Score
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-secondary-500 dark:text-secondary-400 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-secondary-200 dark:divide-secondary-700">
-                    {filteredEntries.map((entry) => (
-                      <tr key={entry.id} className="hover:bg-secondary-50 dark:hover:bg-secondary-800/50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                          {entry.date}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                          {entry.inspection_type}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                          {entry.project}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900 dark:text-white">
-                          {entry.inspector}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {entry.status === 'pending' ? (
-                            <span className="text-yellow-600 dark:text-yellow-400 inline-flex items-center">
-                              <span className="w-2 h-2 rounded-full bg-yellow-600 dark:bg-yellow-400 mr-1.5 animate-pulse"></span>
-                              Pending
-                            </span>
-                          ) : (
-                            <span className={getScoreColorClass(entry.safety_score)}>
-                              {entry.safety_score}%
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {getWorkflowStatusBadge(entry)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                          <div className="flex justify-end space-x-2">
-                            {canUserViewEntry(entry) && (
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleViewDetails(entry)}
-                                rightIcon={<RiArrowRightLine />}
-                                className="hover:bg-red-50 dark:hover:bg-red-900/20"
-                              >
-                                View Details
-                              </Button>
-                            )}
-                            {/* Admin delete button */}
-                            {user?.role === 'admin' && (
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleDeleteEntry(entry)}
-                                leftIcon={<RiCloseLine />}
-                                className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
-                              >
-                                Delete
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Results Found</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
+                  No inspections match the current search or filter criteria.
+                </p>
+                <div className="mt-5 flex justify-center gap-2">
+                  <Button variant="outline" onClick={() => setSearchQuery('')}>
+                    Clear Search
+                  </Button>
+                  <Button variant="outline" onClick={() => setStatusFilter('all')}>
+                    Reset Filter
+                  </Button>
+                </div>
+              </>
             )}
           </Card>
-        </motion.div>
-      )}
+        )}
+      </motion.div>
 
       {/* Process Flow Modal */}
       {showProcessFlow && (
         <AnimatePresence>
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-[#3a2009]/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={(e) => e.stopPropagation()}
           >
             <motion.div
-              className="w-full max-w-7xl max-h-[90vh] overflow-auto bg-white dark:bg-secondary-800 rounded-lg shadow-xl"
+              className="h-[95dvh] w-full max-w-7xl overflow-auto rounded-t-2xl border border-[#ffd978]/40 bg-gradient-to-b from-white to-[#fff7df] shadow-xl dark:bg-secondary-800 sm:h-auto sm:max-h-[92vh] sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1641,12 +1718,12 @@ const SafetyPage: React.FC = () => {
                                           {(selectedNode.ccRecipients || []).map(cc => (
                                             <div 
                                               key={cc.id} 
-                                              className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-3 py-1 rounded-full flex items-center text-sm"
+                                              className="flex items-center rounded-full bg-[#fff4cc] px-3 py-1 text-sm text-[#8a4b14] dark:bg-[#8a4b14]/30 dark:text-[#ffd978]"
                                             >
                                               <span className="mr-2">{cc.name}</span>
                                               <button
                                                 type="button"
-                                                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200"
+                                                className="text-[#a56a1f] hover:text-[#8a4b14] dark:text-[#f2cd6f] dark:hover:text-[#ffe9b8]"
                                                 onClick={() => removeUserFromCc(cc.id)}
                                               >
                                                 <RiCloseLine />
@@ -1690,7 +1767,7 @@ const SafetyPage: React.FC = () => {
                                       setProcessNodes(updatedNodes);
                                       setSelectedNode(updatedNode);
                                     }}
-                                    className="rounded border-secondary-300 dark:border-secondary-600 text-red-600 focus:ring-red-500"
+                                    className="rounded border-secondary-300 text-[#8a4b14] focus:ring-[#8a4b14] dark:border-secondary-600"
                                   />
                                   <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300">
                                     Allow CC recipients to edit when this node is active
@@ -1825,7 +1902,7 @@ const SafetyPage: React.FC = () => {
                       variant="primary"
                       leftIcon={<RiCheckLine />}
                       onClick={handleFinalSave}
-                      className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
+                      className="bg-gradient-to-r from-[#8a4b14] to-[#a56a1f] hover:from-[#7a410f] hover:to-[#8a4b14]"
                     >
                       Save Safety Inspection
                     </Button>
@@ -1856,12 +1933,14 @@ const SafetyPage: React.FC = () => {
         isOpen={showDetails}
         onClose={() => setShowDetails(false)}
         title="Safety Inspection Details"
+        className="w-full max-w-5xl border border-secondary-200/80 bg-white/95 shadow-2xl dark:border-dark-700 dark:bg-dark-900/95"
+        disablePadding
       >
         {selectedSafetyEntry && (
-          <div className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center bg-primary-50 dark:bg-primary-900/20 p-3 rounded-lg">
-              <div className="text-lg font-bold text-primary-900 dark:text-primary-300 flex items-center">
-                <RiShieldCheckLine className="mr-2 text-primary-600 dark:text-primary-400" />
+          <div className="max-h-[80vh] space-y-5 overflow-y-auto p-5">
+            <div className="flex items-center justify-between rounded-xl border border-[#ffe9b8] bg-[#fff7df] p-3 dark:border-dark-700 dark:bg-dark-800/80">
+              <div className="flex items-center text-lg font-bold text-[#7a410f] dark:text-[#ffd978]">
+                <RiShieldCheckLine className="mr-2 text-[#a56a1f] dark:text-[#f2cd6f]" />
                 Safety Inspection - {selectedSafetyEntry.date}
               </div>
               <div className="flex items-center space-x-2">
@@ -1870,17 +1949,17 @@ const SafetyPage: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-[#ffe9b8] bg-[#fff9e8]/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                  <RiUserLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <RiUserLine className="mr-2 text-[#a56a1f] dark:text-[#f2cd6f]" />
                   <span className="text-sm font-medium uppercase tracking-wide">Inspector</span>
                 </div>
                 <div className="font-medium">{selectedSafetyEntry.inspector}</div>
               </div>
               
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-[#ffe9b8] bg-[#fff9e8]/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                  <div className="mr-2 text-primary-600 dark:text-primary-400">
+                  <div className="mr-2 text-[#a56a1f] dark:text-[#f2cd6f]">
                     <RiShieldCheckLine />
                   </div>
                   <span className="text-sm font-medium uppercase tracking-wide">Inspection Type</span>
@@ -1890,9 +1969,9 @@ const SafetyPage: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-               <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+               <div className="rounded-xl border border-[#ffe9b8] bg-[#fff9e8]/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                  <RiPercentLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <RiPercentLine className="mr-2 text-[#a56a1f] dark:text-[#f2cd6f]" />
                   <span className="text-sm font-medium uppercase tracking-wide">Safety Score</span>
                 </div>
                 <div className={`font-medium text-lg ${getScoreColorClass(selectedSafetyEntry.safety_score)}`}>
@@ -1900,34 +1979,34 @@ const SafetyPage: React.FC = () => {
                 </div>
               </div>
               
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-[#ffe9b8] bg-[#fff9e8]/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                  <RiAlarmWarningLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <RiAlarmWarningLine className="mr-2 text-[#a56a1f] dark:text-[#f2cd6f]" />
                   <span className="text-sm font-medium uppercase tracking-wide">Findings Count</span>
                 </div>
                 <div className="font-medium">{selectedSafetyEntry.findings_count}</div>
               </div>
             </div>
             
-            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+            <div className="rounded-xl border border-[#ffe9b8] bg-[#fff9e8]/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                <RiErrorWarningLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <RiErrorWarningLine className="mr-2 text-[#a56a1f] dark:text-[#f2cd6f]" />
                 <span className="text-sm font-medium uppercase tracking-wide">Incidents Reported</span>
               </div>
               <div className="whitespace-pre-line">{selectedSafetyEntry.incidents_reported || 'None'}</div>
             </div>
             
-            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+            <div className="rounded-xl border border-[#ffe9b8] bg-[#fff9e8]/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                <RiSettings4Line className="mr-2 text-primary-600 dark:text-primary-400" />
+                <RiSettings4Line className="mr-2 text-[#a56a1f] dark:text-[#f2cd6f]" />
                 <span className="text-sm font-medium uppercase tracking-wide">Corrective Actions</span>
               </div>
               <div className="whitespace-pre-line">{selectedSafetyEntry.corrective_actions || 'None'}</div>
             </div>
             
-            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+            <div className="rounded-xl border border-[#ffe9b8] bg-[#fff9e8]/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                <RiFileWarningLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <RiFileWarningLine className="mr-2 text-[#a56a1f] dark:text-[#f2cd6f]" />
                 <span className="text-sm font-medium uppercase tracking-wide">Notes</span>
               </div>
               <div className="whitespace-pre-line">{selectedSafetyEntry.notes || 'None'}</div>
@@ -1935,9 +2014,9 @@ const SafetyPage: React.FC = () => {
             
             {/* Workflow Status Section */}
             {selectedSafetyEntry.safety_workflow_nodes && selectedSafetyEntry.safety_workflow_nodes.length > 0 && (
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-[#ffe9b8] bg-[#fff9e8]/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
-                  <RiFlowChart className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <RiFlowChart className="mr-2 text-[#a56a1f] dark:text-[#f2cd6f]" />
                   <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
                 </div>
                 
@@ -1948,10 +2027,10 @@ const SafetyPage: React.FC = () => {
                       <div key={node.id} className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-dark-700 rounded-lg">
                         <div className="flex items-center">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                            node.status === 'completed' ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400' :
-                            node.status === 'pending' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-400' :
-                            node.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400' :
-                            'bg-gray-100 text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'
+                            node.status === 'completed' ? 'bg-[#ffe9b8] text-[#8a4b14] dark:bg-[#8a4b14]/30 dark:text-[#ffd978]' :
+                            node.status === 'pending' ? 'bg-[#fff4cc] text-[#a56a1f] dark:bg-[#8a4b14]/25 dark:text-[#f2cd6f]' :
+                            node.status === 'rejected' ? 'bg-[#ffe4a8] text-[#9f5818] dark:bg-[#8a4b14]/30 dark:text-[#f2cd6f]' :
+                            'bg-[#fff4cc] text-[#a56a1f] dark:bg-[#8a4b14]/20 dark:text-[#f2cd6f]'
                           }`}>
                             {node.status === 'completed' ? <RiCheckLine /> :
                              node.status === 'pending' ? <RiNotificationLine /> :
@@ -1967,14 +2046,28 @@ const SafetyPage: React.FC = () => {
                             )}
                           </div>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-                          node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
-                          node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
-                          'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
-                        }`}>
-                          {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            node.status === 'completed' ? 'bg-[#ffe9b8] text-[#8a4b14] dark:bg-[#8a4b14]/30 dark:text-[#ffd978]' :
+                            node.status === 'pending' ? 'bg-[#fff4cc] text-[#a56a1f] dark:bg-[#8a4b14]/25 dark:text-[#f2cd6f]' :
+                            node.status === 'rejected' ? 'bg-[#ffe4a8] text-[#9f5818] dark:bg-[#8a4b14]/30 dark:text-[#f2cd6f]' :
+                            'bg-[#fff4cc] text-[#a56a1f] dark:bg-[#8a4b14]/20 dark:text-[#f2cd6f]'
+                          }`}>
+                            {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
+                          </span>
+                          {user?.role === 'admin' && canSendNodeReminder(node) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleNodeReminder(selectedSafetyEntry, node)}
+                              isLoading={!!sendingNodeReminder[`${selectedSafetyEntry.id}-${node.node_order}`]}
+                              leftIcon={<RiNotificationLine />}
+                              className="h-8"
+                            >
+                              Reminder
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                 </div>
@@ -1983,9 +2076,9 @@ const SafetyPage: React.FC = () => {
             
             {/* Comments Section */}
             {selectedSafetyEntry.safety_comments && selectedSafetyEntry.safety_comments.length > 0 && (
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-[#ffe9b8] bg-[#fff9e8]/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
-                  <RiChat3Line className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <RiChat3Line className="mr-2 text-[#a56a1f] dark:text-[#f2cd6f]" />
                   <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
                 </div>
                 
@@ -1999,9 +2092,9 @@ const SafetyPage: React.FC = () => {
                           <div className="flex items-center space-x-2">
                             {comment.action && (
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-                                comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
-                                'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+                                comment.action === 'approve' ? 'bg-[#ffe9b8] text-[#8a4b14] dark:bg-[#8a4b14]/30 dark:text-[#ffd978]' :
+                                comment.action === 'reject' ? 'bg-[#ffe4a8] text-[#9f5818] dark:bg-[#8a4b14]/30 dark:text-[#f2cd6f]' :
+                                'bg-[#fff4cc] text-[#a56a1f] dark:bg-[#8a4b14]/20 dark:text-[#f2cd6f]'
                               }`}>
                                 {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
                               </span>
@@ -2049,7 +2142,7 @@ const SafetyPage: React.FC = () => {
                         setShowDetails(false);
                         handleDeleteEntry(selectedSafetyEntry);
                       }}
-                      className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                      className="text-[#a56a1f] hover:bg-[#fff4cc] hover:text-[#8a4b14]"
                     >
                       Delete
                     </Button>
@@ -2065,6 +2158,20 @@ const SafetyPage: React.FC = () => {
                     className="border-white/10 hover:bg-white/5"
                   >
                     Close
+                  </Button>
+
+                  {/* History Button */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<RiHistoryLine />}
+                    onClick={() => {
+                      setShowDetails(false);
+                      handleViewHistory(selectedSafetyEntry);
+                    }}
+                    className="hover:bg-white/5"
+                  >
+                    History
                   </Button>
 
                   {/* View/Edit Form Button */}
@@ -2091,7 +2198,7 @@ const SafetyPage: React.FC = () => {
                           size="sm"
                           leftIcon={<RiArrowLeftLine />}
                           onClick={() => handleWorkflowAction('back')}
-                          className="text-orange-500 border-orange-500/30 hover:bg-orange-500/10 hover:border-orange-500"
+                          className="border-[#c27a1b]/40 text-[#c27a1b] hover:border-[#a56a1f] hover:bg-[#fff4cc]"
                         >
                           Send Back
                         </Button>
@@ -2104,7 +2211,7 @@ const SafetyPage: React.FC = () => {
                           size="sm"
                           leftIcon={<RiCloseLine />}
                           onClick={() => handleWorkflowAction('reject')}
-                          className="text-red-500 border-red-500/30 hover:bg-red-500/10 hover:border-red-500"
+                          className="border-[#d8a126]/40 text-[#9f5818] hover:border-[#c27a1b] hover:bg-[#fff4cc]"
                         >
                           Reject
                         </Button>
@@ -2117,7 +2224,7 @@ const SafetyPage: React.FC = () => {
                           size="sm"
                           leftIcon={<RiCheckLine />}
                           onClick={() => handleWorkflowAction('approve')}
-                          className="bg-portfolio-orange hover:bg-portfolio-orange/80 text-white border-none shadow-lg shadow-portfolio-orange/20"
+                          className="border-none bg-gradient-to-r from-[#8a4b14] to-[#c27a1b] text-white shadow-lg shadow-[#8a4b14]/25 hover:from-[#7a410f] hover:to-[#a56a1f]"
                         >
                           {(selectedSafetyEntry.current_node_index === 1) ? 'Complete' : 'Approve'}
                         </Button>
@@ -2135,11 +2242,11 @@ const SafetyPage: React.FC = () => {
       {showFormView && selectedSafetyEntry && (
         <AnimatePresence>
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-[#3a2009]/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={() => setShowFormView(false)}
           >
             <motion.div
-              className="w-full max-w-6xl max-h-[90vh] overflow-auto"
+              className="h-[95dvh] w-full max-w-6xl overflow-auto rounded-t-2xl border border-[#ffd978]/40 bg-gradient-to-b from-white to-[#fff7df] shadow-2xl dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -2162,6 +2269,197 @@ const SafetyPage: React.FC = () => {
           </div>
         </AnimatePresence>
       )}
+
+      {/* History Dialog */}
+      <Dialog
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+        title={t('safety.history') || 'Update History'}
+        size="lg"
+        className="w-full max-w-4xl border border-secondary-200/80 bg-white/95 shadow-2xl dark:border-dark-700 dark:bg-dark-900/95"
+        disablePadding
+      >
+        {loadingHistory ? (
+            <div className="flex justify-center p-8">
+              <RiLoader4Line className="animate-spin text-3xl text-[#a56a1f]" />
+            </div>
+         ) : (
+           <div className="space-y-4 max-h-[70vh] overflow-y-auto p-2">
+             {historyData.length === 0 ? (
+               <p className="py-8 text-center text-[#a56a1f]">No history available for this entry.</p>
+             ) : (
+               historyData.map((history) => (
+                 <div key={history.id} className="rounded-xl border border-[#ffe9b8] bg-[#fff9e8]/80 p-4 transition-shadow hover:shadow-md dark:border-dark-700 dark:bg-dark-800/60">
+                   <div className="flex justify-between items-start mb-3">
+                     <div className="flex items-center">
+                       <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#fff4cc] text-[#a56a1f] dark:bg-[#8a4b14]/35 dark:text-[#ffd978]">
+                         <RiUserLine />
+                       </div>
+                       <div>
+                         <div className="font-semibold text-[#7a410f] dark:text-[#ffe9b8]">
+                           {history.performed_by || history.users?.name || 'Unknown User'}
+                         </div>
+                         <div className="text-xs text-[#a56a1f] dark:text-[#f2cd6f]">
+                           {history.action || history.users?.email}
+                         </div>
+                       </div>
+                     </div>
+                     <div className="text-right">
+                       <div className="text-sm font-medium text-[#7a410f] dark:text-[#ffe9b8]">
+                         {new Date(history.timestamp || history.changed_at || '').toLocaleDateString()}
+                       </div>
+                       <div className="text-xs text-[#a56a1f] dark:text-[#f2cd6f]">
+                         {new Date(history.timestamp || history.changed_at || '').toLocaleTimeString()}
+                       </div>
+                     </div>
+                   </div>
+                   
+                   {/* Summary of changes if available */}
+                   <div className="mb-4 space-y-2 rounded-lg border border-[#ffe9b8] bg-white p-3 dark:border-dark-700 dark:bg-dark-900">
+                     <div className="text-sm text-[#8a4b14] dark:text-[#f2cd6f]">
+                       <span className="font-medium text-[#a56a1f] dark:text-[#ffd978]">Changes: </span>
+                       <span>{history.changes || 'Form updated'}</span>
+                     </div>
+                   </div>
+ 
+                   <div className="flex justify-end space-x-2">
+                      {user?.role === 'admin' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRestore(history)}
+                          leftIcon={<RiHistoryLine />}
+                          className="text-[#a56a1f] hover:bg-[#fff4cc] hover:text-[#8a4b14] dark:text-[#f2cd6f] dark:hover:bg-[#8a4b14]/25 dark:hover:text-[#ffe9b8]"
+                        >
+                          Restore
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedHistoryEntry(history);
+                          setShowHistoryForm(true);
+                          setShowHistory(false);
+                        }}
+                        leftIcon={<RiFileListLine />}
+                        className="w-full sm:w-auto"
+                      >
+                        View Form Snapshot
+                      </Button>
+                    </div>
+                 </div>
+               ))
+             )}
+           </div>
+         )}
+       </Dialog>
+
+      {/* History Form View Modal */}
+      {showHistoryForm && selectedHistoryEntry && (
+        <AnimatePresence>
+          <div 
+            className="fixed inset-0 z-50 flex items-end justify-center bg-[#3a2009]/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
+            onClick={() => {
+              setShowHistoryForm(false);
+              setShowHistory(true);
+            }}
+          >
+            <motion.div
+              className="h-[95dvh] w-full max-w-6xl overflow-auto rounded-t-2xl border border-[#ffd978]/40 bg-gradient-to-b from-white to-[#fff7df] shadow-2xl dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:rounded-2xl"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <SafetyInspectionChecklistTemplate
+                onClose={() => {
+                  setShowHistoryForm(false);
+                  setShowHistory(true);
+                }}
+                onSave={() => {}} // Read-only
+                initialData={selectedHistoryEntry.form_data}
+                isEditMode={false}
+                readOnly={true}
+                title={`History Snapshot - ${new Date(selectedHistoryEntry.timestamp || selectedHistoryEntry.changed_at || '').toLocaleString()}`}
+              />
+            </motion.div>
+          </div>
+        </AnimatePresence>
+      )}
+
+      <ReportModal
+        isOpen={showReport}
+        onClose={() => setShowReport(false)}
+        title="Safety Inspections Full Report"
+        subtitle="Comprehensive report for currently listed safety inspections."
+        downloadLabel="Download PDF"
+        onDownload={handleDownloadReportPdf}
+        isDownloading={isDownloadingReport}
+        contentRef={reportContentRef}
+        maxWidthClassName="max-w-[1700px]"
+        theme={{
+          headerGradient: 'from-[#7a410f] to-[#c27a1b]',
+          bodyBackground: 'bg-[#fff8e5]/60 dark:bg-dark-800/20'
+        }}
+      >
+        <FullReportContent
+          generatedOn={new Date().toLocaleString()}
+          projectName={selectedProject?.name || 'All Projects'}
+          summaryCards={[
+            { label: 'Total Listed', value: reportRows.length },
+            { label: 'Pending', value: reportStatusCounts.pending },
+            { label: 'Completed', value: reportStatusCounts.completed },
+            { label: 'Rejected', value: reportStatusCounts.rejected },
+            { label: 'Permanent Rejected', value: reportStatusCounts.permanentlyRejected },
+            {
+              label: 'Avg Safety Score',
+              value: reportRows.length
+                ? `${Math.round(reportRows.reduce((sum, row) => sum + Number(row.safety_score || 0), 0) / reportRows.length)}%`
+                : '0%'
+            }
+          ]}
+          reportHighlights={reportHighlights}
+          statusChartTitle="Status Distribution"
+          trendChartTitle="Inspections Over Time"
+          contributorChartTitle="Top Inspectors"
+          weatherChartTitle="Inspection Type Distribution"
+          statusChartData={statusChartData}
+          trendChartData={trendChartData}
+          contributorChartData={contributorChartData}
+          weatherChartData={inspectionTypeChartData}
+          chartOptions={chartOptions}
+          issueSectionTitle="Incident Details"
+          issueColumns={[
+            { key: 'date', label: 'Date' },
+            { key: 'inspector', label: 'Inspector' },
+            { key: 'project', label: 'Project' },
+            { key: 'incidents_reported', label: 'Incident' }
+          ]}
+          issueRows={issueRows}
+          issueEmptyText="No incidents found in the currently listed inspections."
+          listSectionTitle="Full Safety Inspection List"
+          listColumns={[
+            { key: 'date', label: 'Date' },
+            { key: 'project', label: 'Project' },
+            { key: 'inspector', label: 'Inspector' },
+            { key: 'inspection_type', label: 'Inspection Type' },
+            { key: 'safety_score', label: 'Safety Score' },
+            { key: 'findings_count', label: 'Findings' },
+            { key: 'status', label: 'Status' },
+            { key: 'corrective_actions', label: 'Corrective Actions' },
+            { key: 'notes', label: 'Notes' }
+          ]}
+          listRows={reportRows}
+          theme={{
+            cardBorder: 'border-[#ffe9b8] dark:border-dark-700',
+            cardSurface: 'bg-[#fffdf4] dark:bg-dark-800',
+            accentText: 'text-[#a56a1f]',
+            numberText: 'text-[#7a410f] dark:text-[#ffe9b8]'
+          }}
+        />
+      </ReportModal>
     </div>
   );
 };

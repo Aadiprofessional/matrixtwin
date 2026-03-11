@@ -133,7 +133,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCoun
         `flex items-center px-4 py-3 relative ${
           isActive 
           ? 'text-white font-medium bg-portfolio-orange/10 border-l-2 border-portfolio-orange' 
-          : 'text-gray-400 dark:text-gray-300 hover:text-white hover:bg-white/5'
+          : 'text-gray-400 dark:text-gray-300 hover:text-white hover:bg-white/5 border-l-2 border-transparent'
         } ${
           collapsed && !mobile ? 'justify-center' : 'justify-between'
         } rounded-lg transition-all duration-300 ${
@@ -170,7 +170,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCoun
             </motion.div>
             {(!collapsed || mobile) && (
               <motion.span 
-                className={`ml-3 font-medium relative ${isActive ? 'text-white' : ''}`}
+                className={`ml-3 font-medium relative whitespace-nowrap ${isActive ? 'text-white' : ''}`}
                 animate={{ 
                   x: isActive ? 2 : 0,
                 }}
@@ -188,7 +188,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCoun
           </div>
           
           {badgeCount > 0 && (!collapsed || mobile) && (
-            <span className="bg-gradient-to-r from-portfolio-orange to-orange-600 text-white text-xs font-semibold px-2 py-1 rounded-full relative z-10 shadow-[0_0_10px_rgba(255,87,34,0.5)]">
+            <span className="bg-gradient-to-r from-portfolio-orange to-orange-600 text-white text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full absolute right-2 top-1/2 -translate-y-1/2 z-10 shadow-[0_0_10px_rgba(255,87,34,0.5)]">
               {badgeCount}
             </span>
           )}
@@ -272,7 +272,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
     { 
       to: '/diary', 
       icon: (
-        <div><IconWrapper icon="RiBookmarkLine" className="text-xl" /></div>
+        <div><IconWrapper icon="RiCalendarCheckLine" className="text-xl" /></div>
       ), 
       label: 'diary.title',
       badgeCount: diaryCount
@@ -300,6 +300,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
       ), 
       label: 'cleansing.title',
       badgeCount: cleansingCount
+    },
+    { 
+      to: '/forms', 
+      icon: (
+        <div><IconWrapper icon="RiFileUserLine" className="text-xl" /></div>
+      ), 
+      label: 'nav.customForms',
+      badgeCount: formsCount
     }
   ];
   
@@ -312,14 +320,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
       ), 
       label: 'tasks.title',
       badgeCount: 5
-    },
-    { 
-      to: '/forms', 
-      icon: (
-        <div><IconWrapper icon="RiFileUserLine" className="text-xl" /></div>
-      ), 
-      label: 'nav.customForms',
-      badgeCount: formsCount
     },
     { 
       to: '/team', 

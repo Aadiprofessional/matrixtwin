@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { RiAddLine, RiBrushLine, RiCheckboxCircleLine, RiCalendarCheckLine, RiTaskLine, RiMapPinLine, RiPercentLine, RiCheckLine, RiArrowRightLine, RiArrowLeftLine, RiFilter3Line, RiCloseLine, RiLoader4Line, RiFlowChart, RiSettings4Line, RiUserLine, RiSearchLine, RiNotificationLine, RiFileWarningLine, RiAlertLine, RiTeamLine, RiFileTextLine, RiDownload2Line, RiPrinterLine, RiDeleteBinLine, RiFileListLine } from 'react-icons/ri';
+import { RiAddLine, RiBrushLine, RiCheckboxCircleLine, RiCalendarCheckLine, RiTaskLine, RiMapPinLine, RiPercentLine, RiCheckLine, RiArrowRightLine, RiArrowLeftLine, RiFilter3Line, RiCloseLine, RiLoader4Line, RiFlowChart, RiSettings4Line, RiUserLine, RiSearchLine, RiNotificationLine, RiFileWarningLine, RiAlertLine, RiTeamLine, RiFileTextLine, RiDownload2Line, RiPrinterLine, RiDeleteBinLine, RiFileListLine, RiHistoryLine, RiEditLine } from 'react-icons/ri';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { DailyCleaningInspectionTemplate } from '../components/forms/DailyCleaningInspectionTemplate';
@@ -13,6 +13,23 @@ import { Dialog } from '../components/ui/Dialog';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
 import { projectService } from '../services/projectService';
 import { PeopleSelectorModal } from '../components/ui/PeopleSelectorModal';
+import { ReportModal } from '../components/common/ReportModal';
+import { FullReportContent } from '../components/common/FullReportContent';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement
+} from 'chart.js';
+
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, BarElement);
 
 interface User {
   id: string;
@@ -35,10 +52,26 @@ interface ProcessNode {
   settings: Record<string, any>;
 }
 
+interface HistoryEntry {
+  id: string;
+  changed_at: string;
+  form_data: any;
+  users?: {
+    name: string;
+    email: string;
+  };
+  // Compatibility fields
+  action?: string;
+  changes?: string;
+  performed_by?: string;
+  timestamp?: string;
+}
+
 interface CleansingEntry {
   id: string;
   date: string;
   project: string;
+  name?: string;
   project_id?: string;
   submitter: string;
   area: string;
@@ -55,6 +88,9 @@ interface CleansingEntry {
   created_by: string;
   created_at: string;
   updated_at?: string;
+  active?: boolean;
+  expires_at?: string;
+  expiresAt?: string;
 }
 
 // People selector modal component
@@ -88,6 +124,83 @@ const CleansingPage: React.FC = () => {
   
   // Cleansing entries from API
   const [cleansingEntries, setCleansingEntries] = useState<CleansingEntry[]>([]);
+
+  // History states
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyData, setHistoryData] = useState<HistoryEntry[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showHistoryForm, setShowHistoryForm] = useState(false);
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<HistoryEntry | null>(null);
+  const [showReport, setShowReport] = useState(false);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  const reportContentRef = useRef<HTMLDivElement | null>(null);
+  const [expiryDrafts, setExpiryDrafts] = useState<Record<string, string>>({});
+  const [savingExpiry, setSavingExpiry] = useState<Record<string, boolean>>({});
+  const [updatingExpiryStatus, setUpdatingExpiryStatus] = useState<Record<string, boolean>>({});
+  const [sendingNodeReminder, setSendingNodeReminder] = useState<Record<string, boolean>>({});
+  const [renamingCleansing, setRenamingCleansing] = useState<Record<string, boolean>>({});
+
+  const fetchHistory = async (cleansingId: string) => {
+    try {
+      setLoadingHistory(true);
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/cleansing/${cleansingId}/history`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setHistoryData(data);
+      } else {
+        console.error('Failed to fetch history');
+        setHistoryData([]);
+      }
+    } catch (error) {
+      console.error('Error fetching history:', error);
+      setHistoryData([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleRestore = async (history: HistoryEntry) => {
+    if (!selectedCleansingEntry) return;
+    
+    if (!window.confirm('Are you sure you want to restore this version? This will create a new history entry with the current state.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/cleansing/${selectedCleansingEntry.id}/restore`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ historyId: history.id })
+      });
+
+      if (response.ok) {
+        alert('Cleansing entry restored successfully!');
+        setShowHistory(false);
+        fetchCleansingEntries();
+        setSelectedCleansingEntry(null);
+        setShowDetails(false);
+      } else {
+        const error = await response.json();
+        alert(`Failed to restore cleansing entry: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error restoring cleansing entry:', error);
+      alert('Failed to restore cleansing entry. Please try again.');
+    }
+  };
+
+  const handleViewHistory = async (entry: CleansingEntry) => {
+    setSelectedCleansingEntry(entry);
+    setShowHistory(true);
+    await fetchHistory(entry.id);
+  };
 
   // Fetch cleansing entries from API with project filtering
   const fetchCleansingEntries = useCallback(async () => {
@@ -172,12 +285,66 @@ const CleansingPage: React.FC = () => {
   }, [location.search, cleansingEntries]);
   
   // Filtered entries based on search
-  const filteredEntries = cleansingEntries.filter(entry => 
-    entry.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  const toDatetimeLocalValue = (date: Date) => {
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+  };
+
+  const getDefaultExpiryDate = (entry: CleansingEntry) => {
+    const baseDate = new Date(entry.created_at || entry.date);
+    const resolvedBaseDate = Number.isNaN(baseDate.getTime()) ? new Date() : baseDate;
+    const defaultExpiryDate = new Date(resolvedBaseDate);
+    defaultExpiryDate.setDate(defaultExpiryDate.getDate() + 10);
+    return defaultExpiryDate;
+  };
+
+  const getEntryExpiryDate = (entry: CleansingEntry) => {
+    const expirySource = entry.expires_at || entry.expiresAt;
+    const parsedExpiry = expirySource ? new Date(expirySource) : getDefaultExpiryDate(entry);
+    return Number.isNaN(parsedExpiry.getTime()) ? getDefaultExpiryDate(entry) : parsedExpiry;
+  };
+
+  const isEntryExpired = (entry: CleansingEntry) => {
+    return entry.active === false || getEntryExpiryDate(entry).getTime() <= Date.now();
+  };
+
+  const getCleansingDisplayName = (entry: CleansingEntry) => {
+    const preferredName = (entry.name || entry.project || '').trim();
+    if (!preferredName || preferredName.toLowerCase() === 'unknown project') {
+      return 'New Cleansing';
+    }
+    return preferredName;
+  };
+
+  const getExpirySummary = (entry: CleansingEntry) => {
+    const expiryDate = getEntryExpiryDate(entry);
+    const now = new Date();
+    const msLeft = expiryDate.getTime() - now.getTime();
+    const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+    if (isEntryExpired(entry)) {
+      const daysOverdue = Math.max(1, Math.abs(daysLeft));
+      return {
+        text: `Expired ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} ago`,
+        className: 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300'
+      };
+    }
+    return {
+      text: `Expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+      className: 'bg-teal-100 text-teal-700 dark:bg-teal-900/25 dark:text-teal-300'
+    };
+  };
+
+  const canSendNodeReminder = (node: any) => {
+    const nodeName = String(node?.node_name || node?.name || '').toLowerCase();
+    return nodeName !== 'start' && nodeName !== 'complete';
+  };
+
+  const filteredEntries = useMemo(() => cleansingEntries.filter(entry => 
+    getCleansingDisplayName(entry).toLowerCase().includes(searchQuery.toLowerCase()) ||
     entry.submitter.toLowerCase().includes(searchQuery.toLowerCase()) ||
     entry.area.toLowerCase().includes(searchQuery.toLowerCase()) ||
     entry.date.includes(searchQuery)
-  );
+  ), [cleansingEntries, searchQuery]);
   
   // Process flow helper functions
   const addNewNode = () => {
@@ -640,6 +807,149 @@ const CleansingPage: React.FC = () => {
       alert('Failed to delete cleansing entry. Please try again.');
     }
   };
+
+  const handleSetExpiry = async (entry: CleansingEntry) => {
+    if (!user?.id || user.role !== 'admin') return;
+    const draftValue = expiryDrafts[entry.id];
+    if (!draftValue) {
+      alert('Please select an expiry date and time.');
+      return;
+    }
+    const parsedExpiry = new Date(draftValue);
+    if (Number.isNaN(parsedExpiry.getTime())) {
+      alert('Invalid expiry date.');
+      return;
+    }
+    try {
+      setSavingExpiry((prev) => ({ ...prev, [entry.id]: true }));
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/cleansing/${entry.id}/expiry`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          expiresAt: parsedExpiry.toISOString()
+        })
+      });
+      if (response.ok) {
+        alert('Expiry date updated successfully.');
+        await fetchCleansingEntries();
+      } else {
+        const error = await response.json();
+        alert(`Failed to set expiry date: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error setting expiry date:', error);
+      alert('Failed to set expiry date. Please try again.');
+    } finally {
+      setSavingExpiry((prev) => ({ ...prev, [entry.id]: false }));
+    }
+  };
+
+  const handleSetExpiryStatus = async (entry: CleansingEntry, nextActive: boolean) => {
+    if (!user?.id || user.role !== 'admin') return;
+    try {
+      setUpdatingExpiryStatus((prev) => ({ ...prev, [entry.id]: true }));
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/cleansing/${entry.id}/expiry-status`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          active: nextActive
+        })
+      });
+      if (response.ok) {
+        alert(nextActive ? 'Cleansing entry reactivated.' : 'Cleansing entry marked as expired.');
+        await fetchCleansingEntries();
+      } else {
+        const error = await response.json();
+        alert(`Failed to update expiry status: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error updating expiry status:', error);
+      alert('Failed to update expiry status. Please try again.');
+    } finally {
+      setUpdatingExpiryStatus((prev) => ({ ...prev, [entry.id]: false }));
+    }
+  };
+
+  const handleNodeReminder = async (entry: CleansingEntry, node: any) => {
+    if (!user?.id || user.role !== 'admin') return;
+    const defaultMessage = `Reminder: Please action "${node.node_name}" step.`;
+    const messageInput = prompt('Enter reminder message for this step:', defaultMessage);
+    if (messageInput === null) return;
+    const message = messageInput.trim() || defaultMessage;
+    const reminderKey = `${entry.id}-${node.node_order}`;
+    try {
+      setSendingNodeReminder((prev) => ({ ...prev, [reminderKey]: true }));
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/cleansing/${entry.id}/nodes/${node.node_order}/delay-notify`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          message
+        })
+      });
+      if (response.ok) {
+        alert('Reminder sent successfully.');
+      } else {
+        const error = await response.json();
+        alert(`Failed to send reminder: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error sending reminder:', error);
+      alert('Failed to send reminder. Please try again.');
+    } finally {
+      setSendingNodeReminder((prev) => ({ ...prev, [reminderKey]: false }));
+    }
+  };
+
+  const handleRenameCleansing = async (entry: CleansingEntry) => {
+    if (!user?.id || user.role !== 'admin') return;
+    const currentName = getCleansingDisplayName(entry);
+    const nextNamePrompt = prompt('Enter new cleansing form name:', currentName);
+    if (nextNamePrompt === null) return;
+    const nextName = nextNamePrompt.trim();
+    if (!nextName) {
+      alert('Name cannot be empty.');
+      return;
+    }
+    if (nextName === currentName) return;
+    try {
+      setRenamingCleansing((prev) => ({ ...prev, [entry.id]: true }));
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/cleansing/${entry.id}/name`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          name: nextName
+        })
+      });
+      if (response.ok) {
+        alert('Cleansing form renamed successfully.');
+        await fetchCleansingEntries();
+      } else {
+        const error = await response.json();
+        alert(`Failed to rename cleansing form: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error renaming cleansing form:', error);
+      alert('Failed to rename cleansing form. Please try again.');
+    } finally {
+      setRenamingCleansing((prev) => ({ ...prev, [entry.id]: false }));
+    }
+  };
   
   // Get statistics
   const getStats = () => {
@@ -653,6 +963,154 @@ const CleansingPage: React.FC = () => {
   };
   
   const stats = getStats();
+
+  const reportRows = useMemo(() => (
+    filteredEntries.map((entry) => ({
+      id: entry.id,
+      date: entry.date || '-',
+      project: entry.project || '-',
+      submitter: entry.submitter || '-',
+      area: entry.area || '-',
+      cleanliness_score: entry.cleanliness_score ?? 0,
+      cleaning_status: entry.cleaning_status || '-',
+      status: entry.status || 'pending',
+      notes: entry.notes || '-'
+    }))
+  ), [filteredEntries]);
+
+  const reportStatusCounts = useMemo(() => ({
+    pending: reportRows.filter((row) => row.status === 'pending').length,
+    completed: reportRows.filter((row) => row.status === 'completed').length,
+    rejected: reportRows.filter((row) => row.status === 'rejected').length,
+    permanentlyRejected: reportRows.filter((row) => row.status === 'permanently_rejected').length
+  }), [reportRows]);
+
+  const reportHighlights = useMemo(() => {
+    const avgScore = reportRows.length
+      ? Math.round(reportRows.reduce((sum, row) => sum + Number(row.cleanliness_score || 0), 0) / reportRows.length)
+      : 0;
+    const topArea = Object.entries(
+      reportRows.reduce<Record<string, number>>((acc, row) => {
+        const key = row.area || 'Unknown';
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {})
+    ).sort((a, b) => b[1] - a[1])[0];
+    return [
+      `Average cleanliness score: ${avgScore}%`,
+      `Clean areas (score >= 90): ${reportRows.filter((row) => Number(row.cleanliness_score || 0) >= 90).length}`,
+      `Total listed records: ${reportRows.length}`,
+      `Most frequent area: ${topArea ? `${topArea[0]} (${topArea[1]})` : 'N/A'}`
+    ];
+  }, [reportRows]);
+
+  const statusChartData = useMemo(() => ({
+    labels: ['Pending', 'Completed', 'Rejected', 'Permanently Rejected'],
+    datasets: [{
+      data: [
+        reportStatusCounts.pending,
+        reportStatusCounts.completed,
+        reportStatusCounts.rejected,
+        reportStatusCounts.permanentlyRejected
+      ],
+      backgroundColor: ['#67e8f9', '#34d399', '#2dd4bf', '#0d9488'],
+      borderColor: ['#a5f3fc', '#6ee7b7', '#5eead4', '#14b8a6'],
+      borderWidth: 1
+    }]
+  }), [reportStatusCounts]);
+
+  const trendChartData = useMemo(() => {
+    const map = reportRows.reduce<Record<string, number>>((acc, row) => {
+      const key = row.date || 'Unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const labels = Object.keys(map).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    return {
+      labels,
+      datasets: [{
+        label: 'Records',
+        data: labels.map((label) => map[label]),
+        borderColor: '#0f766e',
+        backgroundColor: 'rgba(20, 184, 166, 0.2)',
+        tension: 0.3,
+        fill: true
+      }]
+    };
+  }, [reportRows]);
+
+  const contributorChartData = useMemo(() => {
+    const map = reportRows.reduce<Record<string, number>>((acc, row) => {
+      const key = row.submitter || 'Unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 7);
+    return {
+      labels: sorted.map(([name]) => name),
+      datasets: [{
+        label: 'Records',
+        data: sorted.map(([, count]) => count),
+        backgroundColor: '#0f766e'
+      }]
+    };
+  }, [reportRows]);
+
+  const areaChartData = useMemo(() => {
+    const map = reportRows.reduce<Record<string, number>>((acc, row) => {
+      const key = row.area || 'Unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 7);
+    return {
+      labels: sorted.map(([area]) => area),
+      datasets: [{
+        label: 'Records',
+        data: sorted.map(([, count]) => count),
+        backgroundColor: '#14b8a6'
+      }]
+    };
+  }, [reportRows]);
+
+  const chartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#0f766e' } } },
+    scales: {
+      x: { ticks: { color: '#0f766e' }, grid: { color: 'rgba(45, 212, 191, 0.2)' } },
+      y: { ticks: { color: '#0f766e', precision: 0 }, grid: { color: 'rgba(45, 212, 191, 0.2)' } }
+    }
+  }), []);
+
+  const issueRows = useMemo(() => (
+    reportRows.filter((row) => row.notes && row.notes !== '-')
+  ), [reportRows]);
+
+  const handleDownloadReportPdf = useCallback(async () => {
+    if (!reportContentRef.current) return;
+    setIsDownloadingReport(true);
+    try {
+      const canvas = await html2canvas(reportContentRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imageData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const width = pdf.internal.pageSize.getWidth();
+      const height = (canvas.height * width) / canvas.width;
+      let position = 0;
+      let remaining = height;
+      pdf.addImage(imageData, 'PNG', 0, position, width, height);
+      remaining -= pdf.internal.pageSize.getHeight();
+      while (remaining > 0) {
+        position = remaining - height;
+        pdf.addPage();
+        pdf.addImage(imageData, 'PNG', 0, position, width, height);
+        remaining -= pdf.internal.pageSize.getHeight();
+      }
+      pdf.save(`cleansing-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } finally {
+      setIsDownloadingReport(false);
+    }
+  }, []);
 
   // Get workflow status badge
   const getWorkflowStatusBadge = (entry: CleansingEntry) => {
@@ -701,7 +1159,7 @@ const CleansingPage: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <RiLoader4Line className="animate-spin text-4xl text-green-600 mx-auto mb-4" />
+          <RiLoader4Line className="animate-spin text-4xl text-teal-600 mx-auto mb-4" />
           <p className="text-secondary-600 dark:text-secondary-400">Loading cleansing entries...</p>
         </div>
       </div>
@@ -709,162 +1167,104 @@ const CleansingPage: React.FC = () => {
   }
   
   return (
-    <div className="max-w-7xl mx-auto pb-12">
-      {/* Enhanced header with gradient background */}
-      <div className="relative overflow-hidden rounded-xl mb-8 bg-gradient-to-r from-green-800 via-green-700 to-emerald-800">
-        <div className="absolute inset-0 bg-ai-dots opacity-20"></div>
-        <div className="absolute right-0 bottom-0 w-1/3 h-1/2">
-          <svg viewBox="0 0 200 200" className="absolute inset-0 h-full w-full">
-            <motion.path 
-              d="M30,0 L200,0 L200,200 L0,150 Q10,100 30,0"
-              fill="url(#cleansingGradient)" 
-              className="opacity-30"
-              initial={{ x: 200 }}
-              animate={{ x: 0 }}
-              transition={{ duration: 1.5 }}
-            />
-            <defs>
-              <linearGradient id="cleansingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#22c55e" />
-                <stop offset="100%" stopColor="#10b981" />
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        
-        <div className="p-8 relative z-10">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-            <div>
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                <h1 className="text-3xl md:text-4xl font-display font-bold text-white flex items-center">
-                  <RiBrushLine className="mr-3 text-green-300" />
-                  {t('cleansing.title')}
-                </h1>
-                <p className="text-green-200 mt-2 max-w-2xl">
-                  Monitor cleanliness standards, track cleaning activities, and maintain a clean construction environment
-                </p>
-                {/* Project indicator */}
-                {selectedProject ? (
-                  <div className="mt-3 flex items-center text-green-100">
-                    <RiTeamLine className="mr-2" />
-                    <span className="text-sm">
-                      Showing cleansing entries for: <span className="font-semibold">{selectedProject.name}</span>
-                    </span>
-                  </div>
-                ) : (
-                  <div className="mt-3 flex items-center text-yellow-200">
-                    <RiAlertLine className="mr-2" />
-                    <span className="text-sm">
-                      No project selected. Please select a project to view cleansing entries.
-                    </span>
-                  </div>
-                )}
-              </motion.div>
+    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative mb-8 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-teal-900 via-emerald-800 to-cyan-800 p-6 md:p-8"
+      >
+        <div className="absolute inset-0 bg-ai-dots opacity-20" />
+        <div className="relative z-10">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <h1 className="flex items-center text-3xl font-display font-bold text-white md:text-4xl">
+                <RiBrushLine className="mr-3 text-teal-200" />
+                {t('cleansing.title')}
+              </h1>
+              <p className="max-w-3xl text-sm text-white/75 md:text-base">
+                Manage cleansing records with clearer visibility, fast scan cards, and full process workflow context.
+              </p>
+              <div className={`inline-flex items-center rounded-full border px-3 py-1 text-sm ${
+                selectedProject
+                  ? 'border-teal-200/40 bg-teal-200/10 text-teal-50'
+                  : 'border-emerald-200/40 bg-emerald-200/10 text-emerald-50'
+              }`}>
+                {selectedProject ? <RiTeamLine className="mr-2" /> : <RiAlertLine className="mr-2" />}
+                {selectedProject ? `Project: ${selectedProject.name}` : 'No project selected'}
+              </div>
             </div>
-            
-            <motion.div
-              className="mt-4 md:mt-0 flex space-x-3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              <Button 
-                variant="futuristic" 
+            <div className="mt-2 flex flex-nowrap items-center gap-3 lg:mt-0">
+              <Button
+                variant="primary"
                 leftIcon={<RiAddLine />}
                 onClick={() => setShowNewRecord(true)}
-                animated
-                pulseEffect
-                glowing
+                className="whitespace-nowrap bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-800 hover:to-emerald-800"
               >
                 New Record
               </Button>
-              <Button 
-                variant="futuristic"
+              <Button
+                variant="outline"
                 leftIcon={<RiFileTextLine />}
-                animated
-                glowing
+                className="whitespace-nowrap border-white/30 bg-white/10 text-white hover:bg-white/20"
+                onClick={() => setShowReport(true)}
               >
                 Generate Report
               </Button>
-            </motion.div>
+            </div>
           </div>
-
-          {/* Statistics Section */}
-          <motion.div 
-            className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-green-500/20 rounded-full mr-4">
-                <RiBrushLine className="text-2xl text-green-300" />
-              </div>
-              <div>
-                <div className="text-sm text-green-100">Total Records</div>
-                <div className="text-2xl font-bold text-white">{stats.totalEntries}</div>
-              </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Total Records</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{stats.totalEntries}</div>
             </div>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-green-500/20 rounded-full mr-4">
-                <RiPercentLine className="text-2xl text-green-300" />
-              </div>
-              <div>
-                <div className="text-sm text-green-100">Average Score</div>
-                <div className="text-2xl font-bold text-white">{stats.avgScore}%</div>
-              </div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Average Score</div>
+              <div className="mt-1 text-2xl font-semibold text-teal-100">{stats.avgScore}%</div>
             </div>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-green-500/20 rounded-full mr-4">
-                <RiCheckboxCircleLine className="text-2xl text-green-300" />
-              </div>
-              <div>
-                <div className="text-sm text-green-100">Clean Areas</div>
-                <div className="text-2xl font-bold text-white">{stats.cleanAreas}</div>
-              </div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Clean Areas</div>
+              <div className="mt-1 text-2xl font-semibold text-emerald-100">{stats.cleanAreas}</div>
             </div>
-          </motion.div>
+          </div>
         </div>
-      </div>
+      </motion.div>
       
       {/* Search and Filter Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className="mb-8"
-      >
-        <Card className="p-5 border-none shadow-md bg-white/80 dark:bg-dark-800/80 backdrop-blur-sm">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-grow relative">
-              <Input
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Card variant="glass" className="space-y-4 border border-secondary-200/60 p-4 md:p-5 dark:border-dark-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center text-sm font-semibold text-secondary-800 dark:text-secondary-200">
+              <RiFilter3Line className="mr-2 text-teal-700 dark:text-teal-300" />
+              Search & Filter
+            </div>
+            {searchQuery && (
+              <Button variant="ghost" size="sm" onClick={() => setSearchQuery('')}>
+                Reset
+              </Button>
+            )}
+          </div>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),170px]">
+            <div className="relative">
+              <RiSearchLine className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-secondary-500" />
+              <input
                 type="text"
-                placeholder={t('common.search') + " cleansing records..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                leftIcon={<RiSearchLine className="text-secondary-500" />}
-                className="w-full pl-10 pr-4 py-3 text-base"
+                placeholder={`${t('common.search')} by area, submitter, notes`}
+                className="h-11 w-full rounded-xl border border-secondary-200 bg-white py-2.5 pl-10 pr-10 text-sm text-secondary-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-200 dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-teal-500/20"
               />
               {searchQuery && (
-                <button 
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-400 hover:text-secondary-600"
+                <button
+                  type="button"
                   onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-500 hover:text-secondary-700 dark:hover:text-secondary-300"
                 >
                   <RiCloseLine />
                 </button>
               )}
             </div>
-            <div className="hidden sm:flex items-center text-secondary-500 dark:text-secondary-400">
-              <RiFilter3Line className="mr-2" />
-              <span className="text-sm">
-                {filteredEntries.length} {filteredEntries.length === 1 ? 'record' : 'records'} {t('common.found')}
-              </span>
+            <div className="inline-flex h-11 items-center justify-center rounded-xl border border-secondary-200 bg-secondary-50 px-3 text-sm text-secondary-700 dark:border-dark-600 dark:bg-dark-800 dark:text-secondary-200">
+              {filteredEntries.length} shown
             </div>
           </div>
         </Card>
@@ -884,14 +1284,12 @@ const CleansingPage: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.1 * index }}
             >
-              <Card 
-                className="p-0 overflow-hidden hover:shadow-xl transition-all duration-300 border border-secondary-100 dark:border-dark-700"
-              >
-                <div className="bg-gradient-to-r from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 p-4">
+              <Card className="h-full border border-teal-200/60 bg-gradient-to-b from-white to-teal-50/80 p-0 dark:border-dark-700 dark:from-dark-900 dark:to-dark-800/80">
+                <div className="border-b border-teal-200/60 bg-gradient-to-r from-teal-100/60 via-teal-50/70 to-white p-4 dark:border-dark-700 dark:from-teal-900/20 dark:via-dark-800 dark:to-dark-900">
                   <div className="flex justify-between mb-2">
                     <div className="flex items-center">
-                      <RiCalendarCheckLine className="text-green-600 dark:text-green-400 mr-2" />
-                      <span className="font-medium text-green-900 dark:text-green-300">{entry.date}</span>
+                      <RiCalendarCheckLine className="text-teal-700 dark:text-teal-300 mr-2" />
+                      <span className="font-medium text-teal-900 dark:text-teal-200">{entry.date}</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       {getWorkflowStatusBadge(entry)}
@@ -899,16 +1297,20 @@ const CleansingPage: React.FC = () => {
                   </div>
                   
                   <h3 className="font-display font-semibold text-lg text-secondary-900 dark:text-white mb-1">
-                    {entry.area} - {entry.submitter}
+                    {getCleansingDisplayName(entry)}
                   </h3>
                   
-                  <div className="flex items-center text-sm text-secondary-600 dark:text-secondary-400">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-secondary-600 dark:text-secondary-400">
                     <RiMapPinLine className="mr-1" />
                     <span className="ml-1">{entry.project}</span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${getExpirySummary(entry).className}`}>
+                      <RiCalendarCheckLine className="mr-1" />
+                      {getExpirySummary(entry).text}
+                    </span>
                   </div>
                 </div>
                 
-                <div className="p-4">
+                <div className="space-y-4 p-4">
                   <div className="mb-4">
                     <div className="flex justify-between items-center mb-2">
                       <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide">
@@ -934,8 +1336,8 @@ const CleansingPage: React.FC = () => {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="rounded-lg border border-teal-200/60 bg-teal-50/70 p-3 dark:border-dark-700 dark:bg-dark-800/70">
                       <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
                         Status:
                       </h4>
@@ -943,7 +1345,7 @@ const CleansingPage: React.FC = () => {
                         {entry.cleaning_status}
                       </p>
                     </div>
-                    <div>
+                    <div className="rounded-lg border border-teal-200/60 bg-teal-50/70 p-3 dark:border-dark-700 dark:bg-dark-800/70">
                       <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
                         Notes:
                       </h4>
@@ -952,18 +1354,86 @@ const CleansingPage: React.FC = () => {
                       </p>
                     </div>
                   </div>
+                  {user?.role === 'admin' && (
+                    <div className="rounded-lg border border-teal-200/60 bg-teal-50/70 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+                      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                        {isEntryExpired(entry) ? 'Activation' : 'Expiry Controls'}
+                      </div>
+                      {isEntryExpired(entry) ? (
+                        <div className="flex justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSetExpiryStatus(entry, true)}
+                            isLoading={!!updatingExpiryStatus[entry.id]}
+                            leftIcon={<RiCheckLine />}
+                            className="h-9"
+                          >
+                            Set Active
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr),auto,auto]">
+                          <input
+                            type="datetime-local"
+                            value={expiryDrafts[entry.id] || toDatetimeLocalValue(getEntryExpiryDate(entry))}
+                            onChange={(e) => setExpiryDrafts((prev) => ({ ...prev, [entry.id]: e.target.value }))}
+                            className="h-9 rounded-lg border border-secondary-200 bg-white px-3 text-xs text-secondary-900 outline-none transition [color-scheme:light] [&::-webkit-calendar-picker-indicator]:cursor-pointer dark:border-dark-600 dark:bg-white dark:text-secondary-900 dark:focus:ring-teal-500/20 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSetExpiry(entry)}
+                            isLoading={!!savingExpiry[entry.id]}
+                            leftIcon={<RiCalendarCheckLine />}
+                            className="h-9"
+                          >
+                            Set Expiry
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSetExpiryStatus(entry, false)}
+                            isLoading={!!updatingExpiryStatus[entry.id]}
+                            leftIcon={<RiCloseLine />}
+                            className="h-9"
+                          >
+                            Set Expired
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   
-                  <div className="flex justify-end mt-4">
-                    <div className="flex space-x-2">
+                  <div className="flex flex-wrap justify-end gap-2 pt-1">
+                    <div className="flex flex-wrap gap-2">
                       {canUserViewEntry(entry) && (
                         <Button 
                           variant="outline" 
                           size="sm"
                           onClick={() => handleViewDetails(entry)}
                           rightIcon={<RiArrowRightLine />}
-                          className="hover:bg-green-50 dark:hover:bg-green-900/20"
                         >
                           {t('common.viewDetails')}
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewHistory(entry)}
+                        leftIcon={<RiHistoryLine />}
+                      >
+                        History
+                      </Button>
+                      {user?.role === 'admin' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRenameCleansing(entry)}
+                          isLoading={!!renamingCleansing[entry.id]}
+                          leftIcon={<RiEditLine />}
+                        >
+                          Rename
                         </Button>
                       )}
                       {/* Admin delete button */}
@@ -973,7 +1443,7 @@ const CleansingPage: React.FC = () => {
                           size="sm"
                           onClick={() => handleDeleteEntry(entry)}
                           leftIcon={<RiDeleteBinLine />}
-                          className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
+                          className="border-teal-200 text-teal-700 hover:border-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/20"
                         >
                           Delete
                         </Button>
@@ -987,49 +1457,44 @@ const CleansingPage: React.FC = () => {
         </div>
         
         {filteredEntries.length === 0 && (
-          <Card className="p-8 text-center bg-white/80 dark:bg-dark-800/80 backdrop-blur-sm shadow-md">
-            <div className="text-6xl mx-auto mb-4 text-green-500 opacity-70">
-              <RiBrushLine />
+          <Card className="border border-teal-200/60 bg-gradient-to-b from-white to-teal-50/80 p-10 text-center dark:border-dark-700 dark:from-dark-900 dark:to-dark-800/80">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+              <RiBrushLine className="text-3xl" />
             </div>
             {!selectedProject ? (
               <>
-                <h2 className="text-xl font-display font-semibold mb-2">No Project Selected</h2>
-                <p className="text-secondary-600 dark:text-secondary-400 mb-6 max-w-lg mx-auto">
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Project Selected</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
                   Please select a project from the sidebar to view and manage cleansing records for that project.
                 </p>
               </>
             ) : cleansingEntries.length === 0 ? (
               <>
-                <h2 className="text-xl font-display font-semibold mb-2">No Cleansing Records Found</h2>
-                <p className="text-secondary-600 dark:text-secondary-400 mb-6 max-w-lg mx-auto">
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Cleansing Records Found</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
                   No cleansing records have been created for <span className="font-semibold">{selectedProject.name}</span> yet.
                   {user?.role === 'admin' && ' Create the first record to get started.'}
                 </p>
                 {user?.role === 'admin' && (
-                  <Button 
-                    variant="primary" 
-                    leftIcon={<RiAddLine />}
-                    onClick={() => setShowNewRecord(true)}
-                    className="shadow-md hover:shadow-lg transition-all duration-300"
-                  >
-                    Create First Record
-                  </Button>
+                  <div className="mt-5">
+                    <Button variant="primary" leftIcon={<RiAddLine />} onClick={() => setShowNewRecord(true)}>
+                      Create First Record
+                    </Button>
+                  </div>
                 )}
               </>
             ) : (
               <>
-                <h2 className="text-xl font-display font-semibold mb-2">No Records Match Your Search</h2>
-                <p className="text-secondary-600 dark:text-secondary-400 mb-6 max-w-lg mx-auto">
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Results Found</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
                   No cleansing records found matching "{searchQuery}" in <span className="font-semibold">{selectedProject.name}</span>.
                   Try adjusting your search terms.
                 </p>
-                <Button 
-                  variant="outline"
-                  onClick={() => setSearchQuery('')}
-                  className="shadow-md hover:shadow-lg transition-all duration-300"
-                >
-                  Clear Search
-                </Button>
+                <div className="mt-5 flex justify-center">
+                  <Button variant="outline" onClick={() => setSearchQuery('')}>
+                    Clear Search
+                  </Button>
+                </div>
               </>
             )}
           </Card>
@@ -1040,21 +1505,29 @@ const CleansingPage: React.FC = () => {
       {showNewRecord && (
         <AnimatePresence>
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-teal-950/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={() => setShowNewRecord(false)}
           >
             <motion.div
-              className="bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl w-full max-w-6xl max-h-[90vh] overflow-auto"
+              className="h-[95dvh] w-full overflow-auto rounded-t-2xl border border-teal-200/40 bg-gradient-to-b from-white to-teal-50/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <DailyCleaningInspectionTemplate
-                onClose={() => setShowNewRecord(false)}
-                onSave={handleCreateRecord}
-              />
+              <div className="sticky top-0 z-20 flex items-center justify-between border-b border-teal-200/60 bg-gradient-to-r from-teal-800 to-emerald-800 px-4 py-3 text-white dark:border-dark-700">
+                <div className="text-sm font-semibold">New Cleansing Record</div>
+                <Button variant="ghost" size="sm" onClick={() => setShowNewRecord(false)} leftIcon={<RiCloseLine />}>
+                  Close
+                </Button>
+              </div>
+              <div className="max-h-[calc(95dvh-56px)] overflow-y-auto sm:max-h-[calc(92vh-56px)]">
+                <DailyCleaningInspectionTemplate
+                  onClose={() => setShowNewRecord(false)}
+                  onSave={handleCreateRecord}
+                />
+              </div>
             </motion.div>
           </div>
         </AnimatePresence>
@@ -1065,12 +1538,14 @@ const CleansingPage: React.FC = () => {
         isOpen={showDetails}
         onClose={() => setShowDetails(false)}
         title={t('cleansing.entryDetails', 'Cleansing Record Details')}
+        className="w-full max-w-5xl border border-secondary-200/80 bg-white/95 shadow-2xl dark:border-dark-700 dark:bg-dark-900/95"
+        disablePadding
       >
         {selectedCleansingEntry && (
-          <div className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
-              <div className="text-lg font-bold text-green-900 dark:text-green-300 flex items-center">
-                <RiCalendarCheckLine className="mr-2 text-green-600 dark:text-green-400" />
+          <div className="max-h-[80vh] space-y-5 overflow-y-auto p-5">
+            <div className="flex items-center justify-between rounded-xl border border-secondary-200 bg-secondary-50 p-3 dark:border-dark-700 dark:bg-dark-800/80">
+              <div className="flex items-center text-lg font-bold text-teal-900 dark:text-teal-300">
+                <RiCalendarCheckLine className="mr-2 text-teal-600 dark:text-teal-400" />
                 {selectedCleansingEntry.date}
               </div>
               <div className="px-3 py-1 bg-white dark:bg-dark-800 rounded-full text-sm font-medium text-secondary-700 dark:text-secondary-300 shadow-sm">
@@ -1079,17 +1554,17 @@ const CleansingPage: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                  <RiUserLine className="mr-2 text-green-600 dark:text-green-400" />
+                  <RiUserLine className="mr-2 text-teal-600 dark:text-teal-400" />
                   <span className="text-sm font-medium uppercase tracking-wide">Submitter</span>
                 </div>
                 <div className="font-medium">{selectedCleansingEntry.submitter}</div>
               </div>
               
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                  <RiMapPinLine className="mr-2 text-green-600 dark:text-green-400" />
+                  <RiMapPinLine className="mr-2 text-teal-600 dark:text-teal-400" />
                   <span className="text-sm font-medium uppercase tracking-wide">Area</span>
                 </div>
                 <div className="font-medium">{selectedCleansingEntry.area}</div>
@@ -1097,17 +1572,17 @@ const CleansingPage: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                  <RiTaskLine className="mr-2 text-green-600 dark:text-green-400" />
+                  <RiTaskLine className="mr-2 text-teal-600 dark:text-teal-400" />
                   <span className="text-sm font-medium uppercase tracking-wide">Cleaning Status</span>
                 </div>
                 <div className="font-medium">{selectedCleansingEntry.cleaning_status}</div>
               </div>
               
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                  <RiPercentLine className="mr-2 text-green-600 dark:text-green-400" />
+                  <RiPercentLine className="mr-2 text-teal-600 dark:text-teal-400" />
                   <span className="text-sm font-medium uppercase tracking-wide">Cleanliness Score</span>
                 </div>
                 <div className={`font-bold ${
@@ -1120,9 +1595,9 @@ const CleansingPage: React.FC = () => {
               </div>
             </div>
             
-            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+            <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                <RiFileTextLine className="mr-2 text-green-600 dark:text-green-400" />
+                <RiFileTextLine className="mr-2 text-teal-600 dark:text-teal-400" />
                 <span className="text-sm font-medium uppercase tracking-wide">Notes</span>
               </div>
               <div className="whitespace-pre-line">{selectedCleansingEntry.notes || t('common.none')}</div>
@@ -1130,9 +1605,9 @@ const CleansingPage: React.FC = () => {
             
             {/* Workflow Status Section */}
             {selectedCleansingEntry.cleansing_workflow_nodes && selectedCleansingEntry.cleansing_workflow_nodes.length > 0 && (
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
-                  <RiFlowChart className="mr-2 text-green-600 dark:text-green-400" />
+                  <RiFlowChart className="mr-2 text-teal-600 dark:text-teal-400" />
                   <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
                 </div>
                 
@@ -1162,14 +1637,28 @@ const CleansingPage: React.FC = () => {
                             )}
                           </div>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-                          node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
-                          node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
-                          'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
-                        }`}>
-                          {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                            node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                            node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                            'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+                          }`}>
+                            {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
+                          </span>
+                          {user?.role === 'admin' && canSendNodeReminder(node) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleNodeReminder(selectedCleansingEntry, node)}
+                              isLoading={!!sendingNodeReminder[`${selectedCleansingEntry.id}-${node.node_order}`]}
+                              leftIcon={<RiNotificationLine />}
+                              className="h-8"
+                            >
+                              Reminder
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                 </div>
@@ -1180,7 +1669,7 @@ const CleansingPage: React.FC = () => {
             {selectedCleansingEntry.cleansing_comments && selectedCleansingEntry.cleansing_comments.length > 0 && (
               <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
-                  <RiNotificationLine className="mr-2 text-green-600 dark:text-green-400" />
+                  <RiNotificationLine className="mr-2 text-teal-600 dark:text-teal-400" />
                   <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
                 </div>
                 
@@ -1262,6 +1751,20 @@ const CleansingPage: React.FC = () => {
                     {t('common.close')}
                   </Button>
 
+                  {/* History Button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowDetails(false);
+                      handleViewHistory(selectedCleansingEntry);
+                    }}
+                    leftIcon={<RiHistoryLine />}
+                    className="border-white/10 hover:bg-white/5"
+                  >
+                    History
+                  </Button>
+
                   {/* View/Edit Form Button */}
                   <Button 
                     variant="outline"
@@ -1312,7 +1815,7 @@ const CleansingPage: React.FC = () => {
                           size="sm"
                           leftIcon={<RiCheckLine />}
                           onClick={() => handleWorkflowAction('approve')}
-                          className="bg-green-600 hover:bg-green-700 text-white border-none shadow-lg shadow-green-600/20"
+                          className="bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-800 hover:to-emerald-800 text-white border-none shadow-lg shadow-teal-700/20"
                         >
                           {selectedCleansingEntry.current_node_index === 1 ? 'Complete' : 'Approve'}
                         </Button>
@@ -1330,11 +1833,11 @@ const CleansingPage: React.FC = () => {
       {showProcessFlow && (
         <AnimatePresence>
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-teal-950/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={handleCancelProcessFlow}
           >
             <motion.div
-              className="w-full max-w-7xl max-h-[90vh] overflow-auto bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl"
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-teal-200/40 bg-gradient-to-b from-white to-teal-50/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-7xl sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1342,21 +1845,21 @@ const CleansingPage: React.FC = () => {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="bg-gradient-to-r from-green-600 to-green-700 p-6 text-white">
-                <div className="flex justify-between items-center">
+              <div className="sticky top-0 z-20 border-b border-teal-200/60 bg-gradient-to-r from-teal-800 to-emerald-800 px-6 py-5 text-white dark:border-dark-700">
+                <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-2xl font-display font-bold flex items-center">
                       <RiFlowChart className="mr-3" />
                       Process Configuration
                     </h2>
-                    <p className="text-green-100 mt-1">
+                    <p className="text-teal-100 mt-1">
                       Configure the workflow process for this cleansing record before saving.
                     </p>
                   </div>
                   <Button 
                     variant="outline"
                     onClick={handleCancelProcessFlow}
-                    className="text-white border-white hover:bg-white/10"
+                    className="border-white/30 bg-white/10 text-white hover:bg-white/20"
                   >
                     <RiCloseLine className="text-xl" />
                   </Button>
@@ -1364,7 +1867,7 @@ const CleansingPage: React.FC = () => {
               </div>
               
               {/* Content */}
-              <div className="p-6">
+              <div className="max-h-[calc(95dvh-78px)] overflow-y-auto p-6 sm:max-h-[calc(92vh-86px)]">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   {/* Left panel - Flow chart */}
                   <div className="lg:col-span-5">
@@ -1438,12 +1941,12 @@ const CleansingPage: React.FC = () => {
                                           {selectedNode.ccRecipients.map(cc => (
                                             <div 
                                               key={cc.id} 
-                                              className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-3 py-1 rounded-full flex items-center text-sm"
+                                              className="bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 px-3 py-1 rounded-full flex items-center text-sm"
                                             >
                                               <span className="mr-2">{cc.name}</span>
                                               <button
                                                 type="button"
-                                                className="text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-200"
+                                                className="text-teal-500 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-200"
                                                 onClick={() => removeUserFromCc(cc.id)}
                                               >
                                                 <RiCloseLine />
@@ -1584,7 +2087,7 @@ const CleansingPage: React.FC = () => {
                 </div>
                 
                 {/* Footer Actions */}
-                <div className="flex justify-between items-center mt-6 pt-6 border-t border-secondary-200 dark:border-dark-700">
+                <div className="sticky bottom-0 mt-6 flex items-center justify-between border-t border-teal-200/60 bg-white/95 pt-6 backdrop-blur-sm dark:border-dark-700 dark:bg-dark-900/95">
                   <Button 
                     variant="outline"
                     leftIcon={<RiArrowLeftLine />}
@@ -1604,7 +2107,7 @@ const CleansingPage: React.FC = () => {
                       variant="primary"
                       leftIcon={<RiCheckLine />}
                       onClick={handleFinalSave}
-                      className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+                      className="bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-800 hover:to-emerald-800"
                     >
                       Save Cleansing Record
                     </Button>
@@ -1630,11 +2133,11 @@ const CleansingPage: React.FC = () => {
       {showFormView && selectedCleansingEntry && (
         <AnimatePresence>
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-teal-950/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={() => setShowFormView(false)}
           >
             <motion.div
-              className="w-full max-w-6xl max-h-[90vh] overflow-auto"
+              className="h-[95dvh] w-full overflow-auto rounded-t-2xl border border-teal-200/40 bg-gradient-to-b from-white to-teal-50/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1657,6 +2160,194 @@ const CleansingPage: React.FC = () => {
           </div>
         </AnimatePresence>
       )}
+
+      {/* History Dialog */}
+      <Dialog
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+        title={t('cleansing.history') || 'Update History'}
+        size="lg"
+      >
+        {loadingHistory ? (
+            <div className="flex justify-center p-8">
+              <RiLoader4Line className="animate-spin text-3xl text-teal-600" />
+            </div>
+         ) : (
+           <div className="space-y-4 max-h-[70vh] overflow-y-auto p-2">
+             {historyData.length === 0 ? (
+               <p className="text-center text-gray-500 py-8">No history available for this entry.</p>
+             ) : (
+               historyData.map((history) => (
+                 <div key={history.id} className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50 hover:shadow-md transition-shadow">
+                   <div className="flex justify-between items-start mb-3">
+                     <div className="flex items-center">
+                       <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center text-teal-600 dark:text-teal-400 mr-3">
+                         <RiUserLine />
+                       </div>
+                       <div>
+                         <div className="font-semibold text-secondary-900 dark:text-white">
+                           {history.performed_by || history.users?.name || 'Unknown User'}
+                         </div>
+                         <div className="text-xs text-secondary-500 dark:text-secondary-400">
+                           {history.action || history.users?.email}
+                         </div>
+                       </div>
+                     </div>
+                     <div className="text-right">
+                       <div className="text-sm font-medium text-secondary-900 dark:text-white">
+                         {new Date(history.timestamp || history.changed_at || '').toLocaleDateString()}
+                       </div>
+                       <div className="text-xs text-secondary-500 dark:text-secondary-400">
+                         {new Date(history.timestamp || history.changed_at || '').toLocaleTimeString()}
+                       </div>
+                     </div>
+                   </div>
+                   
+                   {/* Summary of changes if available */}
+                   <div className="mb-4 space-y-2 bg-white dark:bg-gray-900 p-3 rounded border border-gray-100 dark:border-gray-700">
+                     <div className="text-sm text-secondary-700 dark:text-secondary-300">
+                       <span className="font-medium text-secondary-500 dark:text-secondary-400">Changes: </span>
+                       <span>{history.changes || 'Form updated'}</span>
+                     </div>
+                   </div>
+ 
+                   <div className="flex justify-end space-x-2">
+                     {user?.role === 'admin' && (
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={() => handleRestore(history)}
+                         leftIcon={<RiHistoryLine />}
+                         className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:text-orange-300 dark:hover:bg-orange-900/20"
+                       >
+                         Restore
+                       </Button>
+                     )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedHistoryEntry(history);
+                          setShowHistoryForm(true);
+                          setShowHistory(false);
+                        }}
+                        leftIcon={<RiFileListLine />}
+                        className="w-full sm:w-auto"
+                      >
+                        View Form Snapshot
+                      </Button>
+                    </div>
+                 </div>
+               ))
+             )}
+           </div>
+         )}
+       </Dialog>
+
+      {/* History Form View Modal */}
+      {showHistoryForm && selectedHistoryEntry && (
+        <AnimatePresence>
+          <div 
+            className="fixed inset-0 z-50 flex items-end justify-center bg-teal-950/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
+            onClick={() => {
+              setShowHistoryForm(false);
+              setShowHistory(true);
+            }}
+          >
+            <motion.div
+              className="h-[95dvh] w-full overflow-auto rounded-t-2xl border border-teal-200/40 bg-gradient-to-b from-white to-teal-50/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <DailyCleaningInspectionTemplate
+                onClose={() => {
+                  setShowHistoryForm(false);
+                  setShowHistory(true);
+                }}
+                onSave={() => {}} // Read-only
+                initialData={selectedHistoryEntry.form_data}
+                isEditMode={false}
+                readOnly={true}
+                title={`History Snapshot - ${new Date(selectedHistoryEntry.timestamp || selectedHistoryEntry.changed_at || '').toLocaleString()}`}
+              />
+            </motion.div>
+          </div>
+        </AnimatePresence>
+      )}
+
+      <ReportModal
+        isOpen={showReport}
+        onClose={() => setShowReport(false)}
+        title="Cleansing Records Full Report"
+        subtitle="Comprehensive report for currently listed cleansing records."
+        downloadLabel="Download PDF"
+        onDownload={handleDownloadReportPdf}
+        isDownloading={isDownloadingReport}
+        contentRef={reportContentRef}
+        maxWidthClassName="max-w-[1700px]"
+        theme={{
+          headerGradient: 'from-teal-800 to-emerald-700',
+          bodyBackground: 'bg-[#ecfeff]/70 dark:bg-dark-800/20'
+        }}
+      >
+        <FullReportContent
+          generatedOn={new Date().toLocaleString()}
+          projectName={selectedProject?.name || 'All Projects'}
+          summaryCards={[
+            { label: 'Total Listed', value: reportRows.length },
+            { label: 'Pending', value: reportStatusCounts.pending },
+            { label: 'Completed', value: reportStatusCounts.completed },
+            { label: 'Rejected', value: reportStatusCounts.rejected },
+            { label: 'Permanent Rejected', value: reportStatusCounts.permanentlyRejected },
+            {
+              label: 'Avg Score',
+              value: reportRows.length
+                ? `${Math.round(reportRows.reduce((sum, row) => sum + Number(row.cleanliness_score || 0), 0) / reportRows.length)}%`
+                : '0%'
+            }
+          ]}
+          reportHighlights={reportHighlights}
+          statusChartTitle="Status Distribution"
+          trendChartTitle="Records Over Time"
+          contributorChartTitle="Top Submitters"
+          weatherChartTitle="Area Distribution"
+          statusChartData={statusChartData}
+          trendChartData={trendChartData}
+          contributorChartData={contributorChartData}
+          weatherChartData={areaChartData}
+          chartOptions={chartOptions}
+          issueSectionTitle="Notes / Observations"
+          issueColumns={[
+            { key: 'date', label: 'Date' },
+            { key: 'submitter', label: 'Submitter' },
+            { key: 'area', label: 'Area' },
+            { key: 'notes', label: 'Notes' }
+          ]}
+          issueRows={issueRows}
+          issueEmptyText="No notes/observations found in the currently listed records."
+          listSectionTitle="Full Cleansing Records List"
+          listColumns={[
+            { key: 'date', label: 'Date' },
+            { key: 'project', label: 'Project' },
+            { key: 'submitter', label: 'Submitter' },
+            { key: 'area', label: 'Area' },
+            { key: 'cleanliness_score', label: 'Score' },
+            { key: 'cleaning_status', label: 'Cleaning Status' },
+            { key: 'status', label: 'Workflow Status' },
+            { key: 'notes', label: 'Notes' }
+          ]}
+          listRows={reportRows}
+          theme={{
+            cardBorder: 'border-[#99f6e4] dark:border-dark-700',
+            cardSurface: 'bg-[#f0fdfa] dark:bg-dark-800',
+            accentText: 'text-[#0f766e]',
+            numberText: 'text-[#134e4a] dark:text-[#99f6e4]'
+          }}
+        />
+      </ReportModal>
     </div>
   );
 };

@@ -1,11 +1,28 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Dialog } from '../components/ui/Dialog';
+import { ReportModal } from '../components/common/ReportModal';
+import { FullReportContent } from '../components/common/FullReportContent';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { projectService } from '../services/projectService';
@@ -40,6 +57,7 @@ interface DiaryEntry {
   id: string;
   date: string;
   project: string;
+  name?: string;
   project_id?: string;
   author: string;
   weather: string;
@@ -58,14 +76,43 @@ interface DiaryEntry {
   created_by: string;
   created_at: string;
   updated_at?: string;
+  expires_at?: string;
+  expiresAt?: string;
+  active?: boolean;
 }
 
+interface HistoryEntry {
+  id: string;
+  changed_at: string;
+  form_data: any;
+  users?: {
+    name: string;
+    email: string;
+  };
+}
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
+
 const DiaryPage: React.FC = () => {
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://server.matrixtwin.com';
   const { t } = useTranslation();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed' | 'rejected' | 'permanently_rejected'>('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest'>('newest');
   const [showNewEntry, setShowNewEntry] = useState(false);
   const [selectedDiaryEntry, setSelectedDiaryEntry] = useState<DiaryEntry | null>(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -88,6 +135,72 @@ const DiaryPage: React.FC = () => {
   
   // Diary entries from API
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
+
+  // History states
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyData, setHistoryData] = useState<HistoryEntry[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showHistoryForm, setShowHistoryForm] = useState(false);
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<HistoryEntry | null>(null);
+  const [showReport, setShowReport] = useState(false);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  const [expiryDrafts, setExpiryDrafts] = useState<Record<string, string>>({});
+  const [savingExpiry, setSavingExpiry] = useState<Record<string, boolean>>({});
+  const [updatingExpiryStatus, setUpdatingExpiryStatus] = useState<Record<string, boolean>>({});
+  const [renamingDiary, setRenamingDiary] = useState<Record<string, boolean>>({});
+  const [sendingNodeReminder, setSendingNodeReminder] = useState<Record<string, boolean>>({});
+  const reportContentRef = useRef<HTMLDivElement>(null);
+
+  const formatDateTimeLocal = (date: Date) => {
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+  };
+
+  const getDefaultExpiryDate = (entry: DiaryEntry) => {
+    const baseDate = new Date(entry.created_at || entry.date);
+    const resolvedBaseDate = Number.isNaN(baseDate.getTime()) ? new Date() : baseDate;
+    const defaultExpiryDate = new Date(resolvedBaseDate);
+    defaultExpiryDate.setDate(defaultExpiryDate.getDate() + 10);
+    return defaultExpiryDate;
+  };
+
+  const getEntryExpiryDate = (entry: DiaryEntry) => {
+    const expirySource = entry.expires_at || entry.expiresAt;
+    const parsedExpiry = expirySource ? new Date(expirySource) : getDefaultExpiryDate(entry);
+    return Number.isNaN(parsedExpiry.getTime()) ? getDefaultExpiryDate(entry) : parsedExpiry;
+  };
+
+  const isEntryExpired = (entry: DiaryEntry) => {
+    return entry.active === false || getEntryExpiryDate(entry).getTime() <= Date.now();
+  };
+
+  const getDiaryDisplayName = (entry: DiaryEntry) => {
+    const preferredName = (entry.name || entry.project || '').trim();
+    if (!preferredName || preferredName.toLowerCase() === 'unknown project') {
+      return 'New Diary';
+    }
+    return preferredName;
+  };
+
+  const getExpirySummary = (entry: DiaryEntry) => {
+    const expiryDate = getEntryExpiryDate(entry);
+    const now = new Date();
+    const msLeft = expiryDate.getTime() - now.getTime();
+    const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+
+    if (isEntryExpired(entry)) {
+      const daysOverdue = Math.max(1, Math.abs(daysLeft));
+      return {
+        text: `Expired ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} ago`,
+        className: 'bg-[#dbe5c4] text-[#526728] dark:bg-[#2f3a17]/40 dark:text-[#a4b986]'
+      };
+    }
+
+    return {
+      text: `Expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+      className: 'bg-[#e2ebcf] text-[#526728] dark:bg-[#2f3a17]/40 dark:text-[#b0c985]'
+    };
+  };
 
   // Fetch diary entries from API with project filtering
   const fetchDiaryEntries = useCallback(async () => {
@@ -158,6 +271,22 @@ const DiaryPage: React.FC = () => {
     }
   }, [user?.id, selectedProject?.id, fetchDiaryEntries, fetchUsers]);
 
+  useEffect(() => {
+    if (diaryEntries.length === 0) return;
+
+    setExpiryDrafts((prev) => {
+      const next = { ...prev };
+      diaryEntries.forEach((entry) => {
+        if (!next[entry.id]) {
+          const expirySource = entry.expires_at || entry.expiresAt;
+          const expiryDate = expirySource ? new Date(expirySource) : getDefaultExpiryDate(entry);
+          next[entry.id] = formatDateTimeLocal(expiryDate);
+        }
+      });
+      return next;
+    });
+  }, [diaryEntries]);
+
   // Handle URL query parameters for direct navigation
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -172,13 +301,29 @@ const DiaryPage: React.FC = () => {
     }
   }, [location.search, diaryEntries]);
   
-  // Filtered entries based on search
-  const filteredEntries = diaryEntries.filter(entry => 
-    entry.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    entry.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    entry.work_completed.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    entry.date.includes(searchQuery)
-  );
+  const filteredEntries = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const baseFiltered = diaryEntries.filter(entry => {
+      const matchesSearch = !query ||
+        getDiaryDisplayName(entry).toLowerCase().includes(query) ||
+        entry.author.toLowerCase().includes(query) ||
+        entry.work_completed.toLowerCase().includes(query) ||
+        entry.date.includes(query);
+      const matchesStatus = statusFilter === 'all' || entry.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    return [...baseFiltered].sort((a, b) => {
+      const aTime = new Date(a.date).getTime();
+      const bTime = new Date(b.date).getTime();
+      if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
+        return sortBy === 'newest'
+          ? b.date.localeCompare(a.date)
+          : a.date.localeCompare(b.date);
+      }
+      return sortBy === 'newest' ? bTime - aTime : aTime - bTime;
+    });
+  }, [diaryEntries, searchQuery, statusFilter, sortBy]);
   
   // Process flow helper functions
   const addNewNode = () => {
@@ -332,6 +477,72 @@ const DiaryPage: React.FC = () => {
     setPendingFormData(null);
   };
   
+  // Fetch history for a diary entry
+  const fetchHistory = async (diaryId: string) => {
+    try {
+      setLoadingHistory(true);
+      const response = await fetch(`https://server.matrixtwin.com/api/diary/${diaryId}/history`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setHistoryData(data);
+      } else {
+        console.error('Failed to fetch history');
+        setHistoryData([]);
+      }
+    } catch (error) {
+      console.error('Error fetching history:', error);
+      setHistoryData([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  // Restore history version
+  const handleRestore = async (history: HistoryEntry) => {
+    if (!selectedDiaryEntry) return;
+    
+    if (!window.confirm('Are you sure you want to restore this version? This will create a new history entry with the current state.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://server.matrixtwin.com/api/diary/${selectedDiaryEntry.id}/restore`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ historyId: history.id })
+      });
+
+      if (response.ok) {
+        alert('Diary entry restored successfully!');
+        setShowHistory(false);
+        fetchDiaryEntries();
+        setSelectedDiaryEntry(null);
+        setShowDetails(false);
+      } else {
+        const error = await response.json();
+        alert(`Failed to restore diary entry: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error restoring diary entry:', error);
+      alert('Failed to restore diary entry. Please try again.');
+    }
+  };
+
+  // View entry history
+  const handleViewHistory = async (entry: DiaryEntry) => {
+    setSelectedDiaryEntry(entry);
+    setShowHistory(true);
+    await fetchHistory(entry.id);
+  };
+
   // View entry details
   const handleViewDetails = async (entry: DiaryEntry) => {
     try {
@@ -616,19 +827,187 @@ const DiaryPage: React.FC = () => {
       alert('Failed to delete diary entry. Please try again.');
     }
   };
+
+  const handleSetExpiry = async (entry: DiaryEntry) => {
+    if (!user?.id || user.role !== 'admin') return;
+
+    const selectedExpiry = expiryDrafts[entry.id];
+    if (!selectedExpiry) {
+      alert('Please choose an expiry date first.');
+      return;
+    }
+
+    const expiryDate = new Date(selectedExpiry);
+    if (Number.isNaN(expiryDate.getTime())) {
+      alert('Please provide a valid expiry date.');
+      return;
+    }
+
+    try {
+      setSavingExpiry((prev) => ({ ...prev, [entry.id]: true }));
+      const response = await fetch(`${API_BASE_URL}/api/diary/${entry.id}/expiry`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          expiresAt: expiryDate.toISOString()
+        })
+      });
+
+      if (response.ok) {
+        alert('Expiry date updated successfully.');
+        await fetchDiaryEntries();
+        if (selectedDiaryEntry?.id === entry.id) {
+          await handleViewDetails(entry);
+        }
+      } else {
+        const error = await response.json();
+        alert(`Failed to set expiry date: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error setting expiry date:', error);
+      alert('Failed to set expiry date. Please try again.');
+    } finally {
+      setSavingExpiry((prev) => ({ ...prev, [entry.id]: false }));
+    }
+  };
+
+  const handleSetExpiryStatus = async (entry: DiaryEntry, nextActive: boolean) => {
+    if (!user?.id || user.role !== 'admin') return;
+
+    try {
+      setUpdatingExpiryStatus((prev) => ({ ...prev, [entry.id]: true }));
+      const response = await fetch(`${API_BASE_URL}/api/diary/${entry.id}/expiry-status`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          active: nextActive
+        })
+      });
+
+      if (response.ok) {
+        alert(nextActive ? 'Diary entry reactivated.' : 'Diary entry marked as expired.');
+        await fetchDiaryEntries();
+        if (selectedDiaryEntry?.id === entry.id) {
+          await handleViewDetails(entry);
+        }
+      } else {
+        const error = await response.json();
+        alert(`Failed to update expiry status: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error updating expiry status:', error);
+      alert('Failed to update expiry status. Please try again.');
+    } finally {
+      setUpdatingExpiryStatus((prev) => ({ ...prev, [entry.id]: false }));
+    }
+  };
+
+  const handleRenameDiary = async (entry: DiaryEntry) => {
+    if (!user?.id || user.role !== 'admin') return;
+
+    const currentName = getDiaryDisplayName(entry);
+    const nextNamePrompt = prompt('Enter new diary name:', currentName);
+    if (nextNamePrompt === null) return;
+    const nextName = nextNamePrompt.trim();
+
+    if (!nextName) {
+      alert('Diary name cannot be empty.');
+      return;
+    }
+
+    if (nextName === currentName) {
+      return;
+    }
+
+    try {
+      setRenamingDiary((prev) => ({ ...prev, [entry.id]: true }));
+      const response = await fetch(`${API_BASE_URL}/api/diary/${entry.id}/name`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          name: nextName
+        })
+      });
+
+      if (response.ok) {
+        alert('Diary renamed successfully.');
+        await fetchDiaryEntries();
+        if (selectedDiaryEntry?.id === entry.id) {
+          await handleViewDetails(entry);
+        }
+      } else {
+        const error = await response.json();
+        alert(`Failed to rename diary: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error renaming diary:', error);
+      alert('Failed to rename diary. Please try again.');
+    } finally {
+      setRenamingDiary((prev) => ({ ...prev, [entry.id]: false }));
+    }
+  };
+
+  const handleNodeReminder = async (entry: DiaryEntry, node: any, nodeOrder: number) => {
+    if (!user?.id || user.role !== 'admin') return;
+
+    const defaultMessage = `Reminder: Please action "${node.node_name}" step.`;
+    const messageInput = prompt('Enter reminder message for this step:', defaultMessage);
+    if (messageInput === null) return;
+    const message = messageInput.trim() || defaultMessage;
+    const reminderKey = `${entry.id}-${nodeOrder}`;
+
+    try {
+      setSendingNodeReminder((prev) => ({ ...prev, [reminderKey]: true }));
+      const response = await fetch(`${API_BASE_URL}/api/diary/${entry.id}/nodes/${nodeOrder}/delay-notify`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          message
+        })
+      });
+
+      if (response.ok) {
+        alert('Reminder sent successfully for this node.');
+      } else {
+        const error = await response.json();
+        alert(`Failed to send reminder: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error sending node reminder:', error);
+      alert('Failed to send reminder. Please try again.');
+    } finally {
+      setSendingNodeReminder((prev) => ({ ...prev, [reminderKey]: false }));
+    }
+  };
   
   // Get the weather icon based on condition
   const getWeatherIcon = (weather: string) => {
     if (weather.toLowerCase().includes('sun') || weather.toLowerCase().includes('clear')) {
-      return <RiIcons.RiSunLine className="text-amber-500" />;
+      return <RiIcons.RiSunLine className="text-[#789a3b]" />;
     } else if (weather.toLowerCase().includes('cloud')) {
-      return <RiIcons.RiCloudyLine className="text-gray-500" />;
+      return <RiIcons.RiCloudyLine className="text-[#647f31]" />;
     } else if (weather.toLowerCase().includes('rain')) {
-      return <RiIcons.RiRainyLine className="text-blue-500" />;
+      return <RiIcons.RiRainyLine className="text-[#526728]" />;
     } else if (weather.toLowerCase().includes('snow')) {
-      return <RiIcons.RiSnowflakeLine className="text-blue-300" />;
+      return <RiIcons.RiSnowflakeLine className="text-[#b0c985]" />;
     } else {
-      return <RiIcons.RiSunCloudyLine className="text-amber-400" />;
+      return <RiIcons.RiSunCloudyLine className="text-[#6f8f36]" />;
     }
   };
   
@@ -644,19 +1023,252 @@ const DiaryPage: React.FC = () => {
     }).length;
     
     const uniqueAuthors = new Set(diaryEntries.map(entry => entry.author)).size;
-    
-    return { totalEntries, thisWeekEntries, uniqueAuthors };
+    const pendingEntries = diaryEntries.filter(entry => entry.status === 'pending').length;
+    const completedEntries = diaryEntries.filter(entry => entry.status === 'completed').length;
+
+    return { totalEntries, thisWeekEntries, uniqueAuthors, pendingEntries, completedEntries };
   };
   
   const stats = getStats();
+  const statusCounts = useMemo(() => ({
+    all: diaryEntries.length,
+    pending: diaryEntries.filter((entry) => entry.status === 'pending').length,
+    completed: diaryEntries.filter((entry) => entry.status === 'completed').length,
+    rejected: diaryEntries.filter((entry) => entry.status === 'rejected').length,
+    permanently_rejected: diaryEntries.filter((entry) => entry.status === 'permanently_rejected').length
+  }), [diaryEntries]);
+  const reportEntries = useMemo(() => filteredEntries, [filteredEntries]);
+
+  const reportStatusCounts = useMemo(() => ({
+    pending: reportEntries.filter((entry) => entry.status === 'pending').length,
+    completed: reportEntries.filter((entry) => entry.status === 'completed').length,
+    rejected: reportEntries.filter((entry) => entry.status === 'rejected').length,
+    permanentlyRejected: reportEntries.filter((entry) => entry.status === 'permanently_rejected').length
+  }), [reportEntries]);
+
+  const reportEntriesByDate = useMemo(() => {
+    const grouped = reportEntries.reduce((acc, entry) => {
+      const dateKey = entry.date;
+      acc[dateKey] = (acc[dateKey] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(grouped)
+      .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
+      .map(([date, count]) => ({
+        date,
+        label: new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        count
+      }));
+  }, [reportEntries]);
+
+  const weatherAnalytics = useMemo(() => {
+    const normalize = (weather: string) => {
+      const value = (weather || '').toLowerCase();
+      if (value.includes('sun') || value.includes('clear')) return 'Sunny';
+      if (value.includes('cloud')) return 'Cloudy';
+      if (value.includes('rain') || value.includes('storm')) return 'Rainy';
+      if (value.includes('snow')) return 'Snow';
+      if (value.includes('wind')) return 'Windy';
+      return 'Other';
+    };
+
+    const grouped = reportEntries.reduce((acc, entry) => {
+      const key = normalize(entry.weather);
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(grouped)
+      .sort((a, b) => b[1] - a[1])
+      .map(([weather, count]) => ({ weather, count }));
+  }, [reportEntries]);
+
+  const contributorAnalytics = useMemo(() => {
+    const contributorMap = reportEntries.reduce((acc, entry) => {
+      if (!acc[entry.author]) {
+        acc[entry.author] = { author: entry.author, total: 0, completed: 0, pending: 0 };
+      }
+
+      acc[entry.author].total += 1;
+      if (entry.status === 'completed') acc[entry.author].completed += 1;
+      if (entry.status === 'pending') acc[entry.author].pending += 1;
+      return acc;
+    }, {} as Record<string, { author: string; total: number; completed: number; pending: number }>);
+
+    return Object.values(contributorMap).sort((a, b) => b.total - a.total);
+  }, [reportEntries]);
+
+  const incidentEntries = useMemo(() => {
+    return reportEntries.filter((entry) => {
+      const value = (entry.incidents_reported || '').trim().toLowerCase();
+      return value && value !== 'none' && value !== 'n/a' && value !== 'na' && value !== 'nil' && value !== 'no incidents';
+    });
+  }, [reportEntries]);
+
+  const averageTemperature = useMemo(() => {
+    const parsed = reportEntries
+      .map((entry) => parseFloat((entry.temperature || '').replace(/[^\d.-]/g, '')))
+      .filter((value) => !Number.isNaN(value));
+
+    if (parsed.length === 0) return null;
+    const sum = parsed.reduce((acc, value) => acc + value, 0);
+    return (sum / parsed.length).toFixed(1);
+  }, [reportEntries]);
+
+  const reportHighlights = useMemo(() => {
+    const total = reportEntries.length;
+    const completed = reportStatusCounts.completed;
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const incidentRate = total > 0 ? Math.round((incidentEntries.length / total) * 100) : 0;
+    const topContributor = contributorAnalytics[0];
+    const topWeather = weatherAnalytics[0];
+
+    return [
+      `Completion rate is ${completionRate}% across ${total} diary entries.`,
+      `${incidentEntries.length} entries include incidents (${incidentRate}% of listed diaries).`,
+      topContributor ? `${topContributor.author} logged the highest entries (${topContributor.total}).` : 'No contributor activity available.',
+      topWeather ? `Most common weather pattern is ${topWeather.weather} (${topWeather.count} entries).` : 'No weather trend available.',
+      averageTemperature ? `Average captured temperature is ${averageTemperature}°.` : 'Not enough temperature data to calculate average.'
+    ];
+  }, [reportEntries, reportStatusCounts.completed, incidentEntries.length, contributorAnalytics, weatherAnalytics, averageTemperature]);
+
+  const statusChartData = useMemo(() => ({
+    labels: ['Pending', 'Completed', 'Rejected', 'Permanently Rejected'],
+    datasets: [
+      {
+        data: [
+          reportStatusCounts.pending,
+          reportStatusCounts.completed,
+          reportStatusCounts.rejected,
+          reportStatusCounts.permanentlyRejected
+        ],
+        backgroundColor: ['#b0c985', '#526728', '#9aac6d', '#2f3a17'],
+        borderColor: '#ffffff',
+        borderWidth: 2
+      }
+    ]
+  }), [reportStatusCounts]);
+
+  const trendChartData = useMemo(() => ({
+    labels: reportEntriesByDate.map((item) => item.label),
+    datasets: [
+      {
+        label: 'Entries',
+        data: reportEntriesByDate.map((item) => item.count),
+        borderColor: '#526728',
+        backgroundColor: 'rgba(82, 103, 40, 0.2)',
+        fill: true,
+        tension: 0.3
+      }
+    ]
+  }), [reportEntriesByDate]);
+
+  const contributorChartData = useMemo(() => {
+    const topContributors = contributorAnalytics.slice(0, 6);
+    return {
+      labels: topContributors.map((entry) => entry.author),
+      datasets: [
+        {
+          label: 'Total Entries',
+          data: topContributors.map((entry) => entry.total),
+          backgroundColor: 'rgba(120, 154, 59, 0.8)',
+          borderColor: '#526728',
+          borderWidth: 1,
+          borderRadius: 6
+        }
+      ]
+    };
+  }, [contributorAnalytics]);
+
+  const weatherChartData = useMemo(() => ({
+    labels: weatherAnalytics.map((item) => item.weather),
+    datasets: [
+      {
+        label: 'Entries',
+        data: weatherAnalytics.map((item) => item.count),
+        backgroundColor: 'rgba(176, 201, 133, 0.85)',
+        borderColor: '#526728',
+        borderWidth: 1,
+        borderRadius: 6
+      }
+    ]
+  }), [weatherAnalytics]);
+
+  const chartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: {
+          color: '#40501f'
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: { color: '#526728' },
+        grid: { color: 'rgba(82, 103, 40, 0.08)' }
+      },
+      y: {
+        beginAtZero: true,
+        ticks: { color: '#526728' },
+        grid: { color: 'rgba(82, 103, 40, 0.08)' }
+      }
+    }
+  }), []);
+
+  const handleDownloadReportPdf = async () => {
+    if (!reportContentRef.current || isDownloadingReport) return;
+
+    try {
+      setIsDownloadingReport(true);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const canvas = await html2canvas(reportContentRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 5;
+      const imgWidth = pageWidth - margin * 2;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = margin;
+
+      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= (pageHeight - margin * 2);
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + margin;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= (pageHeight - margin * 2);
+      }
+
+      const fileName = `diary-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('Failed to download diary report PDF:', error);
+      alert('Unable to generate PDF. Please try again.');
+    } finally {
+      setIsDownloadingReport(false);
+    }
+  };
 
   // Get workflow status badge
   const getWorkflowStatusBadge = (entry: DiaryEntry) => {
     const statusColors = {
-      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
-      completed: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
-      rejected: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
-      permanently_rejected: 'bg-red-200 text-red-900 dark:bg-red-900/40 dark:text-red-300'
+      pending: 'bg-[#e2ebcf] text-[#526728] dark:bg-[#2f3a17]/40 dark:text-[#b0c985]',
+      completed: 'bg-[#cbdcab] text-[#40501f] dark:bg-[#2f3a17]/50 dark:text-[#cbdcab]',
+      rejected: 'bg-[#dbe5c4] text-[#526728] dark:bg-[#2f3a17]/40 dark:text-[#b0c985]',
+      permanently_rejected: 'bg-[#c9d8a5] text-[#2f3a17] dark:bg-[#2f3a17]/60 dark:text-[#cbdcab]'
     };
 
     // Get current node completion info
@@ -685,7 +1297,7 @@ const DiaryPage: React.FC = () => {
           {statusText}
         </span>
         {completionInfo && (
-          <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          <span className="text-xs text-[#647f31] dark:text-[#a4b986] mt-1">
             Completions{completionInfo}
           </span>
         )}
@@ -697,7 +1309,7 @@ const DiaryPage: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <RiIcons.RiLoader4Line className="animate-spin text-4xl text-primary-600 mx-auto mb-4" />
+          <RiIcons.RiLoader4Line className="animate-spin text-4xl text-[#647f31] mx-auto mb-4" />
           <p className="text-secondary-600 dark:text-secondary-400">Loading diary entries...</p>
         </div>
       </div>
@@ -705,314 +1317,387 @@ const DiaryPage: React.FC = () => {
   }
   
   return (
-    <div className="max-w-7xl mx-auto pb-12">
-      {/* Enhanced header with gradient background */}
-      <div className="relative overflow-hidden rounded-xl mb-8 bg-gradient-to-r from-primary-900 via-primary-800 to-primary-700">
-        <div className="absolute inset-0 bg-ai-dots opacity-20"></div>
-        <div className="absolute right-0 bottom-0 w-1/3 h-1/2">
-          <svg viewBox="0 0 200 200" className="absolute inset-0 h-full w-full">
-            <motion.path 
-              d="M30,0 L200,0 L200,200 L0,150 Q10,100 30,0"
-              fill="url(#diaryGradient)" 
-              className="opacity-30"
-              initial={{ x: 200 }}
-              animate={{ x: 0 }}
-              transition={{ duration: 1.5 }}
-            />
-            <defs>
-              <linearGradient id="diaryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#FF5722" />
-                <stop offset="100%" stopColor="#FF8A65" />
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        
-        <div className="p-8 relative z-10">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-            <div>
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                <h1 className="text-3xl md:text-4xl font-display font-bold text-white flex items-center">
-                  <RiIcons.RiBookmarkLine className="mr-3 text-portfolio-orange" />
-                  {t('diary.title')}
-                </h1>
-                <p className="text-zinc-400 mt-2 max-w-2xl">
-                  Record daily site activities, track progress, and maintain a comprehensive record of your construction project
-                </p>
-                {/* Project indicator */}
-                {selectedProject ? (
-                  <div className="mt-3 flex items-center text-portfolio-orange/90">
-                    <RiIcons.RiBuilding4Line className="mr-2" />
-                    <span className="text-sm">
-                      Showing diary entries for: <span className="font-semibold">{selectedProject.name}</span>
-                    </span>
-                  </div>
-                ) : (
-                  <div className="mt-3 flex items-center text-yellow-200">
-                    <RiIcons.RiInformationLine className="mr-2" />
-                    <span className="text-sm">
-                      No project selected. Please select a project to view diary entries.
-                    </span>
-                  </div>
-                )}
-              </motion.div>
+    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#1f2710] via-[#2f3a17] to-[#526728] p-6 md:p-8"
+      >
+        <div className="absolute inset-0 bg-ai-dots opacity-20" />
+        <div className="relative z-10">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <h1 className="flex items-center text-3xl font-display font-bold text-white md:text-4xl">
+                <RiIcons.RiCalendarCheckLine className="mr-3 text-[#cbdcab]" />
+                {t('diary.title')}
+              </h1>
+              <p className="max-w-3xl text-sm text-white/75 md:text-base">
+                Manage daily site logs with faster scanning, stronger status visibility, and cleaner project context.
+              </p>
+              <div className={`inline-flex items-center rounded-full border px-3 py-1 text-sm ${
+                selectedProject
+                  ? 'border-[#cbdcab]/40 bg-[#b0c985]/15 text-[#e2ebcf]'
+                  : 'border-[#a4b986]/40 bg-[#647f31]/20 text-[#dbe5c4]'
+              }`}>
+                {selectedProject ? <RiIcons.RiBuilding4Line className="mr-2" /> : <RiIcons.RiAlertLine className="mr-2" />}
+                {selectedProject ? `Project: ${selectedProject.name}` : 'No project selected'}
+              </div>
             </div>
-            
-            <motion.div
-              className="mt-4 md:mt-0 flex space-x-3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              {/* Only admin can see new entry button */}
+            <div className="flex flex-wrap gap-3">
               {user?.role === 'admin' && selectedProject && (
-                <Button 
-                  variant="futuristic" 
+                <Button
+                  variant="primary"
                   leftIcon={<RiIcons.RiAddLine />}
                   onClick={() => setShowNewEntry(true)}
+                  className="whitespace-nowrap"
                   animated
-                  pulseEffect
-                  glowing
                 >
                   New Entry
                 </Button>
               )}
-              <Button 
-                variant="futuristic"
+              <Button
+                variant="outline"
                 leftIcon={<RiIcons.RiFileTextLine />}
-                animated
-                glowing
+                onClick={() => setShowReport(true)}
+                className="whitespace-nowrap"
               >
                 Generate Report
               </Button>
-            </motion.div>
+            </div>
           </div>
-
-          {/* Statistics Section */}
-          <motion.div 
-            className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-portfolio-orange/20 rounded-full mr-4">
-                <RiIcons.RiBookmarkLine className="text-2xl text-portfolio-orange" />
-              </div>
-              <div>
-                <div className="text-sm text-zinc-400">Total Entries</div>
-                <div className="text-2xl font-bold text-white">{stats.totalEntries}</div>
-              </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Total</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{stats.totalEntries}</div>
             </div>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-portfolio-orange/20 rounded-full mr-4">
-                <RiIcons.RiCalendarLine className="text-2xl text-portfolio-orange" />
-              </div>
-              <div>
-                <div className="text-sm text-zinc-400">This Week</div>
-                <div className="text-2xl font-bold text-white">{stats.thisWeekEntries}</div>
-              </div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">This Week</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{stats.thisWeekEntries}</div>
             </div>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 flex items-center">
-              <div className="p-3 bg-portfolio-orange/20 rounded-full mr-4">
-                <RiIcons.RiUser3Line className="text-2xl text-portfolio-orange" />
-              </div>
-              <div>
-                <div className="text-sm text-zinc-400">Contributors</div>
-                <div className="text-2xl font-bold text-white">{stats.uniqueAuthors}</div>
-              </div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Pending</div>
+              <div className="mt-1 text-2xl font-semibold text-[#dbe5c4]">{stats.pendingEntries}</div>
             </div>
-          </motion.div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Completed</div>
+              <div className="mt-1 text-2xl font-semibold text-[#cbdcab]">{stats.completedEntries}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Contributors</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{stats.uniqueAuthors}</div>
+            </div>
+          </div>
         </div>
-      </div>
-      
-      {/* Search and Filter Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className="mb-8"
-      >
-        <Card className="p-5 border-none shadow-md bg-white/80 dark:bg-dark-800/80 backdrop-blur-sm">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-grow relative">
-              <Input
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Card variant="glass" className="space-y-4 border border-secondary-200/60 p-4 md:p-5 dark:border-dark-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center text-sm font-semibold text-secondary-800 dark:text-secondary-200">
+              <RiIcons.RiFilter3Line className="mr-2 text-[#647f31] dark:text-[#b0c985]" />
+              Search & Filter
+            </div>
+            {(searchQuery || statusFilter !== 'all') && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                }}
+              >
+                Reset
+              </Button>
+            )}
+          </div>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),200px,190px]">
+            <div className="relative">
+              <RiIcons.RiSearchLine className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-secondary-500" />
+              <input
                 type="text"
-                placeholder={t('common.search') + " diary entries..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                leftIcon={<RiIcons.RiSearchLine className="text-secondary-500" />}
-                className="w-full pl-10 pr-4 py-3 text-base"
+                placeholder={`${t('common.search')} by project, author, work`}
+                className="h-11 w-full rounded-xl border border-secondary-200 bg-white py-2.5 pl-10 pr-10 text-sm text-secondary-900 outline-none transition focus:border-[#94b35f] focus:ring-2 focus:ring-[#cbdcab] dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-[#789a3b]/20"
               />
               {searchQuery && (
-                <button 
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-400 hover:text-secondary-600"
+                <button
+                  type="button"
                   onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-500 hover:text-secondary-700 dark:hover:text-secondary-300"
                 >
                   <RiIcons.RiCloseLine />
                 </button>
               )}
             </div>
-            <div className="hidden sm:flex items-center text-secondary-500 dark:text-secondary-400">
-              <RiIcons.RiInformationLine className="mr-2" />
-              <span className="text-sm">
-                {filteredEntries.length} {filteredEntries.length === 1 ? t('diary.entry') : t('diary.entries')} {t('common.found')}
-              </span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              className="h-11 rounded-xl border border-secondary-200 bg-white px-3 text-sm text-secondary-900 outline-none transition focus:border-[#94b35f] focus:ring-2 focus:ring-[#cbdcab] dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-[#789a3b]/20"
+            >
+              <option value="all">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+              <option value="rejected">Rejected</option>
+              <option value="permanently_rejected">Permanently Rejected</option>
+            </select>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'newest' | 'oldest')}
+              className="h-11 rounded-xl border border-secondary-200 bg-white px-3 text-sm text-secondary-900 outline-none transition focus:border-[#94b35f] focus:ring-2 focus:ring-[#cbdcab] dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-[#789a3b]/20"
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+            </select>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {[
+              { key: 'all', label: 'All' },
+              { key: 'pending', label: 'Pending' },
+              { key: 'completed', label: 'Completed' },
+              { key: 'rejected', label: 'Rejected' },
+              { key: 'permanently_rejected', label: 'Permanent' }
+            ].map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => setStatusFilter(filter.key as typeof statusFilter)}
+                className={`inline-flex min-w-max items-center rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  statusFilter === filter.key
+                    ? 'border-[#789a3b] bg-[#789a3b] text-white shadow-sm'
+                    : 'border-secondary-200 bg-white text-secondary-700 hover:border-[#b0c985] hover:text-[#526728] dark:border-dark-600 dark:bg-dark-800 dark:text-secondary-300 dark:hover:border-[#789a3b]/40'
+                }`}
+              >
+                <span>{filter.label}</span>
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] ${
+                  statusFilter === filter.key
+                    ? 'bg-white/20 text-white'
+                    : 'bg-secondary-100 text-secondary-600 dark:bg-dark-700 dark:text-secondary-300'
+                }`}>
+                  {statusCounts[filter.key as keyof typeof statusCounts]}
+                </span>
+              </button>
+            ))}
+            <div className="ml-auto inline-flex min-w-max items-center rounded-full border border-secondary-200 bg-secondary-50 px-3 py-1.5 text-xs text-secondary-700 dark:border-dark-600 dark:bg-dark-800 dark:text-secondary-200">
+              <RiIcons.RiListCheck3 className="mr-1.5" />
+              {filteredEntries.length} shown
             </div>
           </div>
         </Card>
       </motion.div>
-      
-      {/* Diary entries list */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.3 }}
-      >
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {filteredEntries.map((entry, index) => (
-            <motion.div
-              key={entry.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.1 * index }}
-            >
-              <Card 
-                className="p-0 overflow-hidden hover:shadow-xl transition-all duration-300 border border-secondary-100 dark:border-dark-700"
+
+      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
+        {filteredEntries.length > 0 ? (
+          <div className="grid gap-5 lg:grid-cols-2">
+            {filteredEntries.map((entry, index) => (
+              <motion.div
+                key={entry.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index * 0.06, 0.4) }}
               >
-                <div className="bg-gradient-to-r from-primary-50 to-primary-100 dark:from-primary-900/20 dark:to-primary-800/20 p-4">
-                  <div className="flex justify-between mb-2">
-                    <div className="flex items-center">
-                      <RiIcons.RiCalendarLine className="text-primary-600 dark:text-primary-400 mr-2" />
-                      <span className="font-medium text-primary-900 dark:text-primary-300">{entry.date}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
+                <Card className="h-full border border-[#cbdcab]/60 bg-gradient-to-b from-white to-[#f2f6e9]/80 p-0 dark:border-dark-700 dark:from-dark-900 dark:to-dark-800/80">
+                  <div className="border-b border-[#cbdcab]/70 bg-gradient-to-r from-[#e2ebcf]/70 via-[#f2f6e9]/70 to-white p-4 dark:border-dark-700 dark:from-[#2f3a17]/30 dark:via-dark-800 dark:to-dark-900">
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center text-sm text-secondary-600 dark:text-secondary-300">
+                          <RiIcons.RiCalendarLine className="mr-2 text-[#647f31] dark:text-[#b0c985]" />
+                          {entry.date}
+                        </div>
+                        <h3 className="mt-1 text-lg font-semibold text-secondary-900 dark:text-white">
+                          {getDiaryDisplayName(entry)}
+                        </h3>
+                      </div>
                       {getWorkflowStatusBadge(entry)}
                     </div>
-                  </div>
-                  
-                  <h3 className="font-display font-semibold text-lg text-secondary-900 dark:text-white mb-1">
-                    Daily Log by {entry.author}
-                  </h3>
-                  
-                  <div className="flex items-center text-sm text-secondary-600 dark:text-secondary-400">
-                    {getWeatherIcon(entry.weather)}
-                    <span className="ml-1">{entry.weather}, {entry.temperature}</span>
-                  </div>
-                </div>
-                
-                <div className="p-4">
-                  <div className="mb-4">
-                    <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-2">
-                      {t('diary.workCompleted')}:
-                    </h4>
-                    <p className="text-secondary-600 dark:text-secondary-400 line-clamp-2">
-                      {entry.work_completed}
-                    </p>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
-                        {t('diary.incidents')}:
-                      </h4>
-                      <p className="text-secondary-600 dark:text-secondary-400 text-sm line-clamp-1">
-                        {entry.incidents_reported || t('common.none')}
-                      </p>
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
-                        {t('diary.materials')}:
-                      </h4>
-                      <p className="text-secondary-600 dark:text-secondary-400 text-sm line-clamp-1">
-                        {entry.materials_delivered || t('common.none')}
-                      </p>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-secondary-600 dark:text-secondary-300">
+                      <span className="inline-flex items-center">
+                        <RiIcons.RiUserLine className="mr-1" />
+                        {entry.author}
+                      </span>
+                      <span className="inline-flex items-center">
+                        <span className="mr-1">{getWeatherIcon(entry.weather)}</span>
+                        {entry.weather}, {entry.temperature}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${getExpirySummary(entry).className}`}>
+                        <RiIcons.RiTimerLine className="mr-1" />
+                        {getExpirySummary(entry).text}
+                      </span>
                     </div>
                   </div>
-                  
-                  <div className="flex justify-end mt-4">
-                    <div className="flex space-x-2">
+                  <div className="space-y-4 p-4">
+                    <div>
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                        {t('diary.workCompleted')}
+                      </div>
+                      <p className="line-clamp-3 text-sm text-secondary-700 dark:text-secondary-300">
+                        {entry.work_completed}
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-lg border border-[#cbdcab]/60 bg-[#f2f6e9]/70 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+                        <div className="text-xs font-medium uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                          {t('diary.incidents')}
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm text-secondary-700 dark:text-secondary-300">
+                          {entry.incidents_reported || t('common.none')}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-[#cbdcab]/60 bg-[#f2f6e9]/70 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+                        <div className="text-xs font-medium uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                          {t('diary.materials')}
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm text-secondary-700 dark:text-secondary-300">
+                          {entry.materials_delivered || t('common.none')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-[#cbdcab]/60 bg-white/90 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+                      <div className="text-xs font-medium uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                        {t('diary.notes')}
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-sm text-secondary-700 dark:text-secondary-300">
+                        {entry.notes || t('common.none')}
+                      </p>
+                    </div>
+                    {user?.role === 'admin' && (
+                      <div className="rounded-lg border border-[#cbdcab]/60 bg-[#f2f6e9]/70 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+                        <div className="mb-2 text-xs font-medium uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                          {isEntryExpired(entry) ? 'Activation' : 'Expiry Controls'}
+                        </div>
+                        {isEntryExpired(entry) ? (
+                          <div className="flex justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSetExpiryStatus(entry, true)}
+                              isLoading={!!updatingExpiryStatus[entry.id]}
+                              leftIcon={<RiIcons.RiRefreshLine />}
+                              className="h-9"
+                            >
+                              Set Active
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr),auto,auto]">
+                            <input
+                              type="datetime-local"
+                              value={expiryDrafts[entry.id] || ''}
+                              onChange={(e) => setExpiryDrafts((prev) => ({ ...prev, [entry.id]: e.target.value }))}
+                              className="h-9 rounded-lg border border-secondary-200 bg-white px-3 text-xs text-secondary-900 outline-none transition [color-scheme:light] [&::-webkit-calendar-picker-indicator]:cursor-pointer dark:border-dark-600 dark:bg-white dark:text-secondary-900 dark:focus:ring-[#789a3b]/20 focus:border-[#94b35f] focus:ring-2 focus:ring-[#cbdcab]"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSetExpiry(entry)}
+                              isLoading={!!savingExpiry[entry.id]}
+                              leftIcon={<RiIcons.RiCalendarEventLine className="text-[#526728] dark:text-[#b0c985]" />}
+                              className="h-9"
+                            >
+                              Set Expiry
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSetExpiryStatus(entry, false)}
+                              isLoading={!!updatingExpiryStatus[entry.id]}
+                              leftIcon={<RiIcons.RiTimerLine />}
+                              className="h-9"
+                            >
+                              Set Expired
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap justify-end gap-2 pt-1">
                       {canUserViewEntry(entry) && (
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => handleViewDetails(entry)}
                           rightIcon={<RiIcons.RiArrowRightLine />}
-                          className="hover:bg-primary-50 dark:hover:bg-primary-900/20"
                         >
                           {t('common.viewDetails')}
                         </Button>
                       )}
-                      {/* Admin delete button */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewHistory(entry)}
+                        leftIcon={<RiIcons.RiHistoryLine />}
+                      >
+                        History
+                      </Button>
                       {user?.role === 'admin' && (
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRenameDiary(entry)}
+                          isLoading={!!renamingDiary[entry.id]}
+                          leftIcon={<RiIcons.RiEditLine />}
+                          className="border-[#a4b986] text-[#526728] hover:border-[#94b35f] hover:bg-[#f2f6e9] dark:hover:bg-[#2f3a17]/30"
+                        >
+                          Rename
+                        </Button>
+                      )}
+                      {user?.role === 'admin' && (
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => handleDeleteEntry(entry)}
                           leftIcon={<RiIcons.RiDeleteBinLine />}
-                          className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
+                          className="border-[#a4b986] text-[#526728] hover:border-[#94b35f] hover:bg-[#f2f6e9] dark:hover:bg-[#2f3a17]/30"
                         >
                           Delete
                         </Button>
                       )}
                     </div>
                   </div>
-                </div>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-        
-        {filteredEntries.length === 0 && (
-          <Card className="p-8 text-center bg-white/80 dark:bg-dark-800/80 backdrop-blur-sm shadow-md">
-            <div className="text-6xl mx-auto mb-4 text-primary-500 opacity-70">
-              <RiIcons.RiBookmarkLine />
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        ) : (
+          <Card className="border border-[#cbdcab]/60 bg-gradient-to-b from-white to-[#f2f6e9]/80 p-10 text-center dark:border-dark-700 dark:from-dark-900 dark:to-dark-800/80">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#e2ebcf] text-[#647f31] dark:bg-[#2f3a17]/40 dark:text-[#b0c985]">
+              <RiIcons.RiCalendarCheckLine className="text-3xl" />
             </div>
             {!selectedProject ? (
               <>
-                <h2 className="text-xl font-display font-semibold mb-2">No Project Selected</h2>
-                <p className="text-secondary-600 dark:text-secondary-400 mb-6 max-w-lg mx-auto">
-                  Please select a project from the sidebar to view and manage diary entries for that project.
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Project Selected</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
+                  Select a project to view and manage diary activity in one place.
                 </p>
               </>
             ) : diaryEntries.length === 0 ? (
               <>
-                <h2 className="text-xl font-display font-semibold mb-2">No Diary Entries Found</h2>
-                <p className="text-secondary-600 dark:text-secondary-400 mb-6 max-w-lg mx-auto">
-                  No diary entries have been created for <span className="font-semibold">{selectedProject.name}</span> yet.
-                  {user?.role === 'admin' && ' Create the first entry to get started.'}
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Diary Entries Yet</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
+                  {selectedProject.name} has no diary records yet. Start with your first professional daily log.
                 </p>
                 {user?.role === 'admin' && (
-                  <Button 
-                    variant="primary" 
-                    leftIcon={<RiIcons.RiAddLine />}
-                    onClick={() => setShowNewEntry(true)}
-                    className="shadow-md hover:shadow-lg transition-all duration-300"
-                  >
-                    Create First Entry
-                  </Button>
+                  <div className="mt-5">
+                    <Button variant="primary" leftIcon={<RiIcons.RiAddLine />} onClick={() => setShowNewEntry(true)}>
+                      Create First Entry
+                    </Button>
+                  </div>
                 )}
               </>
             ) : (
               <>
-                <h2 className="text-xl font-display font-semibold mb-2">No Entries Match Your Search</h2>
-                <p className="text-secondary-600 dark:text-secondary-400 mb-6 max-w-lg mx-auto">
-                  No diary entries found matching "{searchQuery}" in <span className="font-semibold">{selectedProject.name}</span>.
-                  Try adjusting your search terms.
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Results Found</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
+                  No entries match the current search or filter criteria.
                 </p>
-                <Button 
-                  variant="outline"
-                  onClick={() => setSearchQuery('')}
-                  className="shadow-md hover:shadow-lg transition-all duration-300"
-                >
-                  Clear Search
-                </Button>
+                <div className="mt-5 flex justify-center gap-2">
+                  <Button variant="outline" onClick={() => setSearchQuery('')}>
+                    Clear Search
+                  </Button>
+                  <Button variant="outline" onClick={() => setStatusFilter('all')}>
+                    Reset Filter
+                  </Button>
+                </div>
               </>
             )}
           </Card>
@@ -1023,21 +1708,29 @@ const DiaryPage: React.FC = () => {
       {showNewEntry && (
         <AnimatePresence>
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-[#1f2710]/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={() => setShowNewEntry(false)}
           >
             <motion.div
-              className="bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl w-full max-w-6xl max-h-[90vh] overflow-auto"
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-[#cbdcab]/70 bg-gradient-to-b from-white to-[#f2f6e9]/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
               onClick={(e) => e.stopPropagation()}
             >
+              <div className="sticky top-0 z-20 flex items-center justify-between border-b border-[#cbdcab]/70 bg-gradient-to-r from-[#1f2710] to-[#526728] px-4 py-3 text-white backdrop-blur-sm dark:border-dark-700">
+                <div className="text-sm font-semibold text-secondary-900 dark:text-white">New Diary Entry</div>
+                <Button variant="ghost" size="sm" onClick={() => setShowNewEntry(false)} leftIcon={<RiIcons.RiCloseLine />}>
+                  Close
+                </Button>
+              </div>
+              <div className="max-h-[calc(95dvh-56px)] overflow-y-auto sm:max-h-[calc(92vh-56px)]">
               <SiteDiaryFormTemplate
                 onClose={() => setShowNewEntry(false)}
                 onSave={handleCreateEntry}
               />
+              </div>
             </motion.div>
           </div>
         </AnimatePresence>
@@ -1048,28 +1741,30 @@ const DiaryPage: React.FC = () => {
         isOpen={showDetails}
         onClose={() => setShowDetails(false)}
         title={t('diary.entryDetails')}
+        className="w-full max-w-5xl border border-secondary-200/80 bg-white/95 shadow-2xl dark:border-dark-700 dark:bg-dark-900/95"
+        disablePadding
       >
         {selectedDiaryEntry && (
-          <div className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center bg-primary-50 dark:bg-primary-900/20 p-3 rounded-lg">
-              <div className="text-lg font-bold text-primary-900 dark:text-primary-300 flex items-center">
-                <RiIcons.RiCalendarCheckLine className="mr-2 text-primary-600 dark:text-primary-400" />
+          <div className="max-h-[80vh] space-y-5 overflow-y-auto p-5">
+            <div className="flex items-center justify-between rounded-xl border border-secondary-200 bg-secondary-50 p-3 dark:border-dark-700 dark:bg-dark-800/80">
+              <div className="text-lg font-bold text-[#2f3a17] dark:text-[#b0c985] flex items-center">
+                <RiIcons.RiCalendarCheckLine className="mr-2 text-[#647f31] dark:text-[#b0c985]" />
                 {selectedDiaryEntry.date}
               </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                  <RiIcons.RiUserLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <RiIcons.RiUserLine className="mr-2 text-[#647f31] dark:text-[#b0c985]" />
                   <span className="text-sm font-medium uppercase tracking-wide">{t('diary.author')}</span>
                 </div>
                 <div className="font-medium">{selectedDiaryEntry.author}</div>
               </div>
               
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                  <div className="mr-2 text-primary-600 dark:text-primary-400">
+                  <div className="mr-2 text-[#647f31] dark:text-[#b0c985]">
                     {getWeatherIcon(selectedDiaryEntry.weather)}
                   </div>
                   <span className="text-sm font-medium uppercase tracking-wide">{t('diary.weatherConditions')}</span>
@@ -1078,33 +1773,33 @@ const DiaryPage: React.FC = () => {
               </div>
             </div>
             
-            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+            <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                <RiIcons.RiTaskLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <RiIcons.RiTaskLine className="mr-2 text-[#647f31] dark:text-[#b0c985]" />
                 <span className="text-sm font-medium uppercase tracking-wide">{t('diary.workCompleted')}</span>
               </div>
               <div className="whitespace-pre-line">{selectedDiaryEntry.work_completed}</div>
             </div>
             
-            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+            <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                <RiIcons.RiAlertLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <RiIcons.RiAlertLine className="mr-2 text-[#647f31] dark:text-[#b0c985]" />
                 <span className="text-sm font-medium uppercase tracking-wide">{t('diary.incidentsReported')}</span>
               </div>
               <div>{selectedDiaryEntry.incidents_reported || t('common.none')}</div>
             </div>
             
-            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+            <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                <RiIcons.RiTruckLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <RiIcons.RiTruckLine className="mr-2 text-[#647f31] dark:text-[#b0c985]" />
                 <span className="text-sm font-medium uppercase tracking-wide">{t('diary.materialsDelivered')}</span>
               </div>
               <div>{selectedDiaryEntry.materials_delivered || t('common.none')}</div>
             </div>
             
-            <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+            <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
               <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-2">
-                <RiIcons.RiFileTextLine className="mr-2 text-primary-600 dark:text-primary-400" />
+                <RiIcons.RiFileTextLine className="mr-2 text-[#647f31] dark:text-[#b0c985]" />
                 <span className="text-sm font-medium uppercase tracking-wide">{t('diary.notes')}</span>
               </div>
               <div>{selectedDiaryEntry.notes || t('common.none')}</div>
@@ -1112,23 +1807,25 @@ const DiaryPage: React.FC = () => {
             
             {/* Workflow Status Section */}
             {selectedDiaryEntry.diary_workflow_nodes && selectedDiaryEntry.diary_workflow_nodes.length > 0 && (
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
-                  <RiIcons.RiFlowChart className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <RiIcons.RiFlowChart className="mr-2 text-[#647f31] dark:text-[#b0c985]" />
                   <span className="text-sm font-medium uppercase tracking-wide">Workflow Status</span>
                 </div>
                 
                 <div className="space-y-3">
                   {selectedDiaryEntry.diary_workflow_nodes
                     .sort((a: any, b: any) => a.node_order - b.node_order)
-                    .map((node: any, index: number) => (
+                    .map((node: any, index: number, nodes: any[]) => {
+                      const isBoundaryNode = index === 0 || index === nodes.length - 1;
+                      return (
                       <div key={node.id} className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-dark-700 rounded-lg">
                         <div className="flex items-center">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                            node.status === 'completed' ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400' :
-                            node.status === 'pending' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-400' :
-                            node.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400' :
-                            'bg-gray-100 text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'
+                            node.status === 'completed' ? 'bg-[#cbdcab] text-[#40501f] dark:bg-[#2f3a17]/40 dark:text-[#cbdcab]' :
+                            node.status === 'pending' ? 'bg-[#e2ebcf] text-[#526728] dark:bg-[#2f3a17]/40 dark:text-[#b0c985]' :
+                            node.status === 'rejected' ? 'bg-[#dbe5c4] text-[#526728] dark:bg-[#2f3a17]/40 dark:text-[#a4b986]' :
+                            'bg-[#e2ebcf] text-[#647f31] dark:bg-[#2f3a17]/30 dark:text-[#a4b986]'
                           }`}>
                             {node.status === 'completed' ? <RiIcons.RiCheckLine /> :
                              node.status === 'pending' ? <RiIcons.RiTimeLine /> :
@@ -1144,25 +1841,38 @@ const DiaryPage: React.FC = () => {
                             )}
                           </div>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          node.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-                          node.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
-                          node.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
-                          'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
-                        }`}>
-                          {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            node.status === 'completed' ? 'bg-[#cbdcab] text-[#40501f] dark:bg-[#2f3a17]/40 dark:text-[#cbdcab]' :
+                            node.status === 'pending' ? 'bg-[#e2ebcf] text-[#526728] dark:bg-[#2f3a17]/40 dark:text-[#b0c985]' :
+                            node.status === 'rejected' ? 'bg-[#dbe5c4] text-[#526728] dark:bg-[#2f3a17]/40 dark:text-[#a4b986]' :
+                            'bg-[#e2ebcf] text-[#647f31] dark:bg-[#2f3a17]/30 dark:text-[#a4b986]'
+                          }`}>
+                            {node.status.charAt(0).toUpperCase() + node.status.slice(1)}
+                          </span>
+                          {user?.role === 'admin' && !isBoundaryNode && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleNodeReminder(selectedDiaryEntry, node, typeof node.node_order === 'number' ? node.node_order : index + 1)}
+                              isLoading={!!sendingNodeReminder[`${selectedDiaryEntry.id}-${typeof node.node_order === 'number' ? node.node_order : index + 1}`]}
+                              leftIcon={<RiIcons.RiNotification3Line />}
+                            >
+                              Reminder
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    ))}
+                    )})}
                 </div>
               </div>
             )}
             
             {/* Comments Section */}
             {selectedDiaryEntry.diary_comments && selectedDiaryEntry.diary_comments.length > 0 && (
-              <div className="bg-white/50 dark:bg-dark-800/50 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-sm">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
                 <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-4">
-                  <RiIcons.RiChat3Line className="mr-2 text-primary-600 dark:text-primary-400" />
+                  <RiIcons.RiChat3Line className="mr-2 text-[#647f31] dark:text-[#b0c985]" />
                   <span className="text-sm font-medium uppercase tracking-wide">Comments & Actions</span>
                 </div>
                 
@@ -1176,9 +1886,9 @@ const DiaryPage: React.FC = () => {
                           <div className="flex items-center space-x-2">
                             {comment.action && (
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                comment.action === 'approve' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-                              comment.action === 'reject' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
-                              'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-400'
+                                comment.action === 'approve' ? 'bg-[#cbdcab] text-[#40501f] dark:bg-[#2f3a17]/40 dark:text-[#cbdcab]' :
+                              comment.action === 'reject' ? 'bg-[#dbe5c4] text-[#526728] dark:bg-[#2f3a17]/40 dark:text-[#a4b986]' :
+                              'bg-[#e2ebcf] text-[#526728] dark:bg-[#2f3a17]/30 dark:text-[#a4b986]'
                             }`}>
                                 {comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
                               </span>
@@ -1195,7 +1905,7 @@ const DiaryPage: React.FC = () => {
               </div>
             )}
             
-            <div className="pt-6 mt-6 border-t border-white/10">
+            <div className="mt-6 border-t border-secondary-200 pt-6 dark:border-dark-700">
               <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-4">
                 {/* Left side: Utility actions */}
                 <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
@@ -1203,7 +1913,7 @@ const DiaryPage: React.FC = () => {
                     variant="ghost"
                     size="sm"
                     leftIcon={<RiIcons.RiDownload2Line />}
-                    className="text-secondary-400 hover:text-white hover:bg-white/5"
+                    className="text-secondary-500 hover:text-secondary-800 dark:text-secondary-400 dark:hover:text-secondary-100"
                   >
                     {t('common.export')}
                   </Button>
@@ -1211,7 +1921,7 @@ const DiaryPage: React.FC = () => {
                     variant="ghost"
                     size="sm"
                     leftIcon={<RiIcons.RiPrinterLine />}
-                    className="text-secondary-400 hover:text-white hover:bg-white/5"
+                    className="text-secondary-500 hover:text-secondary-800 dark:text-secondary-400 dark:hover:text-secondary-100"
                   >
                     {t('common.print')}
                   </Button>
@@ -1226,7 +1936,7 @@ const DiaryPage: React.FC = () => {
                         setShowDetails(false);
                         handleDeleteEntry(selectedDiaryEntry);
                       }}
-                      className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                      className="text-[#526728] hover:text-[#40501f] hover:bg-[#cbdcab]/30"
                     >
                       Delete
                     </Button>
@@ -1239,7 +1949,7 @@ const DiaryPage: React.FC = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => setShowDetails(false)}
-                    className="border-white/10 hover:bg-white/5"
+                    className="dark:hover:bg-dark-800/90"
                   >
                     {t('common.close')}
                   </Button>
@@ -1253,7 +1963,7 @@ const DiaryPage: React.FC = () => {
                       setShowDetails(false);
                       setShowFormView(true);
                     }}
-                    className="hover:bg-white/5"
+                    className="dark:hover:bg-dark-800/90"
                   >
                     {canUserUpdateForm(selectedDiaryEntry) ? 'Edit Form' : 'View Form'}
                   </Button>
@@ -1268,7 +1978,7 @@ const DiaryPage: React.FC = () => {
                           size="sm"
                           leftIcon={<RiIcons.RiArrowLeftLine />}
                           onClick={() => handleWorkflowAction('back')}
-                          className="text-orange-500 border-orange-500/30 hover:bg-orange-500/10 hover:border-orange-500"
+                          className="border-[#a4b986] text-[#526728] hover:border-[#789a3b] hover:bg-[#f2f6e9] dark:border-[#789a3b]/30 dark:text-[#b0c985] dark:hover:bg-[#2f3a17]/20"
                         >
                           Send Back
                         </Button>
@@ -1281,7 +1991,7 @@ const DiaryPage: React.FC = () => {
                           size="sm"
                           leftIcon={<RiIcons.RiCloseLine />}
                           onClick={() => handleWorkflowAction('reject')}
-                          className="text-red-500 border-red-500/30 hover:bg-red-500/10 hover:border-red-500"
+                          className="text-[#526728] border-[#789a3b]/40 hover:bg-[#cbdcab]/30 hover:border-[#789a3b]"
                         >
                           Reject
                         </Button>
@@ -1294,7 +2004,7 @@ const DiaryPage: React.FC = () => {
                           size="sm"
                           leftIcon={<RiIcons.RiCheckLine />}
                           onClick={() => handleWorkflowAction('approve')}
-                          className="bg-portfolio-orange hover:bg-portfolio-orange/80 text-white border-none shadow-lg shadow-portfolio-orange/20"
+                          className="border-none bg-gradient-to-r from-[#647f31] to-[#526728] text-white shadow-lg shadow-[#40501f]/30 hover:from-[#526728] hover:to-[#40501f]"
                         >
                           {selectedDiaryEntry.current_node_index === 1 ? 'Complete' : 'Approve'}
                         </Button>
@@ -1307,51 +2017,201 @@ const DiaryPage: React.FC = () => {
           </div>
         )}
       </Dialog>
-      
-      {/* Process Flow Configuration Modal */}
-      {showProcessFlow && (
+
+      {/* History Dialog */}
+      <Dialog
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+        title={t('diary.history') || 'Update History'}
+        size="lg"
+        className="w-full max-w-4xl border border-secondary-200/80 bg-white/95 shadow-2xl dark:border-dark-700 dark:bg-dark-900/95"
+        disablePadding
+      >
+        {loadingHistory ? (
+            <div className="flex justify-center p-8">
+              <RiIcons.RiLoader4Line className="animate-spin text-3xl text-[#647f31]" />
+            </div>
+         ) : (
+           <div className="space-y-4 max-h-[70vh] overflow-y-auto p-2">
+             {historyData.length === 0 ? (
+               <p className="text-center text-[#647f31] py-8">No history available for this entry.</p>
+             ) : (
+               historyData.map((history) => (
+                 <div key={history.id} className="rounded-xl border border-secondary-200 bg-secondary-50/70 p-4 transition-shadow hover:shadow-md dark:border-dark-700 dark:bg-dark-800/60">
+                   <div className="flex justify-between items-start mb-3">
+                     <div className="flex items-center">
+                       <div className="w-10 h-10 rounded-full bg-[#e2ebcf] dark:bg-[#2f3a17]/40 flex items-center justify-center text-[#647f31] dark:text-[#b0c985] mr-3">
+                         <RiIcons.RiUser3Line />
+                       </div>
+                       <div>
+                         <div className="font-semibold text-[#2f3a17] dark:text-[#dbe5c4]">
+                           {history.users?.name || 'Unknown User'}
+                         </div>
+                         <div className="text-xs text-[#647f31] dark:text-[#a4b986]">
+                           {history.users?.email}
+                         </div>
+                       </div>
+                     </div>
+                     <div className="text-right">
+                       <div className="text-sm font-medium text-[#2f3a17] dark:text-[#dbe5c4]">
+                         {new Date(history.changed_at).toLocaleDateString()}
+                       </div>
+                       <div className="text-xs text-[#647f31] dark:text-[#a4b986]">
+                         {new Date(history.changed_at).toLocaleTimeString()}
+                       </div>
+                     </div>
+                   </div>
+                   
+                   {/* Summary of changes if available */}
+                   <div className="mb-4 space-y-2 rounded-lg border border-secondary-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900">
+                     {history.form_data?.weather ? (
+                       <div className="flex items-center text-sm text-[#526728] dark:text-[#b0c985]">
+                         <span className="w-20 font-medium text-[#647f31] dark:text-[#a4b986]">Weather:</span>
+                         <span className="flex items-center">
+                            {getWeatherIcon(history.form_data.weather)}
+                            <span className="ml-2">{history.form_data.weather}</span>
+                         </span>
+                       </div>
+                     ) : null}
+                     {history.form_data?.notes ? (
+                       <div className="flex items-start text-sm text-[#526728] dark:text-[#b0c985]">
+                         <span className="w-20 font-medium text-[#647f31] dark:text-[#a4b986] mt-0.5">Notes:</span>
+                         <span className="line-clamp-2">{history.form_data.notes}</span>
+                       </div>
+                     ) : null}
+                     
+                     {/* Show raw data toggle or summary of other fields could go here */}
+                     <div className="text-xs text-[#8ea56a] mt-2 italic">
+                       {Object.keys(history.form_data || {}).length} fields recorded
+                     </div>
+                   </div>
+ 
+                   <div className="flex justify-end space-x-2">
+                     {user?.role === 'admin' && (
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={() => handleRestore(history)}
+                         leftIcon={<RiIcons.RiRefreshLine />}
+                        className="text-[#526728] hover:bg-[#f2f6e9] hover:text-[#40501f] dark:text-[#b0c985] dark:hover:bg-[#2f3a17]/20 dark:hover:text-[#dbe5c4]"
+                       >
+                         Restore
+                       </Button>
+                     )}
+                     <Button
+                       variant="outline"
+                       size="sm"
+                        onClick={() => {
+                          setSelectedHistoryEntry(history);
+                          setShowHistoryForm(true);
+                          setShowHistory(false); // Close history dialog to show form
+                        }}
+                        leftIcon={<RiIcons.RiFileListLine />}
+                        className="w-full sm:w-auto"
+                      >
+                        View Form Snapshot
+                      </Button>
+                    </div>
+                 </div>
+               ))
+             )}
+           </div>
+         )}
+       </Dialog>
+
+      {/* History Form View Modal */}
+      {showHistoryForm && selectedHistoryEntry && (
         <AnimatePresence>
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-            onClick={handleCancelProcessFlow}
+            className="fixed inset-0 z-50 flex items-end justify-center bg-[#1f2710]/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
+            onClick={() => {
+              setShowHistoryForm(false);
+              setShowHistory(true); // Reopen history dialog
+            }}
           >
             <motion.div
-              className="w-full max-w-7xl max-h-[90vh] overflow-auto bg-dark-900/80 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl"
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-[#cbdcab]/70 bg-gradient-to-b from-white to-[#f2f6e9]/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-primary-600 to-primary-700 p-6 text-white">
-                <div className="flex justify-between items-center">
+              <div className="sticky top-0 z-20 flex items-center justify-between border-b border-[#cbdcab]/70 bg-gradient-to-r from-[#1f2710] to-[#526728] px-4 py-3 text-white backdrop-blur-sm dark:border-dark-700">
+                <div className="truncate pr-3 text-sm font-semibold text-white">
+                  History Snapshot
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowHistoryForm(false);
+                    setShowHistory(true);
+                  }}
+                  leftIcon={<RiIcons.RiCloseLine />}
+                >
+                  Close
+                </Button>
+              </div>
+              <div className="max-h-[calc(95dvh-56px)] overflow-y-auto sm:max-h-[calc(92vh-56px)]">
+              <SiteDiaryFormTemplate
+                onClose={() => {
+                  setShowHistoryForm(false);
+                  setShowHistory(true); // Reopen history dialog
+                }}
+                onSave={() => {}} // No-op for history view
+                initialData={selectedHistoryEntry.form_data}
+                isEditMode={false}
+                readOnly={true}
+                title={`History Snapshot - ${new Date(selectedHistoryEntry.changed_at).toLocaleString()} by ${selectedHistoryEntry.users?.name || 'Unknown'}`}
+              />
+              </div>
+            </motion.div>
+          </div>
+        </AnimatePresence>
+      )}
+       
+       {/* Process Flow Configuration Modal */}
+      {showProcessFlow && (
+        <AnimatePresence>
+          <div 
+            className="fixed inset-0 z-50 flex items-end justify-center bg-[#1f2710]/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
+            onClick={handleCancelProcessFlow}
+          >
+            <motion.div
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-[#cbdcab]/70 bg-gradient-to-b from-white to-[#f2f6e9]/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-7xl sm:rounded-2xl"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 z-20 border-b border-secondary-200 bg-gradient-to-r from-[#1f2710] to-[#526728] px-4 py-4 text-white dark:border-dark-700 sm:px-6 sm:py-5">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-2xl font-display font-bold flex items-center">
+                    <h2 className="flex items-center text-xl font-display font-bold sm:text-2xl">
                       <RiIcons.RiFlowChart className="mr-3" />
                       Process Configuration
                     </h2>
-                    <p className="text-primary-100 mt-1">
+                    <p className="mt-1 text-sm text-[#dbe5c4] sm:text-base">
                       Configure the workflow process for this diary entry before saving.
                     </p>
                   </div>
-                  <Button 
+                  <Button
                     variant="outline"
                     onClick={handleCancelProcessFlow}
-                    className="text-white border-white hover:bg-white/10"
+                    className="border-white/30 bg-white/10 text-white hover:bg-white/20"
                   >
                     <RiIcons.RiCloseLine className="text-xl" />
                   </Button>
                 </div>
               </div>
               
-              {/* Content */}
-              <div className="p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  {/* Left panel - Flow chart */}
+              <div className="max-h-[calc(95dvh-70px)] overflow-y-auto p-4 sm:max-h-[calc(92vh-84px)] sm:p-6">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
                   <div className="lg:col-span-5">
-                    <Card className="p-4 h-full">
-                      <div className="flex justify-between items-center mb-4">
+                    <Card className="h-full border border-secondary-200/70 p-4 dark:border-dark-700">
+                      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <h3 className="font-semibold text-secondary-900 dark:text-white">Process Flow</h3>
                         <Button 
                           variant="primary" 
@@ -1371,9 +2231,8 @@ const DiaryPage: React.FC = () => {
                     </Card>
                   </div>
                   
-                  {/* Right panel - Node settings */}
                   <div className="lg:col-span-7">
-                    <Card className="p-4 h-full">
+                    <Card className="h-full border border-secondary-200/70 p-4 dark:border-dark-700">
                       <h3 className="font-semibold text-secondary-900 dark:text-white mb-4">Process Settings</h3>
                       
                       {selectedNode ? (
@@ -1398,7 +2257,7 @@ const DiaryPage: React.FC = () => {
                                 <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
                                   Executor
                                 </label>
-                                <div className="flex items-center space-x-2">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                                   <div className="flex-grow bg-secondary-50 dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-3 text-secondary-600 dark:text-secondary-400">
                                     {selectedNode.executor || 'Select executor'}
                                   </div>
@@ -1413,19 +2272,19 @@ const DiaryPage: React.FC = () => {
                                   CC Recipients
                                 </label>
                                 <div className="flex flex-col space-y-2">
-                                  <div className="flex items-center space-x-2">
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                                     <div className="flex-grow bg-secondary-50 dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-3 min-h-[50px]">
                                       {selectedNode.ccRecipients && selectedNode.ccRecipients.length > 0 ? (
                                         <div className="flex flex-wrap gap-2">
                                           {selectedNode.ccRecipients.map(cc => (
                                             <div 
                                               key={cc.id} 
-                                              className="bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-3 py-1 rounded-full flex items-center text-sm"
+                                              className="flex items-center rounded-full bg-[#e2ebcf] px-3 py-1 text-sm text-[#526728] dark:bg-[#2f3a17]/40 dark:text-[#b0c985]"
                                             >
                                               <span className="mr-2">{cc.name}</span>
                                               <button
                                                 type="button"
-                                                className="text-primary-500 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-200"
+                                                className="text-[#789a3b] hover:text-[#526728] dark:text-[#b0c985] dark:hover:text-[#dbe5c4]"
                                                 onClick={() => removeUserFromCc(cc.id)}
                                               >
                                                 <RiIcons.RiCloseLine />
@@ -1490,7 +2349,7 @@ const DiaryPage: React.FC = () => {
                                   Task Expiration
                                 </label>
                                 <div className="space-y-3">
-                                  <div className="flex items-center space-x-2">
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                                     <select 
                                       value={selectedNode.expireTime === 'unlimited' || !selectedNode.expireTime ? 'unlimited' : 'custom'}
                                       onChange={(e) => {
@@ -1506,7 +2365,7 @@ const DiaryPage: React.FC = () => {
                                         setProcessNodes(updatedNodes);
                                         setSelectedNode(updatedNode);
                                       }}
-                                      className="flex-1 bg-white dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-2 text-secondary-900 dark:text-white"
+                                      className="flex-1 rounded border border-secondary-200 bg-white p-2 text-secondary-900 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
                                     >
                                       <option value="unlimited">Unlimited</option>
                                       <option value="custom">Custom Date & Time</option>
@@ -1515,7 +2374,7 @@ const DiaryPage: React.FC = () => {
                                   
                                   {(selectedNode.expireTime !== 'unlimited' && selectedNode.expireTime !== undefined) && (
                                     <div className="space-y-2">
-                                      <div className="flex items-center space-x-2">
+                                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                                         <input
                                           type="datetime-local"
                                           value={selectedNode.expireTime && selectedNode.expireTime !== 'unlimited' ? 
@@ -1533,7 +2392,7 @@ const DiaryPage: React.FC = () => {
                                             setSelectedNode(updatedNode);
                                           }}
                                           min={new Date().toISOString().slice(0, 16)}
-                                          className="flex-1 bg-white dark:bg-dark-700 border border-secondary-200 dark:border-dark-600 rounded p-2 text-secondary-900 dark:text-white"
+                                          className="flex-1 rounded border border-secondary-200 bg-white p-2 text-secondary-900 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
                                         />
                                       </div>
                                       <p className="text-xs text-secondary-500 dark:text-secondary-400">
@@ -1565,31 +2424,34 @@ const DiaryPage: React.FC = () => {
                   </div>
                 </div>
                 
-                {/* Footer Actions */}
-                <div className="flex justify-between items-center mt-6 pt-6 border-t border-secondary-200 dark:border-dark-700">
+                <div className="sticky bottom-0 mt-4 border-t border-[#cbdcab]/70 bg-gradient-to-r from-white/95 to-[#f2f6e9]/95 pt-4 backdrop-blur-sm dark:border-dark-700 dark:from-dark-900/95 dark:to-dark-800/95 sm:mt-6 sm:pt-6">
+                  <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <Button 
                     variant="outline"
                     leftIcon={<RiIcons.RiArrowLeftLine />}
                     onClick={handleCancelProcessFlow}
+                    className="w-full sm:w-auto"
                   >
                     Back to Form
                   </Button>
                   
-                  <div className="flex space-x-3">
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:space-x-0">
                     <Button 
                       variant="outline"
                       onClick={handleCancelProcessFlow}
+                      className="w-full sm:w-auto"
                     >
                       Cancel
                     </Button>
-                    <Button 
+                    <Button
                       variant="primary"
                       leftIcon={<RiIcons.RiCheckLine />}
                       onClick={handleFinalSave}
-                      className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800"
+                      className="w-full bg-gradient-to-r from-[#647f31] to-[#526728] hover:from-[#526728] hover:to-[#40501f] sm:w-auto"
                     >
                       Save Diary Entry
                     </Button>
+                  </div>
                   </div>
                 </div>
               </div>
@@ -1597,6 +2459,72 @@ const DiaryPage: React.FC = () => {
           </div>
         </AnimatePresence>
       )}
+
+      <ReportModal
+        isOpen={showReport}
+        onClose={() => setShowReport(false)}
+        title="Diary Full Report"
+        subtitle="Includes all currently listed diary entries with visuals, trends, and detailed tables."
+        onDownload={handleDownloadReportPdf}
+        isDownloading={isDownloadingReport}
+        contentRef={reportContentRef}
+        maxWidthClassName="max-w-[1700px]"
+        theme={{
+          headerGradient: 'from-[#1f2710] to-[#526728]',
+          bodyBackground: 'bg-[#f2f6e9]/45 dark:bg-dark-800/20'
+        }}
+      >
+        <FullReportContent
+          generatedOn={new Date().toLocaleString()}
+          projectName={selectedProject?.name || 'All Projects'}
+          summaryCards={[
+            { label: 'Total Listed', value: reportEntries.length },
+            { label: 'Pending', value: reportStatusCounts.pending },
+            { label: 'Completed', value: reportStatusCounts.completed },
+            { label: 'Rejected', value: reportStatusCounts.rejected },
+            { label: 'Permanent Rejected', value: reportStatusCounts.permanentlyRejected },
+            { label: 'Incidents Logged', value: incidentEntries.length }
+          ]}
+          reportHighlights={reportHighlights}
+          statusChartTitle="Status Distribution"
+          trendChartTitle="Entries Over Time"
+          contributorChartTitle="Top Contributors"
+          weatherChartTitle="Weather Distribution"
+          statusChartData={statusChartData}
+          trendChartData={trendChartData}
+          contributorChartData={contributorChartData}
+          weatherChartData={weatherChartData}
+          chartOptions={chartOptions}
+          issueSectionTitle="Incident Details"
+          issueColumns={[
+            { key: 'date', label: 'Date' },
+            { key: 'author', label: 'Author' },
+            { key: 'project', label: 'Project' },
+            { key: 'incidents_reported', label: 'Incident' }
+          ]}
+          issueRows={incidentEntries}
+          issueEmptyText="No incidents found in the currently listed entries."
+          listSectionTitle="Full Diary List"
+          listColumns={[
+            { key: 'date', label: 'Date' },
+            { key: 'project', label: 'Project' },
+            { key: 'author', label: 'Author' },
+            { key: 'weather', label: 'Weather' },
+            { key: 'temperature', label: 'Temp' },
+            { key: 'status', label: 'Status' },
+            { key: 'work_completed', label: 'Work Completed' },
+            { key: 'materials_delivered', label: 'Materials' },
+            { key: 'notes', label: 'Notes' }
+          ]}
+          listRows={reportEntries}
+          theme={{
+            cardBorder: 'border-[#dbe5c4] dark:border-dark-700',
+            cardSurface: 'bg-[#f7faef] dark:bg-dark-800',
+            accentText: 'text-[#647f31]',
+            numberText: 'text-[#2f3a17] dark:text-[#dbe5c4]'
+          }}
+        />
+      </ReportModal>
       
       {/* People Selector Modal */}
       <PeopleSelectorModal
@@ -1612,17 +2540,26 @@ const DiaryPage: React.FC = () => {
       {showFormView && selectedDiaryEntry && (
         <AnimatePresence>
           <div 
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-[#1f2710]/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={() => setShowFormView(false)}
           >
             <motion.div
-              className="w-full max-w-6xl max-h-[90vh] overflow-auto"
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-[#cbdcab]/70 bg-gradient-to-b from-white to-[#f2f6e9]/90 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
               onClick={(e) => e.stopPropagation()}
             >
+              <div className="sticky top-0 z-20 flex items-center justify-between border-b border-[#cbdcab]/70 bg-gradient-to-r from-[#1f2710] to-[#526728] px-4 py-3 text-white backdrop-blur-sm dark:border-dark-700">
+                <div className="truncate pr-3 text-sm font-semibold text-white">
+                  {canUserEditEntry(selectedDiaryEntry) ? 'Edit Diary Entry' : canUserUpdateForm(selectedDiaryEntry) ? 'Update Diary Entry' : 'View Diary Entry'}
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowFormView(false)} leftIcon={<RiIcons.RiCloseLine />}>
+                  Close
+                </Button>
+              </div>
+              <div className="max-h-[calc(95dvh-56px)] overflow-y-auto sm:max-h-[calc(92vh-56px)]">
               <SiteDiaryFormTemplate
                 onClose={() => setShowFormView(false)}
                 onSave={handleFormUpdate}
@@ -1635,6 +2572,7 @@ const DiaryPage: React.FC = () => {
                   'View'
                 } Diary Entry - ${selectedDiaryEntry.date}`}
               />
+              </div>
             </motion.div>
           </div>
         </AnimatePresence>

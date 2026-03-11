@@ -1,15 +1,37 @@
 import React, { createContext, useContext, useState, ReactNode, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
+import { pdfjs } from 'react-pdf';
 
 export interface Message {
   id: string;
   content: string;
   sender: 'user' | 'ai';
   timestamp: Date;
-  imageUrl?: string; // Optional image URL for messages with images
-  isStreaming?: boolean; // Flag to indicate if message is still streaming
+  imageUrl?: string;
+  attachments?: ChatAttachment[];
+  messageType?: OutboundMessageType;
+  isStreaming?: boolean;
 }
+
+export type OutboundMessageType = 'text' | 'search' | 'image' | 'document' | 'pdf_vision';
+
+export interface ChatAttachment {
+  url: string;
+  fileName: string;
+  fileType: 'image' | 'document';
+  originalName: string;
+  size: number;
+}
+
+export interface SendMessageOptions {
+  mode?: 'text' | 'search';
+  file?: File | null;
+  uploadMode?: 'image' | 'document' | 'pdf_vision';
+  imageBase64?: string;
+}
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface ChatSession {
   id: string;
@@ -23,7 +45,7 @@ interface ChatSession {
 interface AIChatContextType {
   currentChat: ChatSession;
   chatHistory: ChatSession[];
-  sendMessage: (content: string, projectId?: string | number | null, imageBase64?: string) => Promise<void>;
+  sendMessage: (content: string, projectId?: string | number | null, options?: SendMessageOptions | string) => Promise<void>;
   clearMessages: () => void;
   startNewChat: (projectId?: string) => void;
   deleteChat: (chatId: string) => Promise<void>;
@@ -101,6 +123,8 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
                 sender: msg.sender,
                 timestamp: new Date(msg.timestamp),
                 imageUrl: msg.image_url,
+                attachments: undefined,
+                messageType: 'text',
                 isStreaming: msg.is_streaming
               }))
               .sort((a: Message, b: Message) => a.timestamp.getTime() - b.timestamp.getTime())
@@ -238,8 +262,107 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
   }, [chatHistory]);
 
   // Send a message in the current chat
-  const sendMessage = async (messageText: string, projectId: string | number | null = null, imageBase64?: string) => {
-    if ((!messageText.trim() && !imageBase64)) return;
+  const uploadAttachment = async (file: File, userId?: string): Promise<ChatAttachment> => {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileName = `${crypto.randomUUID()}_${safeName}`;
+    const ownerId = userId || 'anonymous';
+    const filePath = `users/${ownerId}/chat/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('user-uploads')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      throw new Error(uploadError.message);
+    }
+
+    const { data } = supabase.storage
+      .from('user-uploads')
+      .getPublicUrl(filePath);
+
+    return {
+      url: data.publicUrl,
+      fileName,
+      fileType: file.type.startsWith('image/') ? 'image' : 'document',
+      originalName: file.name,
+      size: file.size
+    };
+  };
+
+  const uploadPdfVisionData = async (file: File, userId?: string): Promise<{ attachment: ChatAttachment; imageUrls: string[]; pageCount: number }> => {
+    const ownerId = userId || 'anonymous';
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const baseId = crypto.randomUUID();
+    const pdfFileName = `${baseId}_${safeName}`;
+    const pdfPath = `users/${ownerId}/chat/${pdfFileName}`;
+
+    const { error: pdfUploadError } = await supabase.storage
+      .from('user-uploads')
+      .upload(pdfPath, file);
+
+    if (pdfUploadError) {
+      throw new Error(pdfUploadError.message);
+    }
+
+    const { data: pdfData } = supabase.storage
+      .from('user-uploads')
+      .getPublicUrl(pdfPath);
+
+    const imageUrls: string[] = [];
+    const fileArrayBuffer = await file.arrayBuffer();
+    const loadingTask = pdfjs.getDocument(fileArrayBuffer);
+    const pdf = await loadingTask.promise;
+
+    for (let i = 1; i <= pdf.numPages; i += 1) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2 });
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      if (!context) {
+        continue;
+      }
+      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      const pageBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!pageBlob) {
+        continue;
+      }
+      const imageFileName = `${baseId}_page_${i}.png`;
+      const imagePath = `users/${ownerId}/chat/${imageFileName}`;
+      const { error: imageUploadError } = await supabase.storage
+        .from('user-uploads')
+        .upload(imagePath, pageBlob);
+      if (imageUploadError) {
+        continue;
+      }
+      const { data: imageData } = supabase.storage
+        .from('user-uploads')
+        .getPublicUrl(imagePath);
+      imageUrls.push(imageData.publicUrl);
+    }
+
+    return {
+      attachment: {
+        url: pdfData.publicUrl,
+        fileName: pdfFileName,
+        fileType: 'document',
+        originalName: file.name,
+        size: file.size
+      },
+      imageUrls,
+      pageCount: pdf.numPages
+    };
+  };
+
+  const sendMessage = async (messageText: string, projectId: string | number | null = null, options?: SendMessageOptions | string) => {
+    const normalizedOptions: SendMessageOptions = typeof options === 'string'
+      ? { imageBase64: options }
+      : (options || {});
+    const imageBase64 = normalizedOptions.imageBase64;
+    const attachedFile = normalizedOptions.file || null;
+    const uploadMode = normalizedOptions.uploadMode;
+    if (!messageText.trim() && !imageBase64 && !attachedFile) return;
     
     let targetChatId = currentChatId;
     
@@ -297,13 +420,50 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
       }
     }
     
-    // Create user message
+    let uploadedAttachment: ChatAttachment | undefined;
+    let pdfVisionData: { imageUrls: string[]; pageCount: number } | undefined;
+    if (attachedFile) {
+      try {
+        if (uploadMode === 'pdf_vision') {
+          const visionResult = await uploadPdfVisionData(attachedFile, user?.id);
+          uploadedAttachment = visionResult.attachment;
+          pdfVisionData = {
+            imageUrls: visionResult.imageUrls,
+            pageCount: visionResult.pageCount
+          };
+        } else {
+          uploadedAttachment = await uploadAttachment(attachedFile, user?.id);
+        }
+      } catch (error) {
+        console.error('Error uploading attachment:', error);
+        return;
+      }
+    }
+
+    const resolvedMessageType: OutboundMessageType = uploadMode === 'pdf_vision'
+      ? 'pdf_vision'
+      : uploadedAttachment
+      ? (uploadedAttachment.fileType === 'image' ? 'image' : 'document')
+      : imageBase64
+        ? 'image'
+        : normalizedOptions.mode === 'search'
+          ? 'search'
+          : 'text';
+
+    const normalizedContent = messageText.trim()
+      ? messageText
+      : uploadedAttachment
+        ? `Attached file: ${uploadedAttachment.originalName}`
+        : 'Analyze this image';
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
-      content: messageText || "Analyze this image",
+      content: normalizedContent,
       sender: 'user',
       timestamp: new Date(),
-      imageUrl: imageBase64 ? imageBase64 : undefined
+      imageUrl: uploadedAttachment?.fileType === 'image' ? uploadedAttachment.url : imageBase64 || undefined,
+      attachments: uploadedAttachment ? [uploadedAttachment] : undefined,
+      messageType: resolvedMessageType
     };
     
     // First add the user message immediately to the UI
@@ -324,41 +484,43 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     }
     
     // Update the chat title if needed
-    updateChatTitle(targetChatId, messageText || "Image analysis");
+    updateChatTitle(targetChatId, normalizedContent);
     
     // Create AI message placeholder ID
     const aiMessageId = crypto.randomUUID();
     
     try {
-      // Add the current user message
-      const currentContent = [];
-      if (messageText) {
-        currentContent.push({
-          type: "text",
-          text: messageText
-        });
-      } else if (imageBase64) {
-        currentContent.push({
-          type: "text",
-          text: "Please analyze this image in detail."
-        });
-      }
-      
-      if (imageBase64) {
-        currentContent.push({
-          type: "image_url",
-          image_url: {
-            url: imageBase64
-          }
-        });
-      }
-      
-      const userMessagePayload = {
-        role: "user",
-        content: currentContent
+      const payloadText = messageText.trim()
+        ? messageText
+        : uploadedAttachment
+          ? `Please analyze this ${uploadedAttachment.fileType}.`
+          : 'Please analyze this image in detail.';
+
+      const resolvedProjectId = projectId ? String(projectId) : (currentChat.projectId || tempChatProjectId || null);
+
+      const outboundMessage: any = {
+        uid: user?.id || 'anonymous',
+        type: resolvedMessageType,
+        text: { body: payloadText },
+        body: payloadText,
+        content: payloadText,
+        role: 'user',
+        roleDescription: user?.role || 'user',
+        timestamp: new Date().toLocaleString(),
+        chatid: targetChatId,
+        projectId: resolvedProjectId
       };
-      
-      const messages = [userMessagePayload];
+
+      if (uploadedAttachment) {
+        outboundMessage.url = uploadedAttachment.url;
+        outboundMessage.attachments = [uploadedAttachment];
+        if (resolvedMessageType === 'pdf_vision') {
+          outboundMessage.image_urls = pdfVisionData?.imageUrls || [];
+          outboundMessage.page_count = pdfVisionData?.pageCount || 0;
+        }
+      } else if (imageBase64) {
+        outboundMessage.url = imageBase64;
+      }
 
       // Create AI message placeholder
       const aiMessage: Message = {
@@ -389,18 +551,17 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
       console.log('🚀 Sending request to API...');
       
       // Make the streaming request to the new webhook
-      const response = await fetch('https://n8n.matrixaiserver.com/webhook/MatrixTwin/DashboardSearch', {
+      const response = await fetch('https://n8n.matrixaiserver.com/webhook/MatrixTwin/aisearch', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: messages,
-          user: user || { id: 'anonymous', role: 'guest', name: 'Guest' },
+          type: 'openrequest',
           stream: true,
-          projectId: projectId,
-          chatId: targetChatId,
-          userId: user?.id
+          chatid: targetChatId,
+          projectId: resolvedProjectId,
+          messages: [outboundMessage]
         })
       });
 
