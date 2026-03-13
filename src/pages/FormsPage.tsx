@@ -97,6 +97,77 @@ const getColumnLetter = (index: number): string => {
   return result;
 };
 
+type GridCommandRange = {
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+};
+
+const columnLettersToIndex = (letters: string): number => {
+  const clean = letters.trim().toUpperCase().replace(/[^A-Z]/g, '');
+  if (!clean) return -1;
+  let index = 0;
+  for (let i = 0; i < clean.length; i++) {
+    index = index * 26 + (clean.charCodeAt(i) - 64);
+  }
+  return index - 1;
+};
+
+const parseCellReference = (reference: string): { row: number; col: number } | null => {
+  const clean = reference.trim().toUpperCase().replace(/[$\s]/g, '');
+  if (!clean) return null;
+  const alphaFirst = clean.match(/^([A-Z]+)(\d+)$/);
+  if (alphaFirst) {
+    const col = columnLettersToIndex(alphaFirst[1]);
+    const row = parseInt(alphaFirst[2], 10) - 1;
+    if (row < 0 || col < 0) return null;
+    return { row, col };
+  }
+  const numericFirst = clean.match(/^(\d+)([A-Z]+)$/);
+  if (numericFirst) {
+    const row = parseInt(numericFirst[1], 10) - 1;
+    const col = columnLettersToIndex(numericFirst[2]);
+    if (row < 0 || col < 0) return null;
+    return { row, col };
+  }
+  return null;
+};
+
+const normalizeRange = (a: { row: number; col: number }, b: { row: number; col: number }): GridCommandRange => ({
+  startRow: Math.min(a.row, b.row),
+  endRow: Math.max(a.row, b.row),
+  startCol: Math.min(a.col, b.col),
+  endCol: Math.max(a.col, b.col)
+});
+
+const parseRangeReference = (value: string): GridCommandRange | null => {
+  const cleaned = value.trim();
+  if (!cleaned) return null;
+  if (cleaned.includes(':')) {
+    const [start, end] = cleaned.split(':').map(part => part.trim());
+    const startRef = parseCellReference(start);
+    const endRef = parseCellReference(end);
+    if (!startRef || !endRef) return null;
+    return normalizeRange(startRef, endRef);
+  }
+  const refs = cleaned
+    .split(/[,\s]+/)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => parseCellReference(part))
+    .filter((item): item is { row: number; col: number } => !!item);
+  if (refs.length === 0) return null;
+  const rows = refs.map(ref => ref.row);
+  const cols = refs.map(ref => ref.col);
+  return {
+    startRow: Math.min(...rows),
+    endRow: Math.max(...rows),
+    startCol: Math.min(...cols),
+    endCol: Math.max(...cols)
+  };
+};
+
 const createInitialGrid = (rows: number = EXCEL_GRID_CONFIG.DEFAULT_ROWS, cols: number = EXCEL_GRID_CONFIG.DEFAULT_COLS): ExcelGridType => {
   const gridRows: GridRow[] = [];
   const gridColumns: GridColumn[] = [];
@@ -2509,7 +2580,17 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   const { user } = useAuth();
   
   const [isScanning, setIsScanning] = useState(false);
+  const [commandInput, setCommandInput] = useState('');
+  const [commandResult, setCommandResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isCommandModalOpen, setIsCommandModalOpen] = useState(false);
+  const [commandPageIndex, setCommandPageIndex] = useState(0);
   const scanFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isCommandModalOpen) {
+      setCommandPageIndex(currentPageIndex);
+    }
+  }, [currentPageIndex, isCommandModalOpen]);
 
   const handleScanFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2539,9 +2620,76 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
         };
 
         try {
+          const extractCommandScript = (raw: string): string => {
+            if (!raw) return '';
+            let text = raw.trim();
+            const codeBlockMatch = text.match(/```(?:sql|commands?|txt|text)?\s*([\s\S]*?)```/i);
+            if (codeBlockMatch?.[1]) {
+              text = codeBlockMatch[1].trim();
+            }
+            const commandLinePattern = /^(?:ON\s+PAGE\s+\d+\s+.+|PAGE\s+\d+\s*[:\-]\s*.+|USE\s+PAGE\s+\d+|PAGE\s+\d+|CREATE\s+PAGE|ADD\s+PAGE|INSERT\s+PAGE(?:\s+AT)?\s+\d+|DELETE\s+PAGE(?:\s+\d+)?|MERGE\s+.+|UNMERGE\s+.+|INSERT\s+.+|UPDATE\s+.+|SET\s+.+|DELETE\s+.+|CLEAR\s+.+)$/i;
+            const lines = text
+              .split('\n')
+              .map(line => line.trim())
+              .filter(Boolean);
+            const commandLines = lines.filter(line => commandLinePattern.test(line));
+            if (commandLines.length > 0) {
+              return commandLines.join('\n');
+            }
+            if (commandLinePattern.test(text)) {
+              return text;
+            }
+            return '';
+          };
+          const extractCommandsFromAny = (payload: any): string => {
+            if (payload == null) return '';
+            if (typeof payload === 'string') {
+              const direct = extractCommandScript(payload);
+              if (direct) return direct;
+              const trimmed = payload.trim();
+              if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                try {
+                  return extractCommandsFromAny(JSON.parse(trimmed));
+                } catch {
+                  return '';
+                }
+              }
+              return '';
+            }
+            if (Array.isArray(payload)) {
+              const parts = payload
+                .map(item => extractCommandsFromAny(item))
+                .filter(Boolean);
+              return parts.join('\n').trim();
+            }
+            if (typeof payload === 'object') {
+              if (typeof payload.commands === 'string') {
+                return extractCommandScript(payload.commands) || payload.commands;
+              }
+              if (Array.isArray(payload.commands) && payload.commands.every((item: any) => typeof item === 'string')) {
+                return payload.commands.join('\n').trim();
+              }
+              const keysToCheck = ['output', 'data', 'result', 'response', 'message', 'text'];
+              for (const key of keysToCheck) {
+                if (payload[key] !== undefined) {
+                  const found = extractCommandsFromAny(payload[key]);
+                  if (found) return found;
+                }
+              }
+            }
+            return '';
+          };
+
           // Parse the output JSON string from webhook response
           // Handle case where output might be nested or direct
           let outputData = result.data.output || result.data;
+          const preParsedCommandScript = extractCommandsFromAny(outputData);
+          if (preParsedCommandScript) {
+            setCommandInput(preParsedCommandScript);
+            executeGridCommands(preParsedCommandScript, currentPageIndex);
+            alert('AI generated commands and executed them successfully.');
+            return;
+          }
           
           if (typeof outputData === 'string') {
              // Clean up the string first
@@ -2665,6 +2813,13 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
              } catch (e) {
                // Ignore second failure
              }
+          }
+          const postParsedCommandScript = extractCommandsFromAny(outputData);
+          if (postParsedCommandScript) {
+            setCommandInput(postParsedCommandScript);
+            executeGridCommands(postParsedCommandScript, currentPageIndex);
+            alert('AI generated commands and executed them successfully.');
+            return;
           }
 
           // Normalize to pages structure
@@ -3144,6 +3299,747 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       formHistoryRef.current.past.shift();
     }
   };
+
+  const executeGridCommands = useCallback((rawInput: string, pageScopeIndex?: number) => {
+    const commandText = rawInput.trim();
+    if (!commandText) {
+      setCommandResult({ type: 'error', message: 'Please enter at least one command.' });
+      return;
+    }
+
+    if (!formPages.length) {
+      setCommandResult({ type: 'error', message: 'No pages found.' });
+      return;
+    }
+
+    const splitBySeparators = commandText
+      .split(/[\n;]+/)
+      .map(cmd => cmd.trim())
+      .filter(Boolean);
+
+    const commands: string[] = [];
+    splitBySeparators.forEach(cmd => {
+      const parts = cmd
+        .split(/\s+AND\s+(?=(MERGE|UNMERGE|INSERT|UPDATE|SET|DELETE|CLEAR|PAGE|ON|USE|ADD|CREATE)\b)/i)
+        .map(p => p.trim())
+        .filter(Boolean);
+      commands.push(...parts);
+    });
+
+    if (!commands.length) {
+      setCommandResult({ type: 'error', message: 'No valid commands detected.' });
+      return;
+    }
+
+    const widgetTypeMap: Record<string, string> = {
+      text: 'text',
+      textfield: 'text',
+      textarea: 'textarea',
+      number: 'number',
+      inputbox: 'number',
+      multiplechoice: 'multipleChoice',
+      checkbox: 'checkbox',
+      dropdown: 'select',
+      select: 'select',
+      date: 'date',
+      intervaldata: 'intervalData',
+      image: 'image',
+      attachment: 'attachment',
+      annotation: 'annotation',
+      signature: 'signature',
+      subform: 'subform',
+      member: 'member',
+      approvalkit: 'approvalKit',
+      layouttable: 'layoutTable',
+      datatable: 'dataTable'
+    };
+
+    const getNormalizedWidgetType = (type: string): string | null => {
+      const normalized = type.replace(/[^a-zA-Z]/g, '').toLowerCase();
+      return widgetTypeMap[normalized] || null;
+    };
+
+    const parseAttributes = (input: string): Record<string, string | boolean> => {
+      const attrs: Record<string, string | boolean> = {};
+      const normalized = input.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+      const regex = /([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=|\s)\s*(?:"([^"]*)"|'([^']*)'|([^\s]+))/g;
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(normalized)) !== null) {
+        const key = match[1].toUpperCase();
+        const rawValue = match[2] ?? match[3] ?? match[4] ?? '';
+        if (/^(true|false)$/i.test(rawValue)) {
+          attrs[key] = /^true$/i.test(rawValue);
+        } else {
+          attrs[key] = rawValue;
+        }
+      }
+      return attrs;
+    };
+
+    const cloneGrid = (grid: ExcelGridType): ExcelGridType => ({
+      ...grid,
+      rows: grid.rows.map(row => ({ ...row })),
+      columns: grid.columns.map(col => ({ ...col })),
+      cells: grid.cells.map(row => row.map(cell => ({
+        ...cell,
+        mergeInfo: cell.mergeInfo ? { ...cell.mergeInfo } : undefined
+      }))),
+      mergedCells: grid.mergedCells
+        ? new Map(Array.from(grid.mergedCells.entries()).map(([key, value]) => [key, { ...value }]))
+        : new Map<string, MergeInfo>()
+    });
+
+    const MAX_AUTO_CREATE_PAGES_PER_RUN = 25;
+    let autoCreatedPagesCount = 0;
+
+    const clonePage = (page: FormPage): FormPage => ({
+      ...page,
+      fields: page.fields.map(field => ({
+        ...field,
+        settings: { ...field.settings }
+      })),
+      grid: cloneGrid(page.grid || createInitialGrid())
+    });
+
+    const clampPageIndex = (value: number) => Math.max(0, Math.min(value, formPages.length - 1));
+    const startingPageIndex = clampPageIndex(pageScopeIndex ?? currentPageIndex);
+    let workingPages: FormPage[] = formPages.map(clonePage);
+    let activePageIndex = startingPageIndex;
+    let activePage = workingPages[activePageIndex];
+    let workingGrid: ExcelGridType = cloneGrid(activePage.grid || createInitialGrid());
+    let workingFields: FormField[] = activePage.fields.map(field => ({
+      ...field,
+      settings: { ...field.settings }
+    }));
+    let hasFormStructureChanges = false;
+    let hasPageStructureChanges = false;
+    let activePageDirty = false;
+    let lastInsertedField: FormField | null = null;
+    let successfulCommands = 0;
+    const errors: string[] = [];
+
+    const syncActivePage = () => {
+      if (!activePageDirty) {
+        return;
+      }
+      const updatedPage = updateAllFieldDimensions(
+        {
+          ...activePage,
+          fields: workingFields,
+          grid: workingGrid
+        },
+        workingGrid
+      );
+      workingPages[activePageIndex] = updatedPage;
+      activePage = updatedPage;
+      workingGrid = cloneGrid(updatedPage.grid);
+      workingFields = updatedPage.fields.map(field => ({
+        ...field,
+        settings: { ...field.settings }
+      }));
+      activePageDirty = false;
+    };
+
+    const switchToPage = (pageNumberOneBased: number) => {
+      const index = pageNumberOneBased - 1;
+      if (index < 0) {
+        throw new Error(`Page ${pageNumberOneBased} does not exist.`);
+      }
+      syncActivePage();
+      while (index >= workingPages.length) {
+        if (autoCreatedPagesCount >= MAX_AUTO_CREATE_PAGES_PER_RUN) {
+          throw new Error(`Auto page creation limit reached (${MAX_AUTO_CREATE_PAGES_PER_RUN}). Use CREATE PAGE first.`);
+        }
+        workingPages.push(createBlankPage());
+        autoCreatedPagesCount += 1;
+        hasPageStructureChanges = true;
+      }
+      activePageIndex = index;
+      activePage = workingPages[activePageIndex];
+      workingGrid = cloneGrid(activePage.grid || createInitialGrid());
+      workingFields = activePage.fields.map(field => ({
+        ...field,
+        settings: { ...field.settings }
+      }));
+    };
+
+    const createBlankPage = (): FormPage => {
+      const defaultDimensions = { width: 595, height: 842 };
+      return {
+        id: `page_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+        fields: [],
+        dimensions: {
+          width: defaultDimensions.width,
+          height: defaultDimensions.height,
+          orientation: 'portrait',
+          size: 'A4'
+        },
+        grid: createInitialGrid()
+      };
+    };
+
+    const isRangeInBounds = (range: GridCommandRange, grid: ExcelGridType): boolean => {
+      return (
+        range.startRow >= 0 &&
+        range.startCol >= 0 &&
+        range.endRow < grid.rows.length &&
+        range.endCol < grid.columns.length
+      );
+    };
+
+    const ensureRangeInBounds = (range: GridCommandRange) => {
+      if (range.startRow < 0 || range.startCol < 0) {
+        throw new Error('Cell or range must start at A1/1A or later.');
+      }
+      while (range.endRow >= workingGrid.rows.length) {
+        workingGrid = addRowToGrid(workingGrid);
+        activePageDirty = true;
+        hasFormStructureChanges = true;
+      }
+      while (range.endCol >= workingGrid.columns.length) {
+        workingGrid = addColumnToGrid(workingGrid);
+        activePageDirty = true;
+        hasFormStructureChanges = true;
+      }
+    };
+
+    const getContainingMerge = (row: number, col: number): MergeInfo | null => {
+      const entries = Array.from((workingGrid.mergedCells || new Map()).entries());
+      for (const [, mergeInfo] of entries) {
+        if (row >= mergeInfo.startRow && row <= mergeInfo.endRow && col >= mergeInfo.startCol && col <= mergeInfo.endCol) {
+          return mergeInfo;
+        }
+      }
+      return null;
+    };
+
+    const clearMergeFromCells = (mergeInfo: MergeInfo) => {
+      for (let row = mergeInfo.startRow; row <= mergeInfo.endRow; row++) {
+        for (let col = mergeInfo.startCol; col <= mergeInfo.endCol; col++) {
+          const currentCell = workingGrid.cells[row]?.[col];
+          if (!currentCell) continue;
+          workingGrid.cells[row][col] = {
+            ...currentCell,
+            mergeInfo: undefined,
+            merged: false
+          };
+        }
+      }
+    };
+
+    const overlaps = (a: GridCommandRange, b: GridCommandRange): boolean => {
+      return !(a.endRow < b.startRow || a.startRow > b.endRow || a.endCol < b.startCol || a.startCol > b.endCol);
+    };
+
+    const unmergeOverlappingRanges = (targetRange: GridCommandRange) => {
+      const nextMergedMap = new Map<string, MergeInfo>();
+      const entries = Array.from((workingGrid.mergedCells || new Map()).entries());
+      entries.forEach(([key, mergeInfo]) => {
+        const mergeRange: GridCommandRange = {
+          startRow: mergeInfo.startRow,
+          endRow: mergeInfo.endRow,
+          startCol: mergeInfo.startCol,
+          endCol: mergeInfo.endCol
+        };
+        if (overlaps(targetRange, mergeRange)) {
+          clearMergeFromCells(mergeInfo);
+        } else {
+          nextMergedMap.set(key, mergeInfo);
+        }
+      });
+      workingGrid.mergedCells = nextMergedMap;
+    };
+
+    const collectFieldIdsInRange = (range: GridCommandRange): Set<string> => {
+      const ids = new Set<string>();
+      for (let row = range.startRow; row <= range.endRow; row++) {
+        for (let col = range.startCol; col <= range.endCol; col++) {
+          const id = workingGrid.cells[row]?.[col]?.fieldId;
+          if (id) ids.add(id);
+        }
+      }
+      return ids;
+    };
+
+    const updateFieldInList = (fieldId: string, updater: (field: FormField) => FormField) => {
+      workingFields = workingFields.map(field => (field.id === fieldId ? updater(field) : field));
+    };
+
+    const applyMerge = (range: GridCommandRange) => {
+      if (!isRangeInBounds(range, workingGrid)) {
+        throw new Error('Merge range is outside grid bounds.');
+      }
+      unmergeOverlappingRanges(range);
+      const occupyingFieldIds = collectFieldIdsInRange(range);
+      if (occupyingFieldIds.size > 1) {
+        throw new Error('Cannot merge cells containing multiple different widgets.');
+      }
+      const singleFieldId = occupyingFieldIds.size === 1 ? Array.from(occupyingFieldIds)[0] : null;
+      const mergeInfo: MergeInfo = {
+        startRow: range.startRow,
+        endRow: range.endRow,
+        startCol: range.startCol,
+        endCol: range.endCol,
+        isMaster: true
+      };
+      if (!workingGrid.mergedCells) {
+        workingGrid.mergedCells = new Map<string, MergeInfo>();
+      }
+      const mergeKey = `${range.startRow}-${range.startCol}`;
+      workingGrid.mergedCells.set(mergeKey, mergeInfo);
+      for (let row = range.startRow; row <= range.endRow; row++) {
+        for (let col = range.startCol; col <= range.endCol; col++) {
+          const currentCell = workingGrid.cells[row][col];
+          workingGrid.cells[row][col] = {
+            ...currentCell,
+            mergeInfo: {
+              ...mergeInfo,
+              isMaster: row === range.startRow && col === range.startCol
+            },
+            merged: true,
+            fieldId: singleFieldId || currentCell.fieldId,
+            isEmpty: singleFieldId ? false : currentCell.isEmpty
+          };
+        }
+      }
+      if (singleFieldId) {
+        updateFieldInList(singleFieldId, field => ({
+          ...field,
+          gridRow: range.startRow,
+          gridCol: range.startCol,
+          cellId: workingGrid.cells[range.startRow][range.startCol].id
+        }));
+      }
+      hasFormStructureChanges = true;
+      activePageDirty = true;
+    };
+
+    const applyUnmerge = (range: GridCommandRange) => {
+      if (!isRangeInBounds(range, workingGrid)) {
+        throw new Error('Unmerge range is outside grid bounds.');
+      }
+      const entries = Array.from((workingGrid.mergedCells || new Map()).entries());
+      const nextMap = new Map<string, MergeInfo>();
+      entries.forEach(([key, mergeInfo]) => {
+        const mergeRange: GridCommandRange = {
+          startRow: mergeInfo.startRow,
+          endRow: mergeInfo.endRow,
+          startCol: mergeInfo.startCol,
+          endCol: mergeInfo.endCol
+        };
+        if (!overlaps(range, mergeRange)) {
+          nextMap.set(key, mergeInfo);
+          return;
+        }
+        const fieldIds = collectFieldIdsInRange(mergeRange);
+        const anchorFieldId = fieldIds.size ? Array.from(fieldIds)[0] : null;
+        clearMergeFromCells(mergeInfo);
+        for (let row = mergeInfo.startRow; row <= mergeInfo.endRow; row++) {
+          for (let col = mergeInfo.startCol; col <= mergeInfo.endCol; col++) {
+            const currentCell = workingGrid.cells[row][col];
+            const isMaster = row === mergeInfo.startRow && col === mergeInfo.startCol;
+            workingGrid.cells[row][col] = {
+              ...currentCell,
+              fieldId: isMaster ? anchorFieldId || undefined : undefined,
+              isEmpty: isMaster ? !anchorFieldId : true
+            };
+          }
+        }
+        if (anchorFieldId) {
+          updateFieldInList(anchorFieldId, field => ({
+            ...field,
+            gridRow: mergeInfo.startRow,
+            gridCol: mergeInfo.startCol,
+            cellId: workingGrid.cells[mergeInfo.startRow][mergeInfo.startCol].id
+          }));
+        }
+      });
+      workingGrid.mergedCells = nextMap;
+      hasFormStructureChanges = true;
+      activePageDirty = true;
+    };
+
+    const getFieldIdAtCell = (row: number, col: number): string | null => {
+      const direct = workingGrid.cells[row]?.[col]?.fieldId;
+      if (direct) return direct;
+      const mergeInfo = getContainingMerge(row, col);
+      if (!mergeInfo) return null;
+      for (let r = mergeInfo.startRow; r <= mergeInfo.endRow; r++) {
+        for (let c = mergeInfo.startCol; c <= mergeInfo.endCol; c++) {
+          const mergedFieldId = workingGrid.cells[r]?.[c]?.fieldId;
+          if (mergedFieldId) return mergedFieldId;
+        }
+      }
+      return null;
+    };
+
+    const applyFieldAttributes = (field: FormField, attrs: Record<string, string | boolean>): FormField => {
+      const nextSettings = { ...field.settings };
+      let nextLabel = field.label;
+      const settingKeyMap: Record<string, string> = {
+        TITLELAYOUT: 'titleLayout',
+        HIDETITLE: 'hideTitle',
+        DEFAULTVALUE: 'defaultValue',
+        MINLENGTH: 'minLength',
+        MAXLENGTH: 'maxLength',
+        MINDATE: 'minDate',
+        MAXDATE: 'maxDate',
+        NUMBERFORMAT: 'numberFormat',
+        ALLOWSEARCH: 'allowSearch',
+        ALLOWMULTIPLE: 'allowMultiple',
+        SIGNATURETYPE: 'signatureType',
+        SUBFORMID: 'subformId',
+        APPROVALTYPE: 'approvalType',
+        TABLETYPE: 'tableType'
+      };
+      const normalizeSettingKey = (rawKey: string): string => {
+        if (settingKeyMap[rawKey]) return settingKeyMap[rawKey];
+        const lower = rawKey.toLowerCase();
+        if (!lower.includes('_')) return lower;
+        const parts = lower.split('_');
+        return parts[0] + parts.slice(1).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+      };
+      const parseSettingValue = (value: string | boolean): any => {
+        if (typeof value === 'boolean') return value;
+        if (typeof value !== 'string') return value;
+        const trimmed = value.trim();
+        if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || trimmed.includes('|')) {
+          const raw = trimmed.startsWith('[') && trimmed.endsWith(']')
+            ? trimmed.slice(1, -1)
+            : trimmed;
+          return raw.split('|').map(item => item.trim()).filter(Boolean);
+        }
+        if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+          return Number(trimmed);
+        }
+        return trimmed;
+      };
+      if (typeof attrs.LABEL === 'string') {
+        nextLabel = attrs.LABEL;
+      }
+      if (typeof attrs.TEXT === 'string') {
+        nextSettings.defaultValue = attrs.TEXT;
+        if (field.type === 'text' || field.type === 'textarea') {
+          nextSettings.placeholder = attrs.TEXT;
+        }
+      }
+      if (typeof attrs.PLACEHOLDER === 'string') {
+        nextSettings.placeholder = attrs.PLACEHOLDER;
+      }
+      if (typeof attrs.REQUIRED === 'boolean') {
+        nextSettings.required = attrs.REQUIRED;
+      }
+      if (typeof attrs.TITLELAYOUT === 'string') {
+        nextSettings.titleLayout = attrs.TITLELAYOUT;
+      }
+      Object.entries(attrs).forEach(([rawKey, rawValue]) => {
+        if (rawKey === 'LABEL' || rawKey === 'TEXT') return;
+        if (rawKey === 'PLACEHOLDER' || rawKey === 'REQUIRED' || rawKey === 'TITLELAYOUT') return;
+        const nextKey = normalizeSettingKey(rawKey);
+        nextSettings[nextKey] = parseSettingValue(rawValue);
+      });
+      if (typeof attrs.OPTIONS === 'string') {
+        nextSettings.options = parseSettingValue(attrs.OPTIONS);
+      }
+      return {
+        ...field,
+        label: nextLabel,
+        settings: nextSettings
+      };
+    };
+
+    const removeFields = (fieldIds: Set<string>) => {
+      if (!fieldIds.size) return;
+      workingFields = workingFields.filter(field => !fieldIds.has(field.id));
+      for (let row = 0; row < workingGrid.cells.length; row++) {
+        for (let col = 0; col < workingGrid.cells[row].length; col++) {
+          if (workingGrid.cells[row][col].fieldId && fieldIds.has(workingGrid.cells[row][col].fieldId as string)) {
+            workingGrid.cells[row][col] = {
+              ...workingGrid.cells[row][col],
+              fieldId: undefined,
+              isEmpty: true
+            };
+          }
+        }
+      }
+      hasFormStructureChanges = true;
+      activePageDirty = true;
+    };
+
+    const parseRangeOrThrow = (value: string): GridCommandRange => {
+      const parsedRange = parseRangeReference(value);
+      if (!parsedRange) {
+        throw new Error(`Invalid cell or range reference: ${value}`);
+      }
+      if (!isRangeInBounds(parsedRange, workingGrid)) {
+        ensureRangeInBounds(parsedRange);
+      }
+      if (!isRangeInBounds(parsedRange, workingGrid)) {
+        throw new Error(`Cell or range is outside the grid: ${value}`);
+      }
+      return parsedRange;
+    };
+
+    const removePage = (targetPageNumber?: number) => {
+      const pageNumber = targetPageNumber ?? activePageIndex + 1;
+      const index = pageNumber - 1;
+      if (workingPages.length <= 1) {
+        throw new Error('Cannot delete the only page.');
+      }
+      if (index < 0 || index >= workingPages.length) {
+        throw new Error(`Page ${pageNumber} does not exist.`);
+      }
+      syncActivePage();
+      workingPages = workingPages.filter((_, pageIdx) => pageIdx !== index);
+      hasPageStructureChanges = true;
+      if (activePageIndex === index) {
+        activePageIndex = Math.max(0, index - 1);
+      } else if (activePageIndex > index) {
+        activePageIndex -= 1;
+      }
+      activePage = workingPages[activePageIndex];
+      workingGrid = cloneGrid(activePage.grid || createInitialGrid());
+      workingFields = activePage.fields.map(field => ({
+        ...field,
+        settings: { ...field.settings }
+      }));
+    };
+
+    commands.forEach((command, index) => {
+      try {
+        let trimmed = command.trim();
+        let upper = trimmed.toUpperCase();
+
+        const onPageMatch = trimmed.match(/^ON\s+PAGE\s+(\d+)\s+(.+)$/i);
+        if (onPageMatch) {
+          switchToPage(parseInt(onPageMatch[1], 10));
+          trimmed = onPageMatch[2].trim();
+          upper = trimmed.toUpperCase();
+        }
+
+        const pageScopedMatch = trimmed.match(/^PAGE\s+(\d+)\s*[:\-]\s*(.+)$/i);
+        if (pageScopedMatch) {
+          switchToPage(parseInt(pageScopedMatch[1], 10));
+          trimmed = pageScopedMatch[2].trim();
+          upper = trimmed.toUpperCase();
+        }
+
+        const selectPageMatch = trimmed.match(/^USE\s+PAGE\s+(\d+)$/i) || trimmed.match(/^PAGE\s+(\d+)$/i);
+        if (selectPageMatch) {
+          switchToPage(parseInt(selectPageMatch[1], 10));
+          successfulCommands += 1;
+          return;
+        }
+
+        if (/^(ADD|CREATE)\s+PAGE$/i.test(trimmed)) {
+          syncActivePage();
+          const newPage = createBlankPage();
+          workingPages = [...workingPages, newPage];
+          hasPageStructureChanges = true;
+          activePageIndex = workingPages.length - 1;
+          activePage = newPage;
+          workingGrid = cloneGrid(newPage.grid);
+          workingFields = [];
+          activePageDirty = false;
+          successfulCommands += 1;
+          return;
+        }
+
+        const insertPageMatch = trimmed.match(/^INSERT\s+PAGE(?:\s+AT)?\s+(\d+)$/i);
+        if (insertPageMatch) {
+          const insertAt = Math.max(1, parseInt(insertPageMatch[1], 10));
+          syncActivePage();
+          const newPage = createBlankPage();
+          const insertIndex = Math.min(insertAt - 1, workingPages.length);
+          workingPages = [...workingPages.slice(0, insertIndex), newPage, ...workingPages.slice(insertIndex)];
+          hasPageStructureChanges = true;
+          activePageIndex = insertIndex;
+          activePage = newPage;
+          workingGrid = cloneGrid(newPage.grid);
+          workingFields = [];
+          activePageDirty = false;
+          successfulCommands += 1;
+          return;
+        }
+
+        const deletePageMatch = trimmed.match(/^DELETE\s+PAGE(?:\s+(\d+))?$/i);
+        if (deletePageMatch) {
+          const targetPageNumber = deletePageMatch[1] ? parseInt(deletePageMatch[1], 10) : undefined;
+          removePage(targetPageNumber);
+          successfulCommands += 1;
+          return;
+        }
+
+        if (upper.startsWith('MERGE ')) {
+          const rangeExpr = trimmed.replace(/^MERGE\s+/i, '');
+          const range = parseRangeOrThrow(rangeExpr);
+          applyMerge(range);
+          successfulCommands += 1;
+          return;
+        }
+
+        if (upper.startsWith('UNMERGE ')) {
+          const rangeExpr = trimmed.replace(/^UNMERGE\s+/i, '');
+          const range = parseRangeOrThrow(rangeExpr);
+          applyUnmerge(range);
+          successfulCommands += 1;
+          return;
+        }
+
+        if (upper.startsWith('INSERT ')) {
+          const insertPatternA = trimmed.match(/^INSERT\s+(?:WIDGET\s+)?([a-zA-Z_]+)\s+INTO\s+([a-zA-Z0-9:,\s]+?)(?:\s+(.*))?$/i);
+          const insertPatternB = trimmed.match(/^INSERT\s+INTO\s+([a-zA-Z0-9:,\s]+)\s+(?:WIDGET\s+)?([a-zA-Z_]+)(?:\s+(.*))?$/i);
+          if (!insertPatternA && !insertPatternB) {
+            throw new Error('Invalid INSERT syntax.');
+          }
+          const typeRaw = insertPatternA ? insertPatternA[1] : (insertPatternB ? insertPatternB[2] : '');
+          const rangeRaw = insertPatternA ? insertPatternA[2] : (insertPatternB ? insertPatternB[1] : '');
+          const attrsRaw = insertPatternA ? (insertPatternA[3] || '') : (insertPatternB ? (insertPatternB[3] || '') : '');
+          const widgetType = getNormalizedWidgetType(typeRaw);
+          if (!widgetType) {
+            throw new Error(`Unsupported widget type: ${typeRaw}`);
+          }
+          const range = parseRangeOrThrow(rangeRaw);
+          const attrs = parseAttributes(attrsRaw);
+          if (range.startRow !== range.endRow || range.startCol !== range.endCol) {
+            applyMerge(range);
+          }
+          const activeMerge = getContainingMerge(range.startRow, range.startCol);
+          const effectiveRange: GridCommandRange = activeMerge
+            ? {
+                startRow: activeMerge.startRow,
+                endRow: activeMerge.endRow,
+                startCol: activeMerge.startCol,
+                endCol: activeMerge.endCol
+              }
+            : range;
+
+          const occupied = collectFieldIdsInRange(effectiveRange);
+          if (occupied.size > 0) {
+            throw new Error('Target cell/range already has a widget.');
+          }
+
+          const masterCell = workingGrid.cells[effectiveRange.startRow][effectiveRange.startCol];
+          const snapped = snapToGridCell(effectiveRange.startRow, effectiveRange.startCol, workingGrid);
+          const defaultHeight = widgetType === 'layoutTable' || widgetType === 'dataTable' ? 200 :
+            widgetType === 'signature' ? 80 :
+            widgetType === 'textarea' ? 80 :
+            widgetType === 'image' || widgetType === 'attachment' ? 120 : snapped.height;
+          const fieldId = `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const baseLabel = `${widgetType.charAt(0).toUpperCase() + widgetType.slice(1)} Field`;
+          let newField: FormField = {
+            id: fieldId,
+            type: widgetType,
+            label: baseLabel,
+            settings: {
+              required: false,
+              placeholder: '',
+              hideTitle: false,
+              titleLayout: 'horizontal',
+              options: widgetType === 'multipleChoice' || widgetType === 'checkbox' || widgetType === 'select' ? ['Option 1', 'Option 2'] : []
+            },
+            x: snapped.x,
+            y: snapped.y,
+            width: snapped.width,
+            height: Math.max(Math.min(defaultHeight, snapped.height || defaultHeight), 20),
+            zIndex: 1,
+            gridRow: effectiveRange.startRow,
+            gridCol: effectiveRange.startCol,
+            cellId: masterCell.id
+          };
+          newField = applyFieldAttributes(newField, attrs);
+
+          for (let row = effectiveRange.startRow; row <= effectiveRange.endRow; row++) {
+            for (let col = effectiveRange.startCol; col <= effectiveRange.endCol; col++) {
+              const existingCell = workingGrid.cells[row][col];
+              workingGrid.cells[row][col] = {
+                ...existingCell,
+                fieldId,
+                isEmpty: false
+              };
+            }
+          }
+
+          workingFields = [...workingFields, newField];
+          lastInsertedField = newField;
+          hasFormStructureChanges = true;
+          activePageDirty = true;
+          successfulCommands += 1;
+          return;
+        }
+
+        if (upper.startsWith('DELETE ') || upper.startsWith('CLEAR ')) {
+          const rangeExpr = trimmed.replace(/^(DELETE\s+FROM|DELETE|CLEAR)\s+/i, '');
+          const range = parseRangeOrThrow(rangeExpr);
+          const fieldIds = collectFieldIdsInRange(range);
+          removeFields(fieldIds);
+          successfulCommands += 1;
+          return;
+        }
+
+        if (upper.startsWith('UPDATE ') || upper.startsWith('SET ')) {
+          const updateMatch = trimmed.match(/^UPDATE\s+([a-zA-Z0-9]+)\s+SET\s+(.+)$/i)
+            || trimmed.match(/^SET\s+([a-zA-Z0-9]+)\s+(.+)$/i);
+          if (!updateMatch) {
+            throw new Error('Invalid UPDATE syntax.');
+          }
+          const cellRef = parseCellReference(updateMatch[1]);
+          if (!cellRef) {
+            throw new Error(`Invalid cell reference: ${updateMatch[1]}`);
+          }
+          if (cellRef.row < 0 || cellRef.col < 0 || cellRef.row >= workingGrid.rows.length || cellRef.col >= workingGrid.columns.length) {
+            throw new Error(`Cell is outside grid bounds: ${updateMatch[1]}`);
+          }
+          const fieldId = getFieldIdAtCell(cellRef.row, cellRef.col);
+          if (!fieldId) {
+            throw new Error(`No widget found in cell ${updateMatch[1]}`);
+          }
+          const attrs = parseAttributes(updateMatch[2]);
+          if (Object.keys(attrs).length === 0) {
+            throw new Error('No attributes provided in UPDATE command.');
+          }
+          updateFieldInList(fieldId, field => applyFieldAttributes(field, attrs));
+          hasFormStructureChanges = true;
+          activePageDirty = true;
+          successfulCommands += 1;
+          return;
+        }
+
+        throw new Error(`Unsupported command: ${trimmed}`);
+      } catch (error: any) {
+        errors.push(`Command ${index + 1}: ${error?.message || 'Unknown error'}`);
+      }
+    });
+
+    if (successfulCommands === 0) {
+      setCommandResult({ type: 'error', message: errors.join(' | ') });
+      return;
+    }
+
+    syncActivePage();
+    if (hasFormStructureChanges || hasPageStructureChanges) {
+      saveToHistory();
+      setFormPages(workingPages);
+    }
+    setCurrentPageIndex(activePageIndex);
+    setCommandPageIndex(activePageIndex);
+
+    const insertedField = lastInsertedField as FormField | null;
+    if (insertedField) {
+      setSelectedField(insertedField);
+      const nextRow = (insertedField as any).gridRow;
+      const nextCol = (insertedField as any).gridCol;
+      if (typeof nextRow === 'number' && typeof nextCol === 'number') {
+        setSelectedCell({ row: nextRow, col: nextCol });
+      }
+    }
+    const successMessage = `${successfulCommands} command${successfulCommands > 1 ? 's' : ''} executed successfully.`;
+    if (errors.length) {
+      setCommandResult({ type: 'error', message: `${successMessage} ${errors.join(' | ')}` });
+    } else {
+      setCommandResult({ type: 'success', message: successMessage });
+    }
+  }, [currentPageIndex, formPages, saveToHistory, setCurrentPageIndex, setFormPages, setSelectedCell, setSelectedField]);
 
   const undo = () => {
     if (formHistoryRef.current.past.length === 0) return;
@@ -3653,7 +4549,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
         orientation: 'portrait',
         size: 'A4'
       },
-      grid: createInitialGrid(defaultDimensions.width, defaultDimensions.height)
+      grid: createInitialGrid()
     };
     setFormPages(prev => [...prev, newPage]);
   };
@@ -3871,7 +4767,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       id: `page_${Date.now()}_${currentPageIndex}`,
       fields: [],
       dimensions: defaultDimensions,
-      grid: createInitialGrid(defaultDimensions.width, defaultDimensions.height)
+      grid: createInitialGrid()
     });
     console.log('Initialized first page');
     
@@ -5214,6 +6110,17 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               >
                 {isScanning ? 'Scanning...' : 'AI Generate'}
               </Button>
+              <Button
+                variant="ai-secondary"
+                size="sm"
+                onClick={() => {
+                  setCommandPageIndex(currentPageIndex);
+                  setIsCommandModalOpen(true);
+                }}
+                leftIcon={<RiFileEditLine />}
+              >
+                Run Commands
+              </Button>
               
               {/* Zoom Controls */}
               <div className="flex items-center gap-1 ml-4 border-l border-dark-600/50 pl-4">
@@ -5253,6 +6160,13 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               {isDragging ? 'Drop widget here' : `${getCurrentPageDimensions().width}×${getCurrentPageDimensions().height}px`}
             </div>
           </div>
+          {commandResult && (
+            <div className="border-b border-dark-700/50 p-2 flex-shrink-0 bg-dark-900/20">
+              <div className={`text-xs ${commandResult.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                {commandResult.message}
+              </div>
+            </div>
+          )}
           
           {/* MS Word-like Form content area - Continuous scrollable pages */}
           <div 
@@ -5428,6 +6342,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                           height: page.dimensions.height,
                           label: page.dimensions.size
                         }}
+                        rows={page.grid.rows}
+                        columns={page.grid.columns}
+                        cells={page.grid.cells}
+                        mergedCells={page.grid.mergedCells}
                         onCellSelect={(row, col) => {
                           setSelectedCell({ row, col });
                           setCurrentPageIndex(pageIndex);
@@ -6936,6 +7854,62 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
         </div>
       )}
       
+      <Dialog
+        isOpen={isCommandModalOpen}
+        onClose={() => setIsCommandModalOpen(false)}
+        title="Command Runner"
+        size="lg"
+      >
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600 dark:text-gray-300">Run from page</span>
+            <select
+              value={commandPageIndex}
+              onChange={(e) => setCommandPageIndex(parseInt(e.target.value, 10))}
+              className="bg-dark-700/40 border border-dark-600/50 rounded px-2 py-1 text-sm text-white"
+            >
+              {formPages.map((_, pageIdx) => (
+                <option key={pageIdx} value={pageIdx}>
+                  Page {pageIdx + 1}
+                </option>
+              ))}
+            </select>
+          </div>
+          <textarea
+            value={commandInput}
+            onChange={(e) => setCommandInput(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                executeGridCommands(commandInput, commandPageIndex);
+              }
+            }}
+            placeholder={`PAGE 1: MERGE 1A,1B
+PAGE 1: INSERT text INTO 1A LABEL "Name" TEXT "Enter Name"
+ON PAGE 2 INSERT signature INTO A3
+CREATE PAGE
+INSERT PAGE 2`}
+            className="w-full min-h-[180px] resize-y rounded-md border border-dark-600 bg-dark-800/40 text-gray-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-portfolio-orange"
+          />
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            Supported commands: MERGE, UNMERGE, INSERT widget, UPDATE/SET, DELETE/CLEAR, PAGE/USE PAGE, CREATE PAGE, INSERT PAGE, DELETE PAGE. PAGE n auto-creates missing pages, and out-of-range cell refs auto-expand rows/columns.
+          </div>
+          {commandResult && (
+            <div className={`text-xs ${commandResult.type === 'success' ? 'text-green-500' : 'text-red-500'}`}>
+              {commandResult.message}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setIsCommandModalOpen(false)}>
+              Close
+            </Button>
+            <Button variant="ai" onClick={() => executeGridCommands(commandInput, commandPageIndex)}>
+              Run
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
       {/* Print Styles */}
       <style>{`
         @media print {
@@ -8227,7 +9201,7 @@ const FormsPage: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
-      
+
       {/* Context Menu */}
       {contextMenu && (
         <div

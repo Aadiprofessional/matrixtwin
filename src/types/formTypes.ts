@@ -70,8 +70,8 @@ export interface ExcelGrid {
 
 // Grid configuration constants
 export const EXCEL_GRID_CONFIG = {
-  DEFAULT_ROWS: 10,
-  DEFAULT_COLS: 6,
+  DEFAULT_ROWS: 23,
+  DEFAULT_COLS: 8,
   MIN_ROW_HEIGHT: 30,
   MIN_COL_WIDTH: 80,
   DEFAULT_ROW_HEIGHT: 50,
