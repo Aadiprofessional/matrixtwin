@@ -15,8 +15,7 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+import { exportReportElementToSinglePagePdf } from '../utils/pdfUtils';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -124,6 +123,8 @@ const DiaryPage: React.FC = () => {
   // Process flow states
   const [showProcessFlow, setShowProcessFlow] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<any>(null);
+  const [pendingDiaryName, setPendingDiaryName] = useState('');
+  const [pendingDiaryExpiry, setPendingDiaryExpiry] = useState('');
   const [processNodes, setProcessNodes] = useState<ProcessNode[]>([
     { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
     { id: 'review', type: 'node', name: 'Review & Approval', editAccess: true, ccRecipients: [], settings: {} },
@@ -393,7 +394,19 @@ const DiaryPage: React.FC = () => {
   
   // Create new diary entry - now shows process flow first
   const handleCreateEntry = (formData: any) => {
+    const sourceDate = formData?.date ? new Date(formData.date) : new Date();
+    const resolvedDate = Number.isNaN(sourceDate.getTime()) ? new Date() : sourceDate;
+    const formattedDate = resolvedDate.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short'
+    });
+    const defaultName = `Diary - ${selectedProject?.name || 'Project'} - ${formattedDate}`;
+    const defaultExpiry = new Date();
+    defaultExpiry.setDate(defaultExpiry.getDate() + 10);
+
     setPendingFormData(formData);
+    setPendingDiaryName(defaultName);
+    setPendingDiaryExpiry(formatDateTimeLocal(defaultExpiry));
     setShowNewEntry(false);
     setShowProcessFlow(true);
     setSelectedNode(processNodes.find(node => node.type === 'node') || null);
@@ -402,6 +415,23 @@ const DiaryPage: React.FC = () => {
   // Final save after process flow configuration
   const handleFinalSave = async () => {
     if (!pendingFormData || !user?.id) return;
+
+    const diaryName = pendingDiaryName.trim();
+    if (!diaryName) {
+      alert('Please provide a diary name.');
+      return;
+    }
+
+    if (!pendingDiaryExpiry) {
+      alert('Please select an expiry date and time.');
+      return;
+    }
+
+    const parsedExpiry = new Date(pendingDiaryExpiry);
+    if (Number.isNaN(parsedExpiry.getTime())) {
+      alert('Please select a valid expiry date and time.');
+      return;
+    }
     
     try {
       // Prepare process nodes with proper structure for backend
@@ -419,7 +449,8 @@ const DiaryPage: React.FC = () => {
         createdBy: user.id,
         projectId: selectedProject?.id,
         formId: pendingFormData.formNumber,
-        name: pendingFormData.formNumber
+        name: diaryName,
+        expiresAt: parsedExpiry.toISOString()
       });
 
       const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/diary/create`, {
@@ -434,7 +465,8 @@ const DiaryPage: React.FC = () => {
           createdBy: user.id,
           projectId: selectedProject?.id,
           formId: pendingFormData.formNumber,
-          name: pendingFormData.formNumber
+          name: diaryName,
+          expiresAt: parsedExpiry.toISOString()
         })
       });
 
@@ -448,6 +480,8 @@ const DiaryPage: React.FC = () => {
         // Reset states
         setShowProcessFlow(false);
         setPendingFormData(null);
+        setPendingDiaryName('');
+        setPendingDiaryExpiry('');
         setSelectedNode(null);
         
         // Reset process nodes to default
@@ -475,6 +509,8 @@ const DiaryPage: React.FC = () => {
     setShowProcessFlow(false);
     setShowNewEntry(true);
     setPendingFormData(null);
+    setPendingDiaryName('');
+    setPendingDiaryExpiry('');
   };
   
   // Fetch history for a diary entry
@@ -1224,36 +1260,8 @@ const DiaryPage: React.FC = () => {
     try {
       setIsDownloadingReport(true);
       await new Promise((resolve) => setTimeout(resolve, 200));
-
-      const canvas = await html2canvas(reportContentRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 5;
-      const imgWidth = pageWidth - margin * 2;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = margin;
-
-      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight, undefined, 'FAST');
-      heightLeft -= (pageHeight - margin * 2);
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight + margin;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight, undefined, 'FAST');
-        heightLeft -= (pageHeight - margin * 2);
-      }
-
       const fileName = `diary-report-${new Date().toISOString().slice(0, 10)}.pdf`;
-      pdf.save(fileName);
+      await exportReportElementToSinglePagePdf(reportContentRef.current, fileName);
     } catch (error) {
       console.error('Failed to download diary report PDF:', error);
       alert('Unable to generate PDF. Please try again.');
@@ -2234,6 +2242,32 @@ const DiaryPage: React.FC = () => {
                   <div className="lg:col-span-7">
                     <Card className="h-full border border-secondary-200/70 p-4 dark:border-dark-700">
                       <h3 className="font-semibold text-secondary-900 dark:text-white mb-4">Process Settings</h3>
+                      <div className="mb-4 rounded-lg border border-secondary-200 p-3 dark:border-dark-700">
+                        <h4 className="mb-3 text-sm font-semibold text-secondary-800 dark:text-secondary-200">
+                          Diary Setup
+                        </h4>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Input
+                            label="Project / Diary Name"
+                            value={pendingDiaryName}
+                            onChange={(e) => setPendingDiaryName(e.target.value)}
+                            placeholder={selectedProject?.name || 'Enter diary name'}
+                            className="bg-white/50 border border-white/10 backdrop-blur-md dark:bg-dark-800/50"
+                          />
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-secondary-700 dark:text-secondary-300">
+                              Expiry Date & Time
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={pendingDiaryExpiry}
+                              onChange={(e) => setPendingDiaryExpiry(e.target.value)}
+                              min={formatDateTimeLocal(new Date())}
+                              className="input w-full border border-secondary-200 bg-white text-secondary-900 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
                       
                       {selectedNode ? (
                         <div className="space-y-4">

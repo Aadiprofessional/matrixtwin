@@ -53,8 +53,6 @@ interface ProcessNode {
   executorId?: string;
   ccRecipients?: User[];
   editAccess?: boolean;
-  expireTime?: string;
-  expireDuration?: number | null;
   settings: Record<string, any>;
 }
 
@@ -877,74 +875,6 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
                         </p>
                       </div>
 
-                      {/* Expire Time Configuration */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Task Expiration
-                        </label>
-                        <div className="space-y-3">
-                          <div className="flex items-center space-x-2">
-                            <select 
-                              value={selectedNode.expireTime === 'unlimited' || !selectedNode.expireTime ? 'unlimited' : 'custom'}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                const updatedNode = { 
-                                  ...selectedNode, 
-                                  expireTime: value === 'unlimited' ? 'unlimited' : '',
-                                  expireDuration: value === 'unlimited' ? null : (selectedNode.expireDuration || 24)
-                                };
-                                const updatedNodes = processNodes.map(node => 
-                                  node.id === selectedNode.id ? updatedNode : node
-                                );
-                                setProcessNodes(updatedNodes);
-                                setSelectedNode(updatedNode);
-                              }}
-                              className="flex-1 bg-dark-700/50 border border-dark-600/50 rounded p-2 text-white focus:border-ai-blue/50 focus:ring-1 focus:ring-ai-blue/30 outline-none"
-                            >
-                              <option value="unlimited">Unlimited</option>
-                              <option value="custom">Custom Date & Time</option>
-                            </select>
-                          </div>
-                          
-                          {(selectedNode.expireTime !== 'unlimited' && selectedNode.expireTime !== undefined) && (
-                            <div className="space-y-2">
-                              <div className="flex items-center space-x-2">
-                                <input
-                                  type="datetime-local"
-                                  value={selectedNode.expireTime && selectedNode.expireTime !== 'unlimited' ? 
-                                    (selectedNode.expireTime.includes('T') ? selectedNode.expireTime.slice(0, 16) : '') : ''}
-                                  onChange={(e) => {
-                                    const updatedNode = { 
-                                      ...selectedNode, 
-                                      expireTime: e.target.value ? new Date(e.target.value).toISOString() : '',
-                                      expireDuration: null
-                                    };
-                                    const updatedNodes = processNodes.map(node => 
-                                      node.id === selectedNode.id ? updatedNode : node
-                                    );
-                                    setProcessNodes(updatedNodes);
-                                    setSelectedNode(updatedNode);
-                                  }}
-                                  min={new Date().toISOString().slice(0, 16)}
-                                  className="flex-1 bg-dark-700/50 border border-dark-600/50 rounded p-2 text-white focus:border-ai-blue/50 focus:ring-1 focus:ring-ai-blue/30 outline-none"
-                                />
-                              </div>
-                              <p className="text-xs text-gray-500">
-                                Select the date and time when this task should expire
-                              </p>
-                            </div>
-                          )}
-                          
-                          <p className="text-xs text-gray-500">
-                            {selectedNode.expireTime === 'unlimited' 
-                              ? 'This task will not expire automatically.'
-                              : selectedNode.expireTime && selectedNode.expireTime !== 'unlimited'
-                                ? `This task will expire on ${new Date(selectedNode.expireTime).toLocaleString()}`
-                                : 'Select a custom expiration date and time above.'
-                            }
-                          </p>
-                        </div>
-                      </div>
                     </>
                   )}
                 </div>

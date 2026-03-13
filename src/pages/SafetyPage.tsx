@@ -15,8 +15,7 @@ import { projectService } from '../services/projectService';
 import { PeopleSelectorModal } from '../components/ui/PeopleSelectorModal';
 import { ReportModal } from '../components/common/ReportModal';
 import { FullReportContent } from '../components/common/FullReportContent';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+import { exportReportElementToSinglePagePdf } from '../utils/pdfUtils';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -49,8 +48,6 @@ interface ProcessNode {
   executorId?: string; // Add executor ID for backend
   ccRecipients?: User[]; // Add node-specific CC recipients
   editAccess?: boolean; // Add edit access flag
-  expireTime?: string; // Add expire time field
-  expireDuration?: number | null; // Add expire duration in hours (null = unlimited)
   settings: Record<string, any>;
 }
 
@@ -136,6 +133,8 @@ const SafetyPage: React.FC = () => {
   // Process flow states
   const [showProcessFlow, setShowProcessFlow] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<any>(null);
+  const [pendingSafetyName, setPendingSafetyName] = useState('');
+  const [pendingSafetyExpiry, setPendingSafetyExpiry] = useState('');
   const [processNodes, setProcessNodes] = useState<ProcessNode[]>([
     { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
     { id: 'review', type: 'node', name: 'Safety Review & Approval', editAccess: true, ccRecipients: [], settings: {} },
@@ -144,6 +143,11 @@ const SafetyPage: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<ProcessNode | null>(null);
   const [showPeopleSelector, setShowPeopleSelector] = useState(false);
   const [peopleSelectorType, setPeopleSelectorType] = useState<'executor' | 'cc'>('executor');
+
+  const formatDateTimeLocal = (date: Date) => {
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+  };
   
   // Safety entries from API
   const [safetyEntries, setSafetyEntries] = useState<SafetyEntry[]>([]);
@@ -372,7 +376,19 @@ const SafetyPage: React.FC = () => {
   };
 
   const handleCreateInspection = (formData: any) => {
+    const sourceDate = formData?.inspectionDate ? new Date(formData.inspectionDate) : new Date();
+    const resolvedDate = Number.isNaN(sourceDate.getTime()) ? new Date() : sourceDate;
+    const formattedDate = resolvedDate.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short'
+    });
+    const defaultName = `Safety Checklist - ${selectedProject?.name || 'Project'} - ${formattedDate}`;
+    const defaultExpiry = new Date();
+    defaultExpiry.setDate(defaultExpiry.getDate() + 10);
+
     setPendingFormData(formData);
+    setPendingSafetyName(defaultName);
+    setPendingSafetyExpiry(formatDateTimeLocal(defaultExpiry));
     setShowNewInspection(false);
     setShowProcessFlow(true);
     setSelectedNode(processNodes.find(node => node.type === 'node') || null);
@@ -380,6 +396,23 @@ const SafetyPage: React.FC = () => {
 
   const handleFinalSave = async () => {
     if (!pendingFormData || !user?.id) return;
+
+    const entryName = pendingSafetyName.trim();
+    if (!entryName) {
+      alert('Please provide a safety entry name.');
+      return;
+    }
+
+    if (!pendingSafetyExpiry) {
+      alert('Please select an expiry date and time.');
+      return;
+    }
+
+    const parsedExpiry = new Date(pendingSafetyExpiry);
+    if (Number.isNaN(parsedExpiry.getTime())) {
+      alert('Please select a valid expiry date and time.');
+      return;
+    }
     
     try {
       // Prepare process nodes with proper structure for backend
@@ -397,7 +430,8 @@ const SafetyPage: React.FC = () => {
         createdBy: user.id,
         projectId: selectedProject?.id,
         formId: pendingFormData.formNumber,
-        name: pendingFormData.formNumber
+        name: entryName,
+        expiresAt: parsedExpiry.toISOString()
       });
 
       const response = await fetch('https://server.matrixtwin.com/api/safety/create', {
@@ -412,7 +446,8 @@ const SafetyPage: React.FC = () => {
           createdBy: user.id,
           projectId: selectedProject?.id,
           formId: pendingFormData.formNumber,
-          name: pendingFormData.formNumber
+          name: entryName,
+          expiresAt: parsedExpiry.toISOString()
         })
       });
 
@@ -426,6 +461,8 @@ const SafetyPage: React.FC = () => {
         // Reset states
         setShowProcessFlow(false);
         setPendingFormData(null);
+        setPendingSafetyName('');
+        setPendingSafetyExpiry('');
         setSelectedNode(null);
         
         // Reset process nodes to default
@@ -459,6 +496,8 @@ const SafetyPage: React.FC = () => {
 
   const handleCancelProcessFlow = () => {
     setPendingFormData(null);
+    setPendingSafetyName('');
+    setPendingSafetyExpiry('');
     setShowProcessFlow(false);
     setSelectedNode(null);
   };
@@ -964,22 +1003,10 @@ const SafetyPage: React.FC = () => {
     if (!reportContentRef.current) return;
     setIsDownloadingReport(true);
     try {
-      const canvas = await html2canvas(reportContentRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-      const imageData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const width = pdf.internal.pageSize.getWidth();
-      const height = (canvas.height * width) / canvas.width;
-      let position = 0;
-      let remaining = height;
-      pdf.addImage(imageData, 'PNG', 0, position, width, height);
-      remaining -= pdf.internal.pageSize.getHeight();
-      while (remaining > 0) {
-        position = remaining - height;
-        pdf.addPage();
-        pdf.addImage(imageData, 'PNG', 0, position, width, height);
-        remaining -= pdf.internal.pageSize.getHeight();
-      }
-      pdf.save(`safety-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+      await exportReportElementToSinglePagePdf(
+        reportContentRef.current,
+        `safety-report-${new Date().toISOString().slice(0, 10)}.pdf`
+      );
     } finally {
       setIsDownloadingReport(false);
     }
@@ -1673,6 +1700,32 @@ const SafetyPage: React.FC = () => {
                   <div className="lg:col-span-7">
                     <Card className="p-4 h-full">
                       <h3 className="font-semibold text-secondary-900 dark:text-white mb-4">Process Settings</h3>
+                      <div className="mb-4 rounded-lg border border-secondary-200 p-3 dark:border-secondary-700">
+                        <h4 className="mb-3 text-sm font-semibold text-secondary-800 dark:text-secondary-200">
+                          Safety Setup
+                        </h4>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Input
+                            label="Safety Entry Name"
+                            value={pendingSafetyName}
+                            onChange={(e) => setPendingSafetyName(e.target.value)}
+                            placeholder={selectedProject?.name || 'Enter safety entry name'}
+                            className="bg-white border border-secondary-200 dark:border-secondary-600 dark:bg-secondary-800"
+                          />
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-secondary-700 dark:text-secondary-300">
+                              Expiry Date & Time
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={pendingSafetyExpiry}
+                              onChange={(e) => setPendingSafetyExpiry(e.target.value)}
+                              min={formatDateTimeLocal(new Date())}
+                              className="input w-full border border-secondary-200 bg-white text-secondary-900 dark:border-secondary-600 dark:bg-secondary-700 dark:text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
                       
                       {selectedNode ? (
                         <div className="space-y-4">
@@ -1778,75 +1831,6 @@ const SafetyPage: React.FC = () => {
                                 </p>
                               </div>
 
-                              {/* Expire Time Configuration */}
-                              <div>
-                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
-                                  Task Expiration
-                                </label>
-                                <div className="space-y-3">
-                                  <div className="flex items-center space-x-2">
-                                    <select 
-                                      value={selectedNode.expireTime === 'unlimited' || !selectedNode.expireTime ? 'unlimited' : 'custom'}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        const updatedNode = { 
-                                          ...selectedNode, 
-                                          expireTime: value === 'unlimited' ? 'unlimited' : '',
-                                          expireDuration: value === 'unlimited' ? null : (selectedNode.expireDuration || 24)
-                                        };
-                                        const updatedNodes = processNodes.map(node => 
-                                          node.id === selectedNode.id ? updatedNode : node
-                                        );
-                                        setProcessNodes(updatedNodes);
-                                        setSelectedNode(updatedNode);
-                                      }}
-                                      className="flex-1 bg-white dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-2 text-secondary-900 dark:text-white"
-                                    >
-                                      <option value="unlimited">Unlimited</option>
-                                      <option value="custom">Custom Date & Time</option>
-                                    </select>
-                                  </div>
-                                  
-                                  {(selectedNode.expireTime !== 'unlimited' && selectedNode.expireTime !== undefined) && (
-                                    <div className="space-y-2">
-                                      <div className="flex items-center space-x-2">
-                                        <input
-                                          type="datetime-local"
-                                          value={selectedNode.expireTime && selectedNode.expireTime !== 'unlimited' ? 
-                                            (selectedNode.expireTime.includes('T') ? selectedNode.expireTime.slice(0, 16) : '') : ''}
-                                          onChange={(e) => {
-                                            const updatedNode = { 
-                                              ...selectedNode, 
-                                              expireTime: e.target.value ? new Date(e.target.value).toISOString() : '',
-                                              expireDuration: null
-                                            };
-                                            const updatedNodes = processNodes.map(node => 
-                                              node.id === selectedNode.id ? updatedNode : node
-                                            );
-                                            setProcessNodes(updatedNodes);
-                                            setSelectedNode(updatedNode);
-                                          }}
-                                          min={new Date().toISOString().slice(0, 16)}
-                                          className="flex-1 bg-white dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-2 text-secondary-900 dark:text-white"
-                                        />
-                                      </div>
-                                      <p className="text-xs text-secondary-500 dark:text-secondary-400">
-                                        Select the date and time when this task should expire
-                                      </p>
-                                    </div>
-                                  )}
-                                  
-                                  <p className="text-xs text-secondary-500 dark:text-secondary-400">
-                                    {selectedNode.expireTime === 'unlimited' 
-                                      ? 'This task will not expire automatically.'
-                                      : selectedNode.expireTime && selectedNode.expireTime !== 'unlimited'
-                                        ? `This task will expire on ${new Date(selectedNode.expireTime).toLocaleString()}`
-                                        : 'Select a custom expiration date and time above.'
-                                    }
-                                  </p>
-                                </div>
-                              </div>
-                              
                               <div>
                                 <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
                                   Execution Type

@@ -12,13 +12,11 @@ import { useProjects } from '../contexts/ProjectContext';
 import { projectService } from '../services/projectService';
 import { createForm, getForms, respondToForm, updateFormStatus, FormResponse } from '../api/forms';
 import { UserSelectionModal } from '../components/modals/UserSelectionModal';
-import { generateFormPdf } from '../utils/pdfUtils';
+import { exportReportElementsToPdfPages, generateFormPdf } from '../utils/pdfUtils';
 import { API_BASE_URL } from '../utils/api';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
 import { ReportModal } from '../components/common/ReportModal';
 import { FullReportContent } from '../components/common/FullReportContent';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -46,8 +44,6 @@ interface ProcessNode {
   executorId?: string; // Add executor ID for backend
   ccRecipients?: User[]; // Add node-specific CC recipients
   editAccess?: boolean; // Add edit access flag
-  expireTime?: string; // Add expire time field - can be 'unlimited' or ISO datetime string
-  expireDuration?: number | null; // Add expire duration in hours (null = unlimited)
   settings: Record<string, any>;
 }
 
@@ -231,6 +227,8 @@ const RfiPage: React.FC = () => {
   const [showReport, setShowReport] = useState(false);
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const reportContentRef = useRef<HTMLDivElement | null>(null);
+  const inspectionReportRef = useRef<HTMLDivElement | null>(null);
+  const surveyReportRef = useRef<HTMLDivElement | null>(null);
 
   const [inspectionTemplateVisible, setInspectionTemplateVisible] = useState(false);
   const [surveyTemplateVisible, setSurveyTemplateVisible] = useState(false);
@@ -329,6 +327,8 @@ const RfiPage: React.FC = () => {
   // Process flow states (similar to diary page)
   const [showProcessFlow, setShowProcessFlow] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<any>(null);
+  const [pendingEntryName, setPendingEntryName] = useState('');
+  const [pendingEntryExpiry, setPendingEntryExpiry] = useState('');
   const [processNodes, setProcessNodes] = useState<ProcessNode[]>([
     { id: 'start', type: 'start', name: 'Start', editAccess: true, settings: {} },
     { id: 'review', type: 'node', name: 'Review & Approval', editAccess: true, ccRecipients: [], settings: {} },
@@ -338,6 +338,11 @@ const RfiPage: React.FC = () => {
   const [selectedCcs, setSelectedCcs] = useState<User[]>([]);
   const [showPeopleSelector, setShowPeopleSelector] = useState(false);
   const [peopleSelectorType, setPeopleSelectorType] = useState<'executor' | 'cc'>('executor');
+
+  const formatDateTimeLocal = (date: Date) => {
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+  };
 
   useEffect(() => {
     if (selectedProject) {
@@ -425,7 +430,10 @@ const RfiPage: React.FC = () => {
           created_at: survey.created_at,
           updated_at: survey.updated_at,
           project_id: survey.project_id,
-          name: survey.project
+          name: survey.project,
+          active: survey.active ?? survey.is_active,
+          expires_at: survey.expires_at ?? survey.expiresAt ?? survey.expiry_at ?? survey.expiryAt,
+          expiresAt: survey.expiresAt ?? survey.expires_at ?? survey.expiryAt ?? survey.expiry_at
         }));
         return transformedSurveys;
       } else if (surveyResponse.status === 404) {
@@ -479,7 +487,10 @@ const RfiPage: React.FC = () => {
           created_at: inspection.created_at,
           updated_at: inspection.updated_at,
           project_id: inspection.project_id,
-          name: inspection.project
+          name: inspection.project,
+          active: inspection.active ?? inspection.is_active,
+          expires_at: inspection.expires_at ?? inspection.expiresAt ?? inspection.expiry_at ?? inspection.expiryAt,
+          expiresAt: inspection.expiresAt ?? inspection.expires_at ?? inspection.expiryAt ?? inspection.expiry_at
         }));
         console.log('Transformed inspections:', transformedInspections);
         return transformedInspections;
@@ -775,25 +786,13 @@ const RfiPage: React.FC = () => {
   }), []);
 
   const handleDownloadReportPdf = useCallback(async () => {
-    if (!reportContentRef.current) return;
+    if (!inspectionReportRef.current || !surveyReportRef.current) return;
     setIsDownloadingReport(true);
     try {
-      const canvas = await html2canvas(reportContentRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-      const imageData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const width = pdf.internal.pageSize.getWidth();
-      const height = (canvas.height * width) / canvas.width;
-      let position = 0;
-      let remaining = height;
-      pdf.addImage(imageData, 'PNG', 0, position, width, height);
-      remaining -= pdf.internal.pageSize.getHeight();
-      while (remaining > 0) {
-        position = remaining - height;
-        pdf.addPage();
-        pdf.addImage(imageData, 'PNG', 0, position, width, height);
-        remaining -= pdf.internal.pageSize.getHeight();
-      }
-      pdf.save(`rfi-rics-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+      await exportReportElementsToPdfPages(
+        [inspectionReportRef.current, surveyReportRef.current],
+        `rfi-rics-report-${new Date().toISOString().slice(0, 10)}.pdf`
+      );
     } finally {
       setIsDownloadingReport(false);
     }
@@ -1086,8 +1085,21 @@ const RfiPage: React.FC = () => {
         user.name
       );
 
+      const sourceDateRaw = formType === 'survey' ? data?.surveyDate : data?.inspectionDate;
+      const sourceDate = sourceDateRaw ? new Date(sourceDateRaw) : new Date();
+      const resolvedDate = Number.isNaN(sourceDate.getTime()) ? new Date() : sourceDate;
+      const formattedDate = resolvedDate.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short'
+      });
+      const defaultEntryName = `${formType === 'survey' ? 'Survey Log' : 'Inspection'} - ${selectedProject.name} - ${formattedDate}`;
+      const defaultExpiry = new Date();
+      defaultExpiry.setDate(defaultExpiry.getDate() + 10);
+
       // Store form data and PDF with form type, then show process flow
       setPendingFormData({ ...data, pdf, formType: formType });
+      setPendingEntryName(defaultEntryName);
+      setPendingEntryExpiry(formatDateTimeLocal(defaultExpiry));
       setGeneratedPdf(pdf);
       setShowFormSelector(false);
       setInspectionTemplateVisible(false);
@@ -1394,6 +1406,23 @@ const RfiPage: React.FC = () => {
   // Final save after process flow configuration
   const handleFinalSave = async () => {
     if (!pendingFormData || !user?.id) return;
+
+    const entryName = pendingEntryName.trim();
+    if (!entryName) {
+      alert('Please provide an entry name.');
+      return;
+    }
+
+    if (!pendingEntryExpiry) {
+      alert('Please select an expiry date and time.');
+      return;
+    }
+
+    const parsedExpiry = new Date(pendingEntryExpiry);
+    if (Number.isNaN(parsedExpiry.getTime())) {
+      alert('Please select a valid expiry date and time.');
+      return;
+    }
     
     try {
       // Prepare process nodes with proper structure for backend
@@ -1454,7 +1483,8 @@ const RfiPage: React.FC = () => {
         projectId: selectedProject?.id,
         formType,
         formId: generatedRiscNo,
-        name: generatedRiscNo,
+        name: entryName,
+        expiresAt: parsedExpiry.toISOString(),
         endpoint: formType === 'survey' 
           ? `${API_BASE_URL}/survey/create`
           : `${API_BASE_URL}/inspection/create`
@@ -1495,7 +1525,8 @@ const RfiPage: React.FC = () => {
           createdBy: user.id,
           projectId: selectedProject?.id,
           formId: generatedRiscNo,
-          name: generatedRiscNo
+          name: entryName,
+          expiresAt: parsedExpiry.toISOString()
         })
       });
 
@@ -1509,6 +1540,8 @@ const RfiPage: React.FC = () => {
         // Reset states
         setShowProcessFlow(false);
         setPendingFormData(null);
+        setPendingEntryName('');
+        setPendingEntryExpiry('');
         setSelectedCcs([]);
         setSelectedNode(null);
         
@@ -1677,6 +1710,8 @@ const RfiPage: React.FC = () => {
     setShowProcessFlow(false);
     setShowFormSelector(true);
     setPendingFormData(null);
+    setPendingEntryName('');
+    setPendingEntryExpiry('');
     setGeneratedPdf(null);
   };
 
@@ -2590,6 +2625,32 @@ const RfiPage: React.FC = () => {
                   <div className="lg:col-span-7">
                     <Card className="p-4 h-full">
                       <h3 className="font-semibold text-secondary-900 dark:text-white mb-4">Process Settings</h3>
+                      <div className="mb-4 rounded-lg border border-secondary-200 p-3 dark:border-dark-700">
+                        <h4 className="mb-3 text-sm font-semibold text-secondary-800 dark:text-secondary-200">
+                          Entry Setup
+                        </h4>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Input
+                            label="Entry Name"
+                            value={pendingEntryName}
+                            onChange={(e) => setPendingEntryName(e.target.value)}
+                            placeholder={selectedProject?.name || 'Enter entry name'}
+                            className="bg-white border border-secondary-200 dark:border-dark-600 dark:bg-dark-800"
+                          />
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-secondary-700 dark:text-secondary-300">
+                              Expiry Date & Time
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={pendingEntryExpiry}
+                              onChange={(e) => setPendingEntryExpiry(e.target.value)}
+                              min={formatDateTimeLocal(new Date())}
+                              className="input w-full border border-secondary-200 bg-white text-secondary-900 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
                       
                       {selectedNode ? (
                         <div className="space-y-4">
@@ -2871,109 +2932,113 @@ const RfiPage: React.FC = () => {
           bodyBackground: 'bg-indigo-50/60 dark:bg-dark-800/20'
         }}
       >
-        <div className="rounded-xl border border-indigo-200 bg-white/70 p-4 text-indigo-900 dark:border-dark-700 dark:bg-dark-900/40 dark:text-indigo-100">
-          <div className="text-lg font-semibold">Inspection Section</div>
-          <div className="text-sm opacity-80">Inspection-based RFIs from current filters.</div>
+        <div ref={inspectionReportRef} className="space-y-6">
+          <div className="rounded-xl border border-indigo-200 bg-white/70 p-4 text-indigo-900 dark:border-dark-700 dark:bg-dark-900/40 dark:text-indigo-100">
+            <div className="text-lg font-semibold">Inspection Section</div>
+            <div className="text-sm opacity-80">Inspection-based RFIs from current filters.</div>
+          </div>
+          <FullReportContent
+            generatedOn={new Date().toLocaleString()}
+            projectName={selectedProject?.name || 'All Projects'}
+            summaryCards={[
+              { label: 'Total Listed', value: inspectionReportRows.length },
+              { label: 'Open', value: inspectionReportData.statusCounts.pending },
+              { label: 'Resolved', value: inspectionReportData.statusCounts.completed },
+              { label: 'Rejected', value: inspectionReportData.statusCounts.rejected },
+              { label: 'Permanent Rejected', value: inspectionReportData.statusCounts.permanentlyRejected },
+              { label: 'High Priority', value: inspectionReportRows.filter((row) => row.priority === 'high').length }
+            ]}
+            reportHighlights={inspectionReportData.highlights}
+            statusChartTitle="Status Distribution"
+            trendChartTitle="Requests Over Time"
+            contributorChartTitle="Top Submitters"
+            weatherChartTitle="Priority Distribution"
+            statusChartData={inspectionReportData.statusChartData}
+            trendChartData={inspectionReportData.trendChartData}
+            contributorChartData={inspectionReportData.contributorChartData}
+            weatherChartData={inspectionReportData.priorityChartData}
+            chartOptions={chartOptions}
+            issueSectionTitle="Open / Rejected Details"
+            issueColumns={[
+              { key: 'date', label: 'Date' },
+              { key: 'submittedBy', label: 'Submitted By' },
+              { key: 'title', label: 'Title' },
+              { key: 'status', label: 'Status' }
+            ]}
+            issueRows={inspectionReportData.issueRows}
+            issueEmptyText="No open/rejected inspection requests in the listed data."
+            listSectionTitle="Inspection Requests List"
+            listColumns={[
+              { key: 'date', label: 'Date' },
+              { key: 'title', label: 'Title' },
+              { key: 'submittedBy', label: 'Submitted By' },
+              { key: 'priority', label: 'Priority' },
+              { key: 'status', label: 'Status' },
+              { key: 'description', label: 'Description' }
+            ]}
+            listRows={inspectionReportRows}
+            theme={{
+              cardBorder: 'border-indigo-200 dark:border-dark-700',
+              cardSurface: 'bg-indigo-50/40 dark:bg-dark-800',
+              accentText: 'text-indigo-700',
+              numberText: 'text-indigo-950 dark:text-indigo-100'
+            }}
+          />
         </div>
-        <FullReportContent
-          generatedOn={new Date().toLocaleString()}
-          projectName={selectedProject?.name || 'All Projects'}
-          summaryCards={[
-            { label: 'Total Listed', value: inspectionReportRows.length },
-            { label: 'Open', value: inspectionReportData.statusCounts.pending },
-            { label: 'Resolved', value: inspectionReportData.statusCounts.completed },
-            { label: 'Rejected', value: inspectionReportData.statusCounts.rejected },
-            { label: 'Permanent Rejected', value: inspectionReportData.statusCounts.permanentlyRejected },
-            { label: 'High Priority', value: inspectionReportRows.filter((row) => row.priority === 'high').length }
-          ]}
-          reportHighlights={inspectionReportData.highlights}
-          statusChartTitle="Status Distribution"
-          trendChartTitle="Requests Over Time"
-          contributorChartTitle="Top Submitters"
-          weatherChartTitle="Priority Distribution"
-          statusChartData={inspectionReportData.statusChartData}
-          trendChartData={inspectionReportData.trendChartData}
-          contributorChartData={inspectionReportData.contributorChartData}
-          weatherChartData={inspectionReportData.priorityChartData}
-          chartOptions={chartOptions}
-          issueSectionTitle="Open / Rejected Details"
-          issueColumns={[
-            { key: 'date', label: 'Date' },
-            { key: 'submittedBy', label: 'Submitted By' },
-            { key: 'title', label: 'Title' },
-            { key: 'status', label: 'Status' }
-          ]}
-          issueRows={inspectionReportData.issueRows}
-          issueEmptyText="No open/rejected inspection requests in the listed data."
-          listSectionTitle="Inspection Requests List"
-          listColumns={[
-            { key: 'date', label: 'Date' },
-            { key: 'title', label: 'Title' },
-            { key: 'submittedBy', label: 'Submitted By' },
-            { key: 'priority', label: 'Priority' },
-            { key: 'status', label: 'Status' },
-            { key: 'description', label: 'Description' }
-          ]}
-          listRows={inspectionReportRows}
-          theme={{
-            cardBorder: 'border-indigo-200 dark:border-dark-700',
-            cardSurface: 'bg-indigo-50/40 dark:bg-dark-800',
-            accentText: 'text-indigo-700',
-            numberText: 'text-indigo-950 dark:text-indigo-100'
-          }}
-        />
 
-        <div className="rounded-xl border border-blue-200 bg-white/70 p-4 text-blue-900 dark:border-dark-700 dark:bg-dark-900/40 dark:text-blue-100">
-          <div className="text-lg font-semibold">Survey Section</div>
-          <div className="text-sm opacity-80">Survey-based RFIs from current filters.</div>
+        <div ref={surveyReportRef} className="space-y-6">
+          <div className="rounded-xl border border-blue-200 bg-white/70 p-4 text-blue-900 dark:border-dark-700 dark:bg-dark-900/40 dark:text-blue-100">
+            <div className="text-lg font-semibold">Survey Section</div>
+            <div className="text-sm opacity-80">Survey-based RFIs from current filters.</div>
+          </div>
+          <FullReportContent
+            generatedOn={new Date().toLocaleString()}
+            projectName={selectedProject?.name || 'All Projects'}
+            summaryCards={[
+              { label: 'Total Listed', value: surveyReportRows.length },
+              { label: 'Open', value: surveyReportData.statusCounts.pending },
+              { label: 'Resolved', value: surveyReportData.statusCounts.completed },
+              { label: 'Rejected', value: surveyReportData.statusCounts.rejected },
+              { label: 'Permanent Rejected', value: surveyReportData.statusCounts.permanentlyRejected },
+              { label: 'High Priority', value: surveyReportRows.filter((row) => row.priority === 'high').length }
+            ]}
+            reportHighlights={surveyReportData.highlights}
+            statusChartTitle="Status Distribution"
+            trendChartTitle="Requests Over Time"
+            contributorChartTitle="Top Submitters"
+            weatherChartTitle="Priority Distribution"
+            statusChartData={surveyReportData.statusChartData}
+            trendChartData={surveyReportData.trendChartData}
+            contributorChartData={surveyReportData.contributorChartData}
+            weatherChartData={surveyReportData.priorityChartData}
+            chartOptions={chartOptions}
+            issueSectionTitle="Open / Rejected Details"
+            issueColumns={[
+              { key: 'date', label: 'Date' },
+              { key: 'submittedBy', label: 'Submitted By' },
+              { key: 'title', label: 'Title' },
+              { key: 'status', label: 'Status' }
+            ]}
+            issueRows={surveyReportData.issueRows}
+            issueEmptyText="No open/rejected survey requests in the listed data."
+            listSectionTitle="Survey Requests List"
+            listColumns={[
+              { key: 'date', label: 'Date' },
+              { key: 'title', label: 'Title' },
+              { key: 'submittedBy', label: 'Submitted By' },
+              { key: 'priority', label: 'Priority' },
+              { key: 'status', label: 'Status' },
+              { key: 'description', label: 'Description' }
+            ]}
+            listRows={surveyReportRows}
+            theme={{
+              cardBorder: 'border-blue-200 dark:border-dark-700',
+              cardSurface: 'bg-blue-50/40 dark:bg-dark-800',
+              accentText: 'text-blue-700',
+              numberText: 'text-blue-950 dark:text-blue-100'
+            }}
+          />
         </div>
-        <FullReportContent
-          generatedOn={new Date().toLocaleString()}
-          projectName={selectedProject?.name || 'All Projects'}
-          summaryCards={[
-            { label: 'Total Listed', value: surveyReportRows.length },
-            { label: 'Open', value: surveyReportData.statusCounts.pending },
-            { label: 'Resolved', value: surveyReportData.statusCounts.completed },
-            { label: 'Rejected', value: surveyReportData.statusCounts.rejected },
-            { label: 'Permanent Rejected', value: surveyReportData.statusCounts.permanentlyRejected },
-            { label: 'High Priority', value: surveyReportRows.filter((row) => row.priority === 'high').length }
-          ]}
-          reportHighlights={surveyReportData.highlights}
-          statusChartTitle="Status Distribution"
-          trendChartTitle="Requests Over Time"
-          contributorChartTitle="Top Submitters"
-          weatherChartTitle="Priority Distribution"
-          statusChartData={surveyReportData.statusChartData}
-          trendChartData={surveyReportData.trendChartData}
-          contributorChartData={surveyReportData.contributorChartData}
-          weatherChartData={surveyReportData.priorityChartData}
-          chartOptions={chartOptions}
-          issueSectionTitle="Open / Rejected Details"
-          issueColumns={[
-            { key: 'date', label: 'Date' },
-            { key: 'submittedBy', label: 'Submitted By' },
-            { key: 'title', label: 'Title' },
-            { key: 'status', label: 'Status' }
-          ]}
-          issueRows={surveyReportData.issueRows}
-          issueEmptyText="No open/rejected survey requests in the listed data."
-          listSectionTitle="Survey Requests List"
-          listColumns={[
-            { key: 'date', label: 'Date' },
-            { key: 'title', label: 'Title' },
-            { key: 'submittedBy', label: 'Submitted By' },
-            { key: 'priority', label: 'Priority' },
-            { key: 'status', label: 'Status' },
-            { key: 'description', label: 'Description' }
-          ]}
-          listRows={surveyReportRows}
-          theme={{
-            cardBorder: 'border-blue-200 dark:border-dark-700',
-            cardSurface: 'bg-blue-50/40 dark:bg-dark-800',
-            accentText: 'text-blue-700',
-            numberText: 'text-blue-950 dark:text-blue-100'
-          }}
-        />
       </ReportModal>
     </div>
   );

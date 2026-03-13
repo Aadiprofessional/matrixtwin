@@ -8397,12 +8397,53 @@ const FormsPage: React.FC = () => {
   const [showInspectionCheckTemplate, setShowInspectionCheckTemplate] = useState(false);
   const [showSurveyCheckTemplate, setShowSurveyCheckTemplate] = useState(false);
 
-  // Stats for the header section
-  const [stats] = useState({
-    totalForms: 18,
-    formsThisMonth: 5,
-    templatesAvailable: 6
-  });
+  const [formSearchQuery, setFormSearchQuery] = useState('');
+  const [formTypeFilter, setFormTypeFilter] = useState<'all' | 'single_page' | 'multi_page'>('all');
+  const [formSortBy, setFormSortBy] = useState<'newest' | 'oldest'>('newest');
+
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+
+  const formsStats = {
+    totalForms: formsList.length,
+    formsThisMonth: formsList.filter((form) => {
+      const rawDate = form.created_at || form.createdAt;
+      if (!rawDate) return false;
+      const parsed = new Date(rawDate);
+      if (Number.isNaN(parsed.getTime())) return false;
+      return parsed.getMonth() === currentMonth && parsed.getFullYear() === currentYear;
+    }).length,
+    templatesAvailable: 6,
+    totalFields: formsList.reduce((count, form) => count + (form.fieldsCount || 0), 0),
+    totalPages: formsList.reduce((count, form) => count + (form.form_structure?.pages?.length || 0), 0)
+  };
+
+  const formTypeCounts = {
+    all: formsList.length,
+    single_page: formsList.filter((form) => (form.form_structure?.pages?.length || 0) <= 1).length,
+    multi_page: formsList.filter((form) => (form.form_structure?.pages?.length || 0) > 1).length
+  };
+
+  const filteredForms = formsList
+    .filter((form) => {
+      const query = formSearchQuery.trim().toLowerCase();
+      const name = (form.name || '').toLowerCase();
+      const description = (form.description || '').toLowerCase();
+      const matchesSearch = !query || name.includes(query) || description.includes(query);
+
+      const pageCount = form.form_structure?.pages?.length || 0;
+      const matchesType =
+        formTypeFilter === 'all' ||
+        (formTypeFilter === 'single_page' && pageCount <= 1) ||
+        (formTypeFilter === 'multi_page' && pageCount > 1);
+
+      return matchesSearch && matchesType;
+    })
+    .sort((a, b) => {
+      const aDate = new Date(a.created_at || a.createdAt || 0).getTime();
+      const bDate = new Date(b.created_at || b.createdAt || 0).getTime();
+      return formSortBy === 'newest' ? bDate - aDate : aDate - bDate;
+    });
 
 
 
@@ -8935,139 +8976,296 @@ const FormsPage: React.FC = () => {
   };
   
   return (
-    <div className="max-w-7xl mx-auto">
-      {/* Standard Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-display font-bold text-white flex items-center">
-            <RiFileEditLine className="mr-3 text-portfolio-orange" />
-            {t('forms.title', 'Forms')}
-          </h1>
-          <p className="text-gray-400 mt-1 max-w-2xl">
-            Create custom forms, use templates, and manage your project documentation
-          </p>
+    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#1f2432] via-[#2d3650] to-[#3f567f] p-6 md:p-8"
+      >
+        <div className="absolute inset-0 bg-ai-dots opacity-20" />
+        <div className="relative z-10">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <h1 className="flex items-center text-3xl font-display font-bold text-white md:text-4xl">
+                <RiFileEditLine className="mr-3 text-[#d7e3f7]" />
+                {t('forms.title', 'Forms')}
+              </h1>
+              <p className="max-w-3xl text-sm text-white/75 md:text-base">
+                Manage custom form templates with the same focused workflow and visual clarity as diary records.
+              </p>
+              <div className={`inline-flex items-center rounded-full border px-3 py-1 text-sm ${
+                selectedProject
+                  ? 'border-[#9db4d8]/40 bg-[#7f9ec7]/15 text-[#e3ebf8]'
+                  : 'border-[#8495b0]/40 bg-[#3a4562]/20 text-[#cfd9ee]'
+              }`}>
+                {selectedProject ? <RiTeamLine className="mr-2" /> : <RiFilterLine className="mr-2" />}
+                {selectedProject ? `Project: ${selectedProject.name}` : 'No project selected'}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="primary"
+                leftIcon={<RiAddLine />}
+                onClick={handleCreateForm}
+                className="whitespace-nowrap"
+                animated
+              >
+                New Form
+              </Button>
+              <Button
+                variant="outline"
+                leftIcon={<RiFileTextLine />}
+                onClick={() => setShowTemplates(true)}
+                className="whitespace-nowrap"
+              >
+                Templates
+              </Button>
+            </div>
+          </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Total Forms</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{formsStats.totalForms}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">This Month</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{formsStats.formsThisMonth}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Templates</div>
+              <div className="mt-1 text-2xl font-semibold text-[#d9e4f7]">{formsStats.templatesAvailable}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Fields</div>
+              <div className="mt-1 text-2xl font-semibold text-[#c4d5f1]">{formsStats.totalFields}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/10 p-4">
+              <div className="text-xs uppercase tracking-wide text-white/70">Pages</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{formsStats.totalPages}</div>
+            </div>
+          </div>
         </div>
-        
-        <div className="mt-4 md:mt-0 flex space-x-3">
-          <Button
-            variant="ai-secondary"
-            leftIcon={<RiFileTextLine />}
-            onClick={() => setShowTemplates(true)}
-          >
-            Templates
-          </Button>
-          <Button
-            variant="ai"
-            leftIcon={<RiAddLine />}
-            onClick={handleCreateForm}
-            animated
-            pulseEffect
-            glowing
-          >
-            Create Form
-          </Button>
-        </div>
-      </div>
+      </motion.div>
 
-      {/* Statistics Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card variant="ai" className="p-5 flex items-center">
-          <div className="p-3 bg-portfolio-orange/10 rounded-full mr-4">
-            <RiFileTextLine className="text-2xl text-portfolio-orange" />
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Card variant="glass" className="space-y-4 border border-secondary-200/60 p-4 md:p-5 dark:border-dark-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center text-sm font-semibold text-secondary-800 dark:text-secondary-200">
+              <RiFilterLine className="mr-2 text-[#5f7cae] dark:text-[#b2c3e4]" />
+              Search & Filter
+            </div>
+            {(formSearchQuery || formTypeFilter !== 'all') && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setFormSearchQuery('');
+                  setFormTypeFilter('all');
+                }}
+              >
+                Reset
+              </Button>
+            )}
           </div>
-          <div>
-            <div className="text-sm text-gray-400">Total Forms</div>
-            <div className="text-2xl font-bold text-white">{stats.totalForms}</div>
-          </div>
-        </Card>
-        
-        <Card variant="ai" className="p-5 flex items-center">
-          <div className="p-3 bg-portfolio-orange/10 rounded-full mr-4">
-            <RiCalendarLine className="text-2xl text-portfolio-orange" />
-          </div>
-          <div>
-            <div className="text-sm text-gray-400">This Month</div>
-            <div className="text-2xl font-bold text-white">{stats.formsThisMonth}</div>
-          </div>
-        </Card>
-        
-        <Card variant="ai" className="p-5 flex items-center">
-          <div className="p-3 bg-portfolio-orange/10 rounded-full mr-4">
-            <RiFileTextLine className="text-2xl text-portfolio-orange" />
-          </div>
-          <div>
-            <div className="text-sm text-gray-400">Templates</div>
-            <div className="text-2xl font-bold text-white">{stats.templatesAvailable}</div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Rest of the component rendering logic */}
-      <div className="forms-listing-container">
-        {/* Forms listing JSX */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {formsList.map((form) => (
-            <Card
-              key={form.id}
-              variant="ai"
-              className="p-5 hover:shadow-md transition-shadow"
-              hover
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),200px,190px]">
+            <div className="relative">
+              <RiSearchLine className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-secondary-500" />
+              <input
+                type="text"
+                value={formSearchQuery}
+                onChange={(e) => setFormSearchQuery(e.target.value)}
+                placeholder={`${t('common.search')} by name or description`}
+                className="h-11 w-full rounded-xl border border-secondary-200 bg-white py-2.5 pl-10 pr-10 text-sm text-secondary-900 outline-none transition focus:border-[#7f9ec7] focus:ring-2 focus:ring-[#c8d6ee] dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-[#7f9ec7]/20"
+              />
+              {formSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setFormSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-500 hover:text-secondary-700 dark:hover:text-secondary-300"
+                >
+                  <RiCloseLine />
+                </button>
+              )}
+            </div>
+            <select
+              value={formTypeFilter}
+              onChange={(e) => setFormTypeFilter(e.target.value as typeof formTypeFilter)}
+              className="h-11 rounded-xl border border-secondary-200 bg-white px-3 text-sm text-secondary-900 outline-none transition focus:border-[#7f9ec7] focus:ring-2 focus:ring-[#c8d6ee] dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-[#7f9ec7]/20"
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold mb-1">{form.name}</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{form.description}</p>
-                </div>
-                <div className="text-portfolio-orange dark:text-portfolio-orange-light">
-                  <RiFileTextLine className="text-2xl" />
-                </div>
-              </div>
-              
-              <div className="flex flex-col mt-4 gap-4">
-                <div className="text-sm text-gray-500 flex items-center">
-                  <span>{form.fieldsCount} fields</span>
-                  <span className="mx-2">•</span>
-                  <span>{form.form_structure?.pages?.length || 0} pages</span>
-                </div>
-                
-                <div className="flex justify-end space-x-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleEditForm(form)}
-                    leftIcon={<RiFileEditLine />}
-                    className="hover:bg-portfolio-orange/5 dark:hover:bg-portfolio-orange/10"
-                  >
-                    Edit Form
+              <option value="all">All forms</option>
+              <option value="single_page">Single page</option>
+              <option value="multi_page">Multi page</option>
+            </select>
+            <select
+              value={formSortBy}
+              onChange={(e) => setFormSortBy(e.target.value as 'newest' | 'oldest')}
+              className="h-11 rounded-xl border border-secondary-200 bg-white px-3 text-sm text-secondary-900 outline-none transition focus:border-[#7f9ec7] focus:ring-2 focus:ring-[#c8d6ee] dark:border-dark-600 dark:bg-dark-800 dark:text-white dark:focus:ring-[#7f9ec7]/20"
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+            </select>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {[
+              { key: 'all', label: 'All' },
+              { key: 'single_page', label: 'Single Page' },
+              { key: 'multi_page', label: 'Multi Page' }
+            ].map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => setFormTypeFilter(filter.key as typeof formTypeFilter)}
+                className={`inline-flex min-w-max items-center rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  formTypeFilter === filter.key
+                    ? 'border-[#5f7cae] bg-[#5f7cae] text-white shadow-sm'
+                    : 'border-secondary-200 bg-white text-secondary-700 hover:border-[#9db4d8] hover:text-[#405781] dark:border-dark-600 dark:bg-dark-800 dark:text-secondary-300 dark:hover:border-[#5f7cae]/40'
+                }`}
+              >
+                <span>{filter.label}</span>
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] ${
+                  formTypeFilter === filter.key
+                    ? 'bg-white/20 text-white'
+                    : 'bg-secondary-100 text-secondary-600 dark:bg-dark-700 dark:text-secondary-300'
+                }`}>
+                  {formTypeCounts[filter.key as keyof typeof formTypeCounts]}
+                </span>
+              </button>
+            ))}
+            <div className="ml-auto inline-flex min-w-max items-center rounded-full border border-secondary-200 bg-secondary-50 px-3 py-1.5 text-xs text-secondary-700 dark:border-dark-600 dark:bg-dark-800 dark:text-secondary-200">
+              <RiFileListLine className="mr-1.5" />
+              {filteredForms.length} shown
+            </div>
+          </div>
+        </Card>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
+        {loading ? (
+          <Card className="border border-[#d4deed]/70 bg-gradient-to-b from-white to-[#f3f6fb]/90 p-10 text-center dark:border-dark-700 dark:from-dark-900 dark:to-dark-800/80">
+            <RiLoader4Line className="mx-auto mb-3 animate-spin text-3xl text-[#5f7cae] dark:text-[#b2c3e4]" />
+            <p className="text-sm text-secondary-600 dark:text-secondary-400">Loading forms...</p>
+          </Card>
+        ) : filteredForms.length > 0 ? (
+          <div className="grid gap-5 lg:grid-cols-2">
+            {filteredForms.map((form, index) => (
+              <motion.div
+                key={form.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index * 0.06, 0.4) }}
+              >
+                <Card className="h-full border border-[#d4deed]/70 bg-gradient-to-b from-white to-[#f3f6fb]/90 p-0 dark:border-dark-700 dark:from-dark-900 dark:to-dark-800/80">
+                  <div className="border-b border-[#d4deed]/80 bg-gradient-to-r from-[#e7edf8]/80 via-[#f3f6fb]/85 to-white p-4 dark:border-dark-700 dark:from-[#2d3650]/35 dark:via-dark-800 dark:to-dark-900">
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center text-sm text-secondary-600 dark:text-secondary-300">
+                          <RiCalendarLine className="mr-2 text-[#5f7cae] dark:text-[#b2c3e4]" />
+                          {new Date(form.created_at || form.createdAt || Date.now()).toLocaleDateString()}
+                        </div>
+                        <h3 className="mt-1 text-lg font-semibold text-secondary-900 dark:text-white">{form.name}</h3>
+                      </div>
+                      <span className="inline-flex items-center rounded-full border border-[#8aa4cf]/40 bg-[#e7edf8] px-2.5 py-1 text-xs font-medium text-[#3b527d] dark:border-[#8aa4cf]/40 dark:bg-[#2d3650]/40 dark:text-[#b2c3e4]">
+                        {form.form_structure?.pages?.length || 0} pages
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-secondary-600 dark:text-secondary-300">
+                      <span className="inline-flex items-center">
+                        <RiFileTextLine className="mr-1" />
+                        {form.fieldsCount || 0} fields
+                      </span>
+                      <span className="inline-flex items-center">
+                        <RiLayoutLine className="mr-1" />
+                        {form.form_structure?.pages?.length || 0} page layout
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-4 p-4">
+                    <div className="rounded-lg border border-[#d4deed]/70 bg-white/95 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+                      <div className="text-xs font-medium uppercase tracking-wide text-secondary-500 dark:text-secondary-400">
+                        Description
+                      </div>
+                      <p className="mt-1 line-clamp-3 text-sm text-secondary-700 dark:text-secondary-300">
+                        {form.description || 'No description provided.'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2 pt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditForm(form)}
+                        leftIcon={<RiFileEditLine />}
+                        className="border-[#a8bad7] text-[#48628f] hover:border-[#7f9ec7] hover:bg-[#eef3fb] dark:hover:bg-[#2d3650]/30"
+                      >
+                        Edit Form
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewDetails(form)}
+                        rightIcon={<RiArrowRightLine />}
+                      >
+                        {t('common.viewDetails', 'View Details')}
+                      </Button>
+                      {user?.role === 'admin' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteForm(String(form.id))}
+                          leftIcon={<RiDeleteBinLine />}
+                          className="border-[#a8bad7] text-[#48628f] hover:border-[#7f9ec7] hover:bg-[#eef3fb] dark:hover:bg-[#2d3650]/30"
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        ) : (
+          <Card className="border border-[#d4deed]/70 bg-gradient-to-b from-white to-[#f3f6fb]/90 p-10 text-center dark:border-dark-700 dark:from-dark-900 dark:to-dark-800/80">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#e7edf8] text-[#5f7cae] dark:bg-[#2d3650]/40 dark:text-[#b2c3e4]">
+              <RiFileEditLine className="text-3xl" />
+            </div>
+            {!selectedProject ? (
+              <>
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Project Selected</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
+                  Select a project to view and manage custom forms in one place.
+                </p>
+              </>
+            ) : formsList.length === 0 ? (
+              <>
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Forms Yet</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
+                  {selectedProject.name} has no custom forms yet. Start by creating your first form template.
+                </p>
+                <div className="mt-5">
+                  <Button variant="primary" leftIcon={<RiAddLine />} onClick={handleCreateForm}>
+                    Create First Form
                   </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleViewDetails(form)}
-                    rightIcon={<RiArrowRightLine />}
-                    className="hover:bg-primary-50 dark:hover:bg-primary-900/20"
-                  >
-                    {t('common.viewDetails', 'View Details')}
-                  </Button>
-                  
-                  {user?.role === 'admin' && (
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleDeleteForm(form.id)}
-                      leftIcon={<RiDeleteBinLine />}
-                      className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 border-red-300 hover:border-red-400"
-                    >
-                      Delete
-                    </Button>
-                  )}
                 </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Results Found</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
+                  No forms match the current search or filter criteria.
+                </p>
+                <div className="mt-5 flex justify-center gap-2">
+                  <Button variant="outline" onClick={() => setFormSearchQuery('')}>
+                    Clear Search
+                  </Button>
+                  <Button variant="outline" onClick={() => setFormTypeFilter('all')}>
+                    Reset Filter
+                  </Button>
+                </div>
+              </>
+            )}
+          </Card>
+        )}
+      </motion.div>
 
       <PdfToFormImporter 
         isOpen={showPdfImporter} 
@@ -9078,24 +9276,24 @@ const FormsPage: React.FC = () => {
       {/* Form Renderer Modal for Editing */}
       <AnimatePresence>
         {showEditForm && (
-          <div className="fixed inset-0 bg-dark-900 z-50 overflow-hidden flex flex-col">
+          <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#0f1523]/90 backdrop-blur-md">
              {/* Custom Header with Editable Title */}
-             <div className="bg-dark-800 border-b border-dark-700 p-4 flex justify-between items-center">
+             <div className="flex items-center justify-between border-b border-[#8aa4cf]/30 bg-gradient-to-r from-[#1f2432] via-[#2d3650] to-[#3f567f] p-4 text-white">
                 <div className="flex items-center gap-4 flex-1">
-                   <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-portfolio-orange to-red-500 flex items-center justify-center">
+                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-r from-[#5f7cae] to-[#7f9ec7]">
                       <RiFileEditLine className="text-white text-xl" />
                    </div>
                    <div className="flex-1">
                      <Input 
                        value={formName}
                        onChange={(e) => setFormName(e.target.value)}
-                       className="bg-transparent border-none text-xl font-bold text-white focus:ring-0 p-0 h-auto"
+                       className="h-auto border-none bg-transparent p-0 text-xl font-bold text-white focus:ring-0"
                        placeholder="Form Name"
                      />
                      <Input
                         value={formDescription}
                         onChange={(e) => setFormDescription(e.target.value)}
-                        className="bg-transparent border-none text-sm text-gray-400 focus:ring-0 p-0 h-auto mt-1"
+                        className="mt-1 h-auto border-none bg-transparent p-0 text-sm text-slate-200/80 focus:ring-0"
                         placeholder="Form Description"
                      />
                    </div>
@@ -9105,7 +9303,7 @@ const FormsPage: React.FC = () => {
                 </Button>
              </div>
              
-             <div className="flex-1 overflow-auto p-4">
+             <div className="flex-1 overflow-auto bg-gradient-to-b from-[#f3f6fb] to-white p-4 dark:from-dark-900 dark:to-dark-800">
                 <FormRenderer
                   formTemplate={{
                     id: formId || 'temp',
@@ -9127,7 +9325,7 @@ const FormsPage: React.FC = () => {
       {/* FormCreationFlow Modal */}
       <AnimatePresence>
         {formFlowOpen && (
-          <div className="fixed inset-0 bg-dark-900 z-50">
+          <div className="fixed inset-0 z-50 bg-[#0f1523]/90 backdrop-blur-md">
             <motion.div
               className="w-full h-full"
               initial={{ opacity: 0 }}
@@ -9274,38 +9472,49 @@ const FormsPage: React.FC = () => {
         onClose={() => setViewDetailsOpen(false)}
         title={t('common.viewDetails', 'Form Details')}
         size="lg"
+        className="w-full max-w-5xl border border-secondary-200/80 bg-white/95 shadow-2xl dark:border-dark-700 dark:bg-dark-900/95"
+        disablePadding
       >
         {selectedForm && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Form Name</h3>
-                <p className="text-lg font-semibold text-gray-900 dark:text-white">{selectedForm.name}</p>
+          <div className="max-h-[80vh] space-y-5 overflow-y-auto p-5">
+            <div className="flex items-center justify-between rounded-xl border border-secondary-200 bg-secondary-50 p-3 dark:border-dark-700 dark:bg-dark-800/80">
+              <div className="flex items-center text-lg font-bold text-[#2f3a17] dark:text-[#b0c985]">
+                <RiFileEditLine className="mr-2 text-[#5f7cae] dark:text-[#b2c3e4]" />
+                {selectedForm.name}
               </div>
-              
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Created At</h3>
-                <p className="text-lg text-gray-900 dark:text-white">
+            </div>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
+                <div className="mb-2 flex items-center text-secondary-600 dark:text-secondary-400">
+                  <RiFileTextLine className="mr-2 text-[#5f7cae] dark:text-[#b2c3e4]" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Form Name</span>
+                </div>
+                <div className="font-medium">{selectedForm.name}</div>
+              </div>
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
+                <div className="mb-2 flex items-center text-secondary-600 dark:text-secondary-400">
+                  <RiCalendarLine className="mr-2 text-[#5f7cae] dark:text-[#b2c3e4]" />
+                  <span className="text-sm font-medium uppercase tracking-wide">Created At</span>
+                </div>
+                <div className="font-medium">
                   {new Date(selectedForm.created_at || selectedForm.createdAt).toLocaleDateString()}
-                </p>
+                </div>
               </div>
-
-              <div className="col-span-1 md:col-span-2">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Description</h3>
-                <p className="text-base text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm md:col-span-2 dark:border-dark-700 dark:bg-dark-800/80">
+                <div className="mb-2 text-sm font-medium uppercase tracking-wide text-secondary-600 dark:text-secondary-400">Description</div>
+                <p className="text-base text-secondary-900 dark:text-white">
                   {selectedForm.description || 'No description provided.'}
                 </p>
               </div>
-
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Structure</h3>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center text-gray-700 dark:text-gray-300">
-                    <RiFileTextLine className="mr-2 text-portfolio-orange" />
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm md:col-span-2 dark:border-dark-700 dark:bg-dark-800/80">
+                <div className="mb-2 text-sm font-medium uppercase tracking-wide text-secondary-600 dark:text-secondary-400">Structure</div>
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center text-secondary-700 dark:text-secondary-300">
+                    <RiFileTextLine className="mr-2 text-[#5f7cae] dark:text-[#b2c3e4]" />
                     <span>{selectedForm.form_structure?.pages?.length || 0} Pages</span>
                   </div>
-                  <div className="flex items-center text-gray-700 dark:text-gray-300">
-                    <RiLayoutLine className="mr-2 text-portfolio-orange" />
+                  <div className="flex items-center text-secondary-700 dark:text-secondary-300">
+                    <RiLayoutLine className="mr-2 text-[#5f7cae] dark:text-[#b2c3e4]" />
                     <span>{selectedForm.fieldsCount || 0} Fields</span>
                   </div>
                 </div>
@@ -9314,9 +9523,9 @@ const FormsPage: React.FC = () => {
 
             {/* Process Flow Preview */}
             {(selectedForm.process_nodes || selectedForm.processNodes) && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Workflow Process</h3>
-                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50/80 p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800/80">
+                <h3 className="mb-3 text-sm font-medium uppercase tracking-wide text-secondary-600 dark:text-secondary-400">Workflow Process</h3>
+                <div className="overflow-x-auto rounded-lg border border-secondary-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900/60">
                   <div className="flex items-center space-x-2 min-w-max">
                     {(() => {
                       let nodes = selectedForm.process_nodes || selectedForm.processNodes;
@@ -9325,14 +9534,14 @@ const FormsPage: React.FC = () => {
                       }
                       return (nodes || []).map((node: any, index: number) => (
                         <React.Fragment key={index}>
-                          <div className={`flex flex-col items-center p-3 rounded-lg border ${
-                            node.type === 'start' ? 'bg-green-50 border-green-200 text-green-700' :
-                            node.type === 'end' ? 'bg-red-50 border-red-200 text-red-700' :
-                            'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200'
+                          <div className={`flex flex-col items-center rounded-lg border p-3 ${
+                            node.type === 'start' ? 'border-blue-200 bg-blue-50 text-blue-700' :
+                            node.type === 'end' ? 'border-violet-200 bg-violet-50 text-violet-700' :
+                            'border-gray-200 bg-white text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200'
                           } min-w-[120px]`}>
                             <span className="text-xs font-semibold uppercase tracking-wider mb-1">{node.type}</span>
                             <span className="text-sm font-medium text-center">{node.name}</span>
-                            {node.executor && <span className="text-xs text-gray-500 mt-1">Executor: {node.executor}</span>}
+                            {node.executor && <span className="mt-1 text-xs text-gray-500">Executor: {node.executor}</span>}
                           </div>
                           {index < (nodes || []).length - 1 && (
                             <RiArrowRightLine className="text-gray-400 text-xl flex-shrink-0" />
@@ -9345,7 +9554,7 @@ const FormsPage: React.FC = () => {
               </div>
             )}
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex flex-wrap items-center gap-2 justify-end border-t border-secondary-200 pt-4 dark:border-dark-700">
               <Button
                 variant="outline"
                 onClick={() => setViewDetailsOpen(false)}
@@ -9367,11 +9576,151 @@ const FormsPage: React.FC = () => {
         )}
       </Dialog>
 
-      {/* Templates modal */}
-      {/* Your templates modal JSX */}
-      
-      {/* Template previews */}
-      {/* Your template preview JSX */}
+      <AnimatePresence>
+        {showTemplates && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f1523]/75 p-4 backdrop-blur-md"
+            onClick={() => setShowTemplates(false)}
+          >
+            <motion.div
+              className="w-full max-w-4xl rounded-2xl border border-[#d4deed]/80 bg-gradient-to-b from-white to-[#f3f6fb] p-5 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800"
+              initial={{ opacity: 0, y: 16, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-display font-bold text-secondary-900 dark:text-white">Form Templates</h2>
+                  <p className="mt-1 text-sm text-secondary-600 dark:text-secondary-400">
+                    Pick a prebuilt structure and start faster with the same workflow quality.
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowTemplates(false)} leftIcon={<RiCloseLine />}>
+                  Close
+                </Button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {[
+                  { id: 'site', name: 'Site Diary', desc: 'Daily site progress and field records', onClick: handleUseSiteDiaryTemplate },
+                  { id: 'safety', name: 'Safety Inspection', desc: 'Weekly checklist and safety photos', onClick: handleUseSafetyInspectionTemplate },
+                  { id: 'cleaning', name: 'Daily Cleaning', desc: 'Daily cleaning quality checklist', onClick: handleUseDailyCleaningInspectionTemplate },
+                  { id: 'monthly', name: 'Monthly Return', desc: 'Labour deployment and wage tracking', onClick: handleUseMonthlyReturnTemplate },
+                  { id: 'inspection', name: 'Inspection Check', desc: 'Request inspection verification form', onClick: handleUseInspectionCheckTemplate },
+                  { id: 'survey', name: 'Survey Check', desc: 'Request survey check and signoff', onClick: handleUseSurveyCheckTemplate }
+                ].map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => {
+                      setShowTemplates(false);
+                      template.onClick();
+                    }}
+                    className="rounded-xl border border-[#d4deed] bg-white p-4 text-left transition hover:border-[#8aa4cf] hover:bg-[#eef3fb] dark:border-dark-700 dark:bg-dark-900/70 dark:hover:border-[#8aa4cf]/60 dark:hover:bg-dark-800"
+                  >
+                    <div className="flex items-center text-sm font-semibold text-[#48628f] dark:text-[#b2c3e4]">
+                      <RiFilePdfLine className="mr-2" />
+                      {template.name}
+                    </div>
+                    <p className="mt-2 text-xs text-secondary-600 dark:text-secondary-400">{template.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSiteDiaryTemplate && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#0f1523]/75 p-0 backdrop-blur-md sm:items-center sm:p-4">
+            <motion.div
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-[#d4deed]/80 bg-gradient-to-b from-white to-[#f3f6fb]/95 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+            >
+              <SiteDiaryFormTemplate onClose={() => setShowSiteDiaryTemplate(false)} onSave={handleSiteDiarySave} />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSafetyInspectionTemplate && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#0f1523]/75 p-0 backdrop-blur-md sm:items-center sm:p-4">
+            <motion.div
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-[#d4deed]/80 bg-gradient-to-b from-white to-[#f3f6fb]/95 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+            >
+              <SafetyInspectionChecklistTemplate onClose={() => setShowSafetyInspectionTemplate(false)} onSave={handleSafetyInspectionSave} />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showDailyCleaningInspectionTemplate && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#0f1523]/75 p-0 backdrop-blur-md sm:items-center sm:p-4">
+            <motion.div
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-[#d4deed]/80 bg-gradient-to-b from-white to-[#f3f6fb]/95 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+            >
+              <DailyCleaningInspectionTemplate onClose={() => setShowDailyCleaningInspectionTemplate(false)} onSave={handleDailyCleaningInspectionSave} />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showMonthlyReturnTemplate && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#0f1523]/75 p-0 backdrop-blur-md sm:items-center sm:p-4">
+            <motion.div
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-[#d4deed]/80 bg-gradient-to-b from-white to-[#f3f6fb]/95 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+            >
+              <MonthlyReturnTemplate onClose={() => setShowMonthlyReturnTemplate(false)} onSave={handleMonthlyReturnSave} />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showInspectionCheckTemplate && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#0f1523]/75 p-0 backdrop-blur-md sm:items-center sm:p-4">
+            <motion.div
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-[#d4deed]/80 bg-gradient-to-b from-white to-[#f3f6fb]/95 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+            >
+              <InspectionCheckFormTemplate onClose={() => setShowInspectionCheckTemplate(false)} onSave={handleInspectionCheckSave} />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSurveyCheckTemplate && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#0f1523]/75 p-0 backdrop-blur-md sm:items-center sm:p-4">
+            <motion.div
+              className="h-[95dvh] w-full overflow-hidden rounded-t-2xl border border-[#d4deed]/80 bg-gradient-to-b from-white to-[#f3f6fb]/95 shadow-2xl dark:border-dark-700 dark:from-dark-900 dark:to-dark-800 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl"
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+            >
+              <SurveyCheckFormTemplate onClose={() => setShowSurveyCheckTemplate(false)} onSave={handleSurveyCheckSave} />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

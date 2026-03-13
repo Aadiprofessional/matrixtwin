@@ -121,7 +121,7 @@ const MessageContentRenderer: React.FC<{ message: ChatMessage }> = ({ message })
   }
 
   return (
-    <div className="markdown-container w-full break-words">
+    <div className="markdown-container w-full max-w-full min-w-0 break-words overflow-x-hidden">
       <ReactMarkdown 
         remarkPlugins={[remarkGfm]}
         components={{
@@ -553,7 +553,13 @@ const AskAIPage: React.FC = () => {
                     key={message.id}
                     className={`flex w-full ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className={`flex items-start ${message.sender === 'user' ? 'max-w-[90%] sm:max-w-[85%] flex-row-reverse' : 'max-w-[95%]'}`}>
+                    <div
+                      className={`flex items-start ${
+                        message.sender === 'user'
+                          ? 'max-w-[90%] sm:max-w-[85%] flex-row-reverse'
+                          : 'w-[70vw] max-w-[70vw] min-w-0'
+                      }`}
+                    >
                       <div className={`h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center mx-2 ${
                         message.sender === 'user' 
                           ? 'bg-portfolio-orange text-white' 
@@ -569,7 +575,7 @@ const AskAIPage: React.FC = () => {
                       <div className={`rounded-2xl px-4 py-3 text-sm ${
                         message.sender === 'user'
                           ? 'bg-portfolio-orange text-white shadow-md'
-                          : 'bg-transparent text-gray-200 pl-0 border-none shadow-none'
+                          : 'bg-transparent text-gray-200 pl-0 border-none shadow-none w-full'
                       }`}>
                         <div className={`mb-1 text-[10px] opacity-80 flex items-center ${message.sender === 'user' ? 'text-white/80' : 'text-portfolio-orange'}`}>
                           <IconContext.Provider value={{ className: "mr-1" }}>
