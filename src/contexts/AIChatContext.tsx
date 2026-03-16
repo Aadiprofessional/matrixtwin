@@ -14,7 +14,7 @@ export interface Message {
   isStreaming?: boolean;
 }
 
-export type OutboundMessageType = 'text' | 'search' | 'image' | 'document' | 'pdf_vision';
+export type OutboundMessageType = 'text' | 'search' | 'image' | 'document' | 'pdf_vision' | 'docx' | 'xlsx';
 
 export interface ChatAttachment {
   url: string;
@@ -25,7 +25,7 @@ export interface ChatAttachment {
 }
 
 export interface SendMessageOptions {
-  mode?: 'text' | 'search';
+  mode?: 'text' | 'search' | 'docx' | 'xlsx';
   file?: File | null;
   uploadMode?: 'image' | 'document' | 'pdf_vision';
   imageBase64?: string;
@@ -440,7 +440,9 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
       }
     }
 
-    const resolvedMessageType: OutboundMessageType = uploadMode === 'pdf_vision'
+    const resolvedMessageType: OutboundMessageType = normalizedOptions.mode === 'docx' || normalizedOptions.mode === 'xlsx'
+      ? normalizedOptions.mode
+      : uploadMode === 'pdf_vision'
       ? 'pdf_vision'
       : uploadedAttachment
       ? (uploadedAttachment.fileType === 'image' ? 'image' : 'document')

@@ -27,6 +27,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useProjects } from '../../contexts/ProjectContext';
 import { projectService } from '../../services/projectService';
+import { TemplateUploadPickerModal } from './TemplateUploadPickerModal';
 
 // Define User interface for people selection
 interface User {
@@ -149,6 +150,7 @@ export const FormRenderer: React.FC<FormRendererProps> = ({
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showPeopleSelector, setShowPeopleSelector] = useState(false);
   const [peopleModalType, setPeopleModalType] = useState<'executor' | 'cc'>('executor');
+  const [activeUploadField, setActiveUploadField] = useState<{ fieldId: string; fieldType: 'signature' | 'image' } | null>(null);
 
   // Initialize process config from initialData or Template defaults
   useEffect(() => {
@@ -199,15 +201,10 @@ export const FormRenderer: React.FC<FormRendererProps> = ({
     }));
   };
 
-  const handleFileUpload = (fieldId: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        handleInputChange(fieldId, reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
+  const handleMediaSelect = (url: string) => {
+    if (!activeUploadField) return;
+    handleInputChange(activeUploadField.fieldId, url);
+    setActiveUploadField(null);
   };
 
   const handleSave = async () => {
@@ -431,20 +428,22 @@ export const FormRenderer: React.FC<FormRendererProps> = ({
                   )}
                 </div>
               ) : (
-                <label className={`cursor-pointer w-full h-full flex flex-col items-center justify-center ${readOnly ? 'cursor-not-allowed' : ''}`}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    !readOnly &&
+                    setActiveUploadField({
+                      fieldId: field.id,
+                      fieldType: (field.type === 'signature' ? 'signature' : 'image') as 'signature' | 'image'
+                    })
+                  }
+                  className={`cursor-pointer w-full h-full flex flex-col items-center justify-center ${readOnly ? 'cursor-not-allowed' : ''}`}
+                >
                   <RiUpload2Line className="text-xl text-gray-400 mb-1" />
                   <span className="text-[10px] text-gray-500 text-center px-1 leading-tight">
                     {field.type === 'signature' ? 'Sign' : 'Image'}
                   </span>
-                  {!readOnly && (
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={(e) => handleFileUpload(field.id, e)}
-                    />
-                  )}
-                </label>
+                </button>
               )}
             </div>
           </div>
@@ -477,6 +476,7 @@ export const FormRenderer: React.FC<FormRendererProps> = ({
   };
 
   return (
+    <>
     <div className="fixed inset-0 bg-dark-900 z-50 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-dark-700 bg-dark-800">
@@ -645,5 +645,14 @@ export const FormRenderer: React.FC<FormRendererProps> = ({
         loading={loadingUsers}
       />
     </div>
+    <TemplateUploadPickerModal
+      isOpen={activeUploadField !== null}
+      onClose={() => setActiveUploadField(null)}
+      onSelect={handleMediaSelect}
+      title={activeUploadField?.fieldType === 'signature' ? 'Select Signature' : 'Select Image'}
+      uploadType={activeUploadField?.fieldType === 'signature' ? 'signature' : 'image'}
+      accept="image/*"
+    />
+    </>
   );
 };

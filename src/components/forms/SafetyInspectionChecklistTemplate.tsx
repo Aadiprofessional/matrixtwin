@@ -19,6 +19,7 @@ import {
   RiPrinterLine
 } from 'react-icons/ri';
 import { generatePrefixedFormNumber, FORM_PREFIXES } from '../../utils/formUtils';
+import { TemplateUploadPickerModal } from './TemplateUploadPickerModal';
 
 interface SafetyInspectionChecklistTemplateProps {
   onClose: () => void;
@@ -114,6 +115,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
   
   // Photo record table responses
   const [photoResponses, setPhotoResponses] = useState<Record<string, string>>(initialData?.photoResponses || {});
+  const [activePhotoTarget, setActivePhotoTarget] = useState<{ recordIndex: number; type: 'before' | 'after' } | null>(null);
   
   // Initial checklist data - structured to match the 4 pages from the images
   const [checklistItems, setChecklistItems] = useState<ChecklistItemProps[]>(initialData?.checklistItems || [
@@ -439,30 +441,19 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
     setCurrentPage(pageNumber);
   };
   
-  const handleFileUpload = (recordIndex: number, type: 'before' | 'after', e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      
-      reader.onload = (event) => {
-        if (event.target) {
-          const updatedRecords = [...formData.photoRecords];
-          const fieldName = type === 'before' ? 'beforePhoto' : 'afterPhoto';
-          
-          updatedRecords[recordIndex] = { 
-            ...updatedRecords[recordIndex],
-            [fieldName]: event.target.result 
-          };
-          
-          setFormData({
-            ...formData,
-            photoRecords: updatedRecords
-          });
-        }
-      };
-      
-      reader.readAsDataURL(file);
-    }
+  const handlePhotoSelect = (url: string) => {
+    if (!activePhotoTarget) return;
+    const updatedRecords = [...formData.photoRecords];
+    const fieldName = activePhotoTarget.type === 'before' ? 'beforePhoto' : 'afterPhoto';
+    updatedRecords[activePhotoTarget.recordIndex] = {
+      ...updatedRecords[activePhotoTarget.recordIndex],
+      [fieldName]: url
+    };
+    setFormData({
+      ...formData,
+      photoRecords: updatedRecords
+    });
+    setActivePhotoTarget(null);
   };
   
   const handleDownloadPDF = () => {
@@ -853,6 +844,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
   };
   
   return (
+    <>
     <div className="w-full max-w-[95vw] mx-auto bg-[#1e293b] rounded-xl shadow-2xl flex flex-col h-[90vh] overflow-hidden border border-[#334155]">
       <div className="px-6 py-4 flex justify-between items-center bg-gradient-to-r from-[#0f172a] to-[#1e293b] border-b border-[#334155]">
         <h2 className="text-xl font-semibold text-white flex items-center">
@@ -1260,7 +1252,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                         <td colSpan={4} className="border-r border-gray-800 p-2 h-40 relative">
                           <div 
                             className={`border border-dashed border-gray-400 h-24 flex items-center justify-center ${readOnly ? '' : 'cursor-pointer'}`}
-                            onClick={() => !readOnly && document.getElementById(`before-photo-${actualIndex}`)?.click()}
+                            onClick={() => !readOnly && setActivePhotoTarget({ recordIndex: actualIndex, type: 'before' })}
                           >
                             {record.beforePhoto ? (
                               <img 
@@ -1271,14 +1263,6 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                             ) : (
                               <p className="text-gray-500">{readOnly ? 'No photo uploaded' : 'Click to upload photo'}</p>
                             )}
-                            <input
-                              type="file"
-                              id={`before-photo-${actualIndex}`}
-                              className="hidden"
-                              accept="image/*"
-                              onChange={(e) => handleFileUpload(actualIndex, 'before', e)}
-                              disabled={readOnly}
-                            />
                           </div>
                           
                           <div className="mt-4">
@@ -1305,7 +1289,7 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                         <td colSpan={4} className="border-gray-800 p-2 h-40 relative">
                           <div 
                             className={`border border-dashed border-gray-400 h-24 flex items-center justify-center ${readOnly ? '' : 'cursor-pointer'}`}
-                            onClick={() => !readOnly && document.getElementById(`after-photo-${actualIndex}`)?.click()}
+                            onClick={() => !readOnly && setActivePhotoTarget({ recordIndex: actualIndex, type: 'after' })}
                           >
                             {record.afterPhoto ? (
                               <img 
@@ -1316,14 +1300,6 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
                             ) : (
                               <p className="text-gray-500">{readOnly ? 'No photo uploaded' : 'Click to upload photo'}</p>
                             )}
-                            <input
-                              type="file"
-                              id={`after-photo-${actualIndex}`}
-                              className="hidden"
-                              accept="image/*"
-                              onChange={(e) => handleFileUpload(actualIndex, 'after', e)}
-                              disabled={readOnly}
-                            />
                           </div>
                           
                           <div className="mt-4">
@@ -1383,5 +1359,14 @@ export const SafetyInspectionChecklistTemplate: React.FC<SafetyInspectionCheckli
         </div>
       </div>
     </div>
+    <TemplateUploadPickerModal
+      isOpen={activePhotoTarget !== null}
+      onClose={() => setActivePhotoTarget(null)}
+      onSelect={handlePhotoSelect}
+      title={activePhotoTarget?.type === 'before' ? 'Select Before Photo' : 'Select After Photo'}
+      uploadType="image"
+      accept="image/*"
+    />
+    </>
   );
 }; 

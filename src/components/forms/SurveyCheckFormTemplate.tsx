@@ -21,6 +21,7 @@ import {
   RiTimeLine
 } from 'react-icons/ri';
 import { generatePrefixedFormNumber } from '../../utils/formUtils';
+import { TemplateUploadPickerModal } from './TemplateUploadPickerModal';
 
 interface SurveyCheckFormTemplateProps {
   onClose: () => void;
@@ -83,6 +84,7 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
     counterSignedSignature: '',
     formReceivedSignature: ''
   });
+  const [activeSignatureField, setActiveSignatureField] = useState<keyof typeof signatures | null>(null);
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData({
@@ -138,20 +140,13 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
     'Geotechnical Works'
   ];
 
-  // Handle file upload for signatures
-  const handleSignatureUpload = (field: keyof typeof signatures) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setSignatures({
-            ...signatures,
-            [field]: event.target.result as string
-          });
-        }
-      };
-      reader.readAsDataURL(e.target.files[0]);
-    }
+  const handleSignatureSelect = (url: string) => {
+    if (!activeSignatureField) return;
+    setSignatures({
+      ...signatures,
+      [activeSignatureField]: url
+    });
+    setActiveSignatureField(null);
   };
   
   // Handle time selection
@@ -489,6 +484,7 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
   };
 
   return (
+    <>
     <div className="w-full max-w-[95vw] mx-auto bg-[#1e293b] rounded-xl shadow-2xl flex flex-col h-[90vh] overflow-hidden border border-[#334155]">
       <div className="px-6 py-4 flex justify-between items-center bg-gradient-to-r from-[#0f172a] to-[#1e293b] border-b border-[#334155]">
         <h2 className="text-xl font-semibold text-white flex items-center">
@@ -684,16 +680,10 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
             </div>
             
             <div className="flex justify-between items-center mb-4">
-              <label className="flex items-center text-blue-600 hover:text-blue-800 cursor-pointer">
+              <button type="button" onClick={() => setActiveSignatureField('issuedBySignature')} className="flex items-center text-blue-600 hover:text-blue-800 cursor-pointer">
                 <RiUpload2Line className="mr-1" />
                 <span>Upload Signature</span>
-                <input 
-                  type="file" 
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleSignatureUpload('issuedBySignature')}
-                />
-              </label>
+              </button>
               {signatures.issuedBySignature && (
                 <div className="h-12 w-32">
                   <img 
@@ -731,16 +721,10 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
             </div>
             
             <div className="flex justify-between items-center mb-4">
-              <label className="flex items-center text-blue-600 hover:text-blue-800 cursor-pointer">
+              <button type="button" onClick={() => setActiveSignatureField('receivedBySignature')} className="flex items-center text-blue-600 hover:text-blue-800 cursor-pointer">
                 <RiUpload2Line className="mr-1" />
                 <span>Upload Signature</span>
-                <input 
-                  type="file" 
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleSignatureUpload('receivedBySignature')}
-                />
-              </label>
+              </button>
               {signatures.receivedBySignature && (
                 <div className="h-12 w-32">
                   <img 
@@ -861,16 +845,10 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
                   />
                 </div>
                 <div className="flex justify-between items-center mt-1">
-                  <label className="flex items-center text-blue-600 hover:text-blue-800 cursor-pointer">
+                  <button type="button" onClick={() => setActiveSignatureField('formReturnedSignature')} className="flex items-center text-blue-600 hover:text-blue-800 cursor-pointer">
                     <RiUpload2Line className="mr-1" />
                     <span>Upload Signature</span>
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleSignatureUpload('formReturnedSignature')}
-                    />
-                  </label>
+                  </button>
                   {signatures.formReturnedSignature && (
                     <div className="h-12 w-32">
                       <img 
@@ -908,16 +886,10 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
                   />
                 </div>
                 <div className="flex justify-between items-center mt-1">
-                  <label className="flex items-center text-blue-600 hover:text-blue-800 cursor-pointer">
+                  <button type="button" onClick={() => setActiveSignatureField('counterSignedSignature')} className="flex items-center text-blue-600 hover:text-blue-800 cursor-pointer">
                     <RiUpload2Line className="mr-1" />
                     <span>Upload Signature</span>
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleSignatureUpload('counterSignedSignature')}
-                    />
-                  </label>
+                  </button>
                   {signatures.counterSignedSignature && (
                     <div className="h-12 w-32">
                       <img 
@@ -955,16 +927,10 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
                   />
                 </div>
                 <div className="flex justify-between items-center mt-1">
-                  <label className="flex items-center text-blue-600 hover:text-blue-800 cursor-pointer">
+                  <button type="button" onClick={() => setActiveSignatureField('formReceivedSignature')} className="flex items-center text-blue-600 hover:text-blue-800 cursor-pointer">
                     <RiUpload2Line className="mr-1" />
                     <span>Upload Signature</span>
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleSignatureUpload('formReceivedSignature')}
-                    />
-                  </label>
+                  </button>
                   {signatures.formReceivedSignature && (
                     <div className="h-12 w-32">
                       <img 
@@ -995,5 +961,14 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
         </div>
       </div>
     </div>
+    <TemplateUploadPickerModal
+      isOpen={activeSignatureField !== null}
+      onClose={() => setActiveSignatureField(null)}
+      onSelect={handleSignatureSelect}
+      title="Select Signature"
+      uploadType="signature"
+      accept="image/*"
+    />
+    </>
   );
 }; 

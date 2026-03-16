@@ -18,6 +18,7 @@ import {
   RiTimeLine
 } from 'react-icons/ri';
 import { generatePrefixedFormNumber } from '../../utils/formUtils';
+import { TemplateUploadPickerModal } from './TemplateUploadPickerModal';
 
 interface DailyCleaningInspectionTemplateProps {
   onClose: () => void;
@@ -107,6 +108,7 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
     { id: 2, dataUrl: null },
     { id: 3, dataUrl: null }
   ]);
+  const [activePhotoSlot, setActivePhotoSlot] = useState<number | null>(null);
   
   // Handlers
   const handleInputChange = (field: string, value: string) => {
@@ -148,24 +150,14 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
     );
   };
   
-  const handlePhotoUpload = (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      
-      reader.onload = (event) => {
-        const target = event.target as FileReader;
-        if (target && target.result) {
-          setPhotos(
-            photos.map(photo => 
-              photo.id === id ? { ...photo, dataUrl: target.result as string } : photo
-            )
-          );
-        }
-      };
-      
-      reader.readAsDataURL(file);
-    }
+  const handlePhotoSelect = (url: string) => {
+    if (!activePhotoSlot) return;
+    setPhotos(prevPhotos =>
+      prevPhotos.map(photo =>
+        photo.id === activePhotoSlot ? { ...photo, dataUrl: url } : photo
+      )
+    );
+    setActivePhotoSlot(null);
   };
   
   const changePage = (pageNumber: 1 | 2) => {
@@ -416,6 +408,7 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
   };
 
   return (
+    <>
     <div className="w-full max-w-[95vw] mx-auto bg-[#1e293b] rounded-xl shadow-2xl flex flex-col h-[90vh] overflow-hidden border border-[#334155]">
       <div className="px-6 py-4 flex justify-between items-center bg-gradient-to-r from-[#0f172a] to-[#1e293b] border-b border-[#334155]">
         <h2 className="text-xl font-semibold text-white flex items-center">
@@ -796,20 +789,18 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
                     className="max-w-full max-h-full object-contain"
                   />
                 ) : (
-                  <div className="flex flex-col items-center justify-center w-full h-full">
+                  <button
+                    type="button"
+                    onClick={() => setActivePhotoSlot(1)}
+                    className="flex flex-col items-center justify-center w-full h-full"
+                  >
                     <IconContext.Provider value={{ size: '2em' }}>
                       <RiCamera2Line />
                     </IconContext.Provider>
-                    <label className="cursor-pointer mt-2 bg-ai-blue/20 hover:bg-ai-blue/40 transition-colors py-1 px-3 rounded text-sm">
+                    <span className="cursor-pointer mt-2 bg-ai-blue/20 hover:bg-ai-blue/40 transition-colors py-1 px-3 rounded text-sm">
                       Upload Photo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handlePhotoUpload(1, e)}
-                      />
-                    </label>
-                  </div>
+                    </span>
+                  </button>
                 )}
               </div>
               
@@ -822,20 +813,18 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
                     className="max-w-full max-h-full object-contain"
                   />
                 ) : (
-                  <div className="flex flex-col items-center justify-center w-full h-full">
+                  <button
+                    type="button"
+                    onClick={() => setActivePhotoSlot(2)}
+                    className="flex flex-col items-center justify-center w-full h-full"
+                  >
                     <IconContext.Provider value={{ size: '2em' }}>
                       <RiCamera2Line />
                     </IconContext.Provider>
-                    <label className="cursor-pointer mt-2 bg-ai-blue/20 hover:bg-ai-blue/40 transition-colors py-1 px-3 rounded text-sm">
+                    <span className="cursor-pointer mt-2 bg-ai-blue/20 hover:bg-ai-blue/40 transition-colors py-1 px-3 rounded text-sm">
                       Upload Photo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handlePhotoUpload(2, e)}
-                      />
-                    </label>
-                  </div>
+                    </span>
+                  </button>
                 )}
               </div>
               
@@ -848,20 +837,18 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
                     className="max-w-full max-h-full object-contain"
                   />
                 ) : (
-                  <div className="flex flex-col items-center justify-center w-full h-full">
+                  <button
+                    type="button"
+                    onClick={() => setActivePhotoSlot(3)}
+                    className="flex flex-col items-center justify-center w-full h-full"
+                  >
                     <IconContext.Provider value={{ size: '2em' }}>
                       <RiCamera2Line />
                     </IconContext.Provider>
-                    <label className="cursor-pointer mt-2 bg-ai-blue/20 hover:bg-ai-blue/40 transition-colors py-1 px-3 rounded text-sm">
+                    <span className="cursor-pointer mt-2 bg-ai-blue/20 hover:bg-ai-blue/40 transition-colors py-1 px-3 rounded text-sm">
                       Upload Photo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handlePhotoUpload(3, e)}
-                      />
-                    </label>
-                  </div>
+                    </span>
+                  </button>
                 )}
               </div>
             </div>
@@ -875,5 +862,14 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
         </div>
       </div>
     </div>
+    <TemplateUploadPickerModal
+      isOpen={activePhotoSlot !== null}
+      onClose={() => setActivePhotoSlot(null)}
+      onSelect={handlePhotoSelect}
+      title={`Select Photo ${activePhotoSlot || ''}`}
+      uploadType="image"
+      accept="image/*"
+    />
+    </>
   );
 }; 

@@ -226,6 +226,18 @@ const createInitialGrid = (rows: number = EXCEL_GRID_CONFIG.DEFAULT_ROWS, cols: 
   };
 };
 
+const getGridCanvasSize = (grid: ExcelGridType, pageWidth: number, pageHeight: number) => {
+  const lastColumn = grid.columns[grid.columns.length - 1];
+  const lastRow = grid.rows[grid.rows.length - 1];
+  const gridWidth = lastColumn ? lastColumn.x + lastColumn.width : EXCEL_GRID_CONFIG.HEADER_WIDTH;
+  const gridHeight = lastRow ? lastRow.y + lastRow.height : EXCEL_GRID_CONFIG.HEADER_HEIGHT;
+
+  return {
+    width: Math.max(pageWidth + 400, gridWidth + 200),
+    height: Math.max(pageHeight + 400, gridHeight + 200)
+  };
+};
+
 const updateGridAfterResize = (grid: ExcelGridType): ExcelGridType => {
   const updatedCells: GridCell[][] = [];
   
@@ -1108,7 +1120,7 @@ interface FormBuilderProps {
   formPages: FormPage[];
   setFormPages: React.Dispatch<React.SetStateAction<FormPage[]>>;
   currentPageIndex: number;
-  setCurrentPageIndex: React.Dispatch<React.SetStateAction<number>>;
+  setCurrentPageIndex: (index: number, preserveSelection?: boolean) => void;
   selectedField: FormField | null;
   setSelectedField: React.Dispatch<React.SetStateAction<FormField | null>>;
   selectedCell: { row: number; col: number } | null;
@@ -1952,6 +1964,7 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
           minHeight = Math.min(maxHeight, 60);
           break;
         case 'image':
+        case 'logo':
         case 'attachment':
           minWidth = Math.min(maxWidth, 150);
           minHeight = Math.min(maxHeight, 80);
@@ -2022,6 +2035,7 @@ const ResizableWrapper: React.FC<ResizableWrapperProps> = ({
           height: Math.max(baseHeight, 80)
         };
       case 'image':
+      case 'logo':
       case 'attachment':
         return {
           width: Math.max(baseWidth, 200),
@@ -2584,7 +2598,15 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   const [commandResult, setCommandResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isCommandModalOpen, setIsCommandModalOpen] = useState(false);
   const [commandPageIndex, setCommandPageIndex] = useState(0);
-  const scanFileRef = useRef<HTMLInputElement>(null);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiSelectedFile, setAiSelectedFile] = useState<File | null>(null);
+  const [aiScanError, setAiScanError] = useState('');
+  const [aiScanSummary, setAiScanSummary] = useState('');
+  const [aiScanResponsePreview, setAiScanResponsePreview] = useState('');
+  const [aiGeneratedCommands, setAiGeneratedCommands] = useState('');
+  const [aiGeneratedPages, setAiGeneratedPages] = useState<FormPage[] | null>(null);
+  const [aiTargetPageIndex, setAiTargetPageIndex] = useState(0);
+  const [aiScanProgress, setAiScanProgress] = useState(0);
 
   useEffect(() => {
     if (!isCommandModalOpen) {
@@ -2592,441 +2614,415 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     }
   }, [currentPageIndex, isCommandModalOpen]);
 
-  const handleScanFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  useEffect(() => {
+    if (!isAiModalOpen) {
+      setAiSelectedFile(null);
+      setAiScanError('');
+      setAiScanSummary('');
+      setAiScanResponsePreview('');
+      setAiGeneratedCommands('');
+      setAiGeneratedPages(null);
+      setAiScanProgress(0);
+      setAiTargetPageIndex(currentPageIndex);
+    }
+  }, [isAiModalOpen, currentPageIndex]);
 
-    if (!user) {
-      alert('Please login first');
-      return;
+  const colToIndex = (col: string): number => {
+    if (!col) return 0;
+    let index = 0;
+    const cleanCol = col.toUpperCase().replace(/[^A-Z]/g, '');
+    for (let i = 0; i < cleanCol.length; i++) {
+      index = index * 26 + cleanCol.charCodeAt(i) - 64;
+    }
+    return Math.max(0, index - 1);
+  };
+
+  const extractCommandScript = (raw: string): string => {
+    if (!raw) return '';
+    let text = raw.trim();
+    const codeBlockMatch = text.match(/```(?:sql|commands?|txt|text)?\s*([\s\S]*?)```/i);
+    if (codeBlockMatch?.[1]) {
+      text = codeBlockMatch[1].trim();
+    }
+    const commandLinePattern = /^(?:ON\s+PAGE\s+\d+\s+.+|PAGE\s+\d+\s*[:\-]\s*.+|USE\s+PAGE\s+\d+|PAGE\s+\d+|CREATE\s+PAGE|ADD\s+PAGE|INSERT\s+PAGE(?:\s+AT)?\s+\d+|DELETE\s+PAGE(?:\s+\d+)?|MERGE\s+.+|UNMERGE\s+.+|INSERT\s+.+|UPDATE\s+.+|SET\s+.+|DELETE\s+.+|CLEAR\s+.+)$/i;
+    const lines = text
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+    const commandLines = lines.filter(line => commandLinePattern.test(line));
+    if (commandLines.length > 0) {
+      return commandLines.join('\n');
+    }
+    if (commandLinePattern.test(text)) {
+      return text;
+    }
+    return '';
+  };
+
+  const extractCommandsFromAny = (payload: any): string => {
+    if (payload == null) return '';
+    if (typeof payload === 'string') {
+      const direct = extractCommandScript(payload);
+      if (direct) return direct;
+      const trimmed = payload.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+          return extractCommandsFromAny(JSON.parse(trimmed));
+        } catch {
+          return '';
+        }
+      }
+      return '';
+    }
+    if (Array.isArray(payload)) {
+      const parts = payload
+        .map(item => extractCommandsFromAny(item))
+        .filter(Boolean);
+      return parts.join('\n').trim();
+    }
+    if (typeof payload === 'object') {
+      if (typeof payload.commands === 'string') {
+        return extractCommandScript(payload.commands) || payload.commands;
+      }
+      if (Array.isArray(payload.commands) && payload.commands.every((item: any) => typeof item === 'string')) {
+        return payload.commands.join('\n').trim();
+      }
+      const keysToCheck = ['output', 'data', 'result', 'response', 'message', 'text'];
+      for (const key of keysToCheck) {
+        if (payload[key] !== undefined) {
+          const found = extractCommandsFromAny(payload[key]);
+          if (found) return found;
+        }
+      }
+    }
+    return '';
+  };
+
+  const parseAiScanOutput = (scanData: any) => {
+    let outputData = scanData?.output || scanData;
+    const responsePreview = typeof outputData === 'string'
+      ? outputData
+      : JSON.stringify(outputData, null, 2);
+    const preParsedCommandScript = extractCommandsFromAny(outputData);
+    if (preParsedCommandScript) {
+      return {
+        commandScript: preParsedCommandScript,
+        pages: [] as FormPage[],
+        responsePreview,
+        summary: `AI generated ${preParsedCommandScript.split('\n').filter(Boolean).length} command(s).`
+      };
     }
 
-    try {
-      setIsScanning(true);
-      const result = await processAndScanDocument(file, user.id);
-      
-      if (result.success) {
-        console.log('Scan success:', result.data);
-        
-        // Helper to convert column letter to index (A=0, B=1, etc.)
-        const colToIndex = (col: string): number => {
-          if (!col) return 0;
-          let index = 0;
-          const cleanCol = col.toUpperCase().replace(/[^A-Z]/g, '');
-          for (let i = 0; i < cleanCol.length; i++) {
-            index = index * 26 + cleanCol.charCodeAt(i) - 64;
-          }
-          return Math.max(0, index - 1);
-        };
-
+    if (typeof outputData === 'string') {
+      let cleanedOutput = outputData;
+      const codeBlockMatch = cleanedOutput.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        cleanedOutput = codeBlockMatch[1];
+      }
+      cleanedOutput = cleanedOutput.trim();
+      const firstBrace = cleanedOutput.indexOf('{');
+      const firstBracket = cleanedOutput.indexOf('[');
+      let startIdx = -1;
+      if (firstBrace !== -1 && firstBracket !== -1) {
+        startIdx = Math.min(firstBrace, firstBracket);
+      } else if (firstBrace !== -1) {
+        startIdx = firstBrace;
+      } else if (firstBracket !== -1) {
+        startIdx = firstBracket;
+      }
+      if (startIdx !== -1) {
+        cleanedOutput = cleanedOutput.substring(startIdx);
+      }
+      try {
+        outputData = JSON.parse(cleanedOutput);
+      } catch (e) {
         try {
-          const extractCommandScript = (raw: string): string => {
-            if (!raw) return '';
-            let text = raw.trim();
-            const codeBlockMatch = text.match(/```(?:sql|commands?|txt|text)?\s*([\s\S]*?)```/i);
-            if (codeBlockMatch?.[1]) {
-              text = codeBlockMatch[1].trim();
-            }
-            const commandLinePattern = /^(?:ON\s+PAGE\s+\d+\s+.+|PAGE\s+\d+\s*[:\-]\s*.+|USE\s+PAGE\s+\d+|PAGE\s+\d+|CREATE\s+PAGE|ADD\s+PAGE|INSERT\s+PAGE(?:\s+AT)?\s+\d+|DELETE\s+PAGE(?:\s+\d+)?|MERGE\s+.+|UNMERGE\s+.+|INSERT\s+.+|UPDATE\s+.+|SET\s+.+|DELETE\s+.+|CLEAR\s+.+)$/i;
-            const lines = text
-              .split('\n')
-              .map(line => line.trim())
-              .filter(Boolean);
-            const commandLines = lines.filter(line => commandLinePattern.test(line));
-            if (commandLines.length > 0) {
-              return commandLines.join('\n');
-            }
-            if (commandLinePattern.test(text)) {
-              return text;
-            }
-            return '';
-          };
-          const extractCommandsFromAny = (payload: any): string => {
-            if (payload == null) return '';
-            if (typeof payload === 'string') {
-              const direct = extractCommandScript(payload);
-              if (direct) return direct;
-              const trimmed = payload.trim();
-              if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-                try {
-                  return extractCommandsFromAny(JSON.parse(trimmed));
-                } catch {
-                  return '';
+          const repairTruncatedJSON = (jsonStr: string): string => {
+            let str = jsonStr;
+            const stack: string[] = [];
+            let inString = false;
+            let isEscaped = false;
+            for (let i = 0; i < str.length; i++) {
+              const char = str[i];
+              if (inString) {
+                if (char === '\\' && !isEscaped) {
+                  isEscaped = true;
+                } else if (char === '"' && !isEscaped) {
+                  inString = false;
+                } else {
+                  isEscaped = false;
                 }
-              }
-              return '';
-            }
-            if (Array.isArray(payload)) {
-              const parts = payload
-                .map(item => extractCommandsFromAny(item))
-                .filter(Boolean);
-              return parts.join('\n').trim();
-            }
-            if (typeof payload === 'object') {
-              if (typeof payload.commands === 'string') {
-                return extractCommandScript(payload.commands) || payload.commands;
-              }
-              if (Array.isArray(payload.commands) && payload.commands.every((item: any) => typeof item === 'string')) {
-                return payload.commands.join('\n').trim();
-              }
-              const keysToCheck = ['output', 'data', 'result', 'response', 'message', 'text'];
-              for (const key of keysToCheck) {
-                if (payload[key] !== undefined) {
-                  const found = extractCommandsFromAny(payload[key]);
-                  if (found) return found;
-                }
-              }
-            }
-            return '';
-          };
-
-          // Parse the output JSON string from webhook response
-          // Handle case where output might be nested or direct
-          let outputData = result.data.output || result.data;
-          const preParsedCommandScript = extractCommandsFromAny(outputData);
-          if (preParsedCommandScript) {
-            setCommandInput(preParsedCommandScript);
-            executeGridCommands(preParsedCommandScript, currentPageIndex);
-            alert('AI generated commands and executed them successfully.');
-            return;
-          }
-          
-          if (typeof outputData === 'string') {
-             // Clean up the string first
-             let cleanedOutput = outputData;
-             
-             // Remove markdown code blocks if present
-             const codeBlockMatch = cleanedOutput.match(/```(?:json)?\s*([\s\S]*?)```/);
-             if (codeBlockMatch) {
-               cleanedOutput = codeBlockMatch[1];
-             }
-             
-             // Trim whitespace
-             cleanedOutput = cleanedOutput.trim();
-             
-             // Try to find the JSON object/array if there's surrounding text
-             const firstBrace = cleanedOutput.indexOf('{');
-             const firstBracket = cleanedOutput.indexOf('[');
-             
-             let startIdx = -1;
-             if (firstBrace !== -1 && firstBracket !== -1) {
-               startIdx = Math.min(firstBrace, firstBracket);
-             } else if (firstBrace !== -1) {
-               startIdx = firstBrace;
-             } else if (firstBracket !== -1) {
-               startIdx = firstBracket;
-             }
-             
-             if (startIdx !== -1) {
-               // Start from the first brace/bracket
-               cleanedOutput = cleanedOutput.substring(startIdx);
-             }
-
-             // Attempt 1: Direct Parse
-             try {
-               outputData = JSON.parse(cleanedOutput);
-             } catch (e) {
-               console.warn('First parse attempt failed, trying to repair JSON...');
-               
-               // Attempt 2: Repair truncated JSON
-               try {
-                  // Simple repair logic
-                  let repaired = cleanedOutput;
-                  
-                  // 1. Remove trailing comma/garbage at the end if strict parse failed
-                  // Often truncation happens in the middle of a string or property
-                  
-                  // Helper to close open structures
-                  const repairTruncatedJSON = (jsonStr: string): string => {
-                    let str = jsonStr;
-                    const stack: string[] = [];
-                    let inString = false;
-                    let isEscaped = false;
-                    
-                    for (let i = 0; i < str.length; i++) {
-                      const char = str[i];
-                      
-                      if (inString) {
-                        if (char === '\\' && !isEscaped) {
-                          isEscaped = true;
-                        } else if (char === '"' && !isEscaped) {
-                          inString = false;
-                        } else {
-                          isEscaped = false;
-                        }
-                      } else {
-                        if (char === '"') {
-                          inString = true;
-                        } else if (char === '{') {
-                          stack.push('}');
-                        } else if (char === '[') {
-                          stack.push(']');
-                        } else if (char === '}' || char === ']') {
-                          if (stack.length > 0 && stack[stack.length - 1] === char) {
-                            stack.pop();
-                          }
-                        }
-                      }
-                    }
-                    
-                    // If we ended inside a string, close it
-                    if (inString) {
-                      str += '"';
-                    }
-                    
-                    // Append missing closers in reverse order
-                    while (stack.length > 0) {
-                      str += stack.pop();
-                    }
-                    
-                    return str;
-                  };
-
-                  const repairedJSON = repairTruncatedJSON(repaired);
-                  outputData = JSON.parse(repairedJSON);
-                  console.log('Successfully repaired and parsed JSON');
-               } catch (repairError) {
-                  console.error('Failed to repair JSON:', repairError);
-                  // Attempt 3: Try to find the last valid closing brace/bracket from original string
-                  // (The previous logic that was removed)
-                  if (startIdx !== -1) {
-                     const isArray = cleanedOutput[0] === '[';
-                     const endChar = isArray ? ']' : '}';
-                     const lastIdx = cleanedOutput.lastIndexOf(endChar);
-                     if (lastIdx !== -1) {
-                        try {
-                           outputData = JSON.parse(cleanedOutput.substring(0, lastIdx + 1));
-                           console.log('Parsed by trimming to last closer');
-                        } catch (trimError) {
-                           // Give up
-                        }
-                     }
+              } else {
+                if (char === '"') {
+                  inString = true;
+                } else if (char === '{') {
+                  stack.push('}');
+                } else if (char === '[') {
+                  stack.push(']');
+                } else if (char === '}' || char === ']') {
+                  if (stack.length > 0 && stack[stack.length - 1] === char) {
+                    stack.pop();
                   }
-               }
-             }
-          }
-          
-          // If outputData is still a string after parsing attempts (e.g. double encoded), try again
-          if (typeof outputData === 'string') {
-             try {
-               outputData = JSON.parse(outputData);
-             } catch (e) {
-               // Ignore second failure
-             }
-          }
-          const postParsedCommandScript = extractCommandsFromAny(outputData);
-          if (postParsedCommandScript) {
-            setCommandInput(postParsedCommandScript);
-            executeGridCommands(postParsedCommandScript, currentPageIndex);
-            alert('AI generated commands and executed them successfully.');
-            return;
-          }
-
-          // Normalize to pages structure
-          let pagesData: any[] = [];
-          
-          if (outputData && Array.isArray(outputData.pages)) {
-             pagesData = outputData.pages;
-          } else if (Array.isArray(outputData)) {
-             // Assume it's a list of widgets for a single page
-             pagesData = [{ widgets: outputData }];
-          } else if (outputData && Array.isArray(outputData.widgets)) {
-             // Single page object with widgets
-             pagesData = [outputData];
-          } else if (outputData && typeof outputData === 'object') {
-             // Maybe it's a single widget? Or unexpected structure.
-             // Check if it has keys that look like a widget (id, type, position)
-             if (outputData.type && outputData.position) {
-                pagesData = [{ widgets: [outputData] }];
-             } else if (Object.keys(outputData).length > 0) {
-                // Heuristic: If it has keys but no obvious structure, treat values as potential widgets if array
-                const possibleArrays = Object.values(outputData).filter(val => Array.isArray(val));
-                if (possibleArrays.length === 1) {
-                  pagesData = [{ widgets: possibleArrays[0] }];
                 }
-             }
-          }
-
-          if (pagesData.length > 0) {
-            const newPages: FormPage[] = pagesData.map((pageData: any, pageIndex: number) => {
-              // Calculate grid dimensions based on widgets
-              const maxRow = pageData.widgets?.reduce((max: number, w: any) => Math.max(max, (w.position?.row || 0) + (w.position?.row_span || 1)), 20) || 20;
-              const maxCol = pageData.widgets?.reduce((max: number, w: any) => Math.max(max, colToIndex(w.position?.col || 'A') + (w.position?.col_span || 1)), 10) || 10;
-              
-              // Create a new grid for this page
-              const grid = createInitialGrid(maxRow + 5, maxCol + 2); // Add some padding
-              if (!grid.mergedCells) {
-                grid.mergedCells = new Map<string, MergeInfo>();
               }
-              
-              const fields: FormField[] = (pageData.widgets || []).map((widget: any) => {
-                const colIndex = colToIndex(widget.position?.col || 'A');
-                const rowIndex = (widget.position?.row || 1) - 1; // 1-based to 0-based
-                
-                // Map widget type to internal type
-                let type = 'text'; // Default
-                if (widget.type === 'label') type = 'label';
-                if (widget.type === 'text_field') type = 'text';
-                if (widget.type === 'textarea') type = 'textarea';
-                if (widget.type === 'input_box') type = 'number';
-                if (widget.type === 'date') type = 'date';
-                if (widget.type === 'checkbox') type = 'checkbox';
-                if (widget.type === 'multiple_choice') type = 'multipleChoice';
-                if (widget.type === 'dropdown') type = 'dropdown';
-                if (widget.type === 'interval_data') type = 'intervalData';
-                if (widget.type === 'image') type = 'image';
-                if (widget.type === 'attachment') type = 'attachment';
-                if (widget.type === 'annotation') type = 'sketch';
-                if (widget.type === 'signature') type = 'signature';
-                if (widget.type === 'table') type = 'layoutTable';
-                
-                // Add unique ID to avoid collisions
-                const fieldId = widget.id || `field-${crypto.randomUUID()}`;
+            }
+            if (inString) {
+              str += '"';
+            }
+            while (stack.length > 0) {
+              str += stack.pop();
+            }
+            return str;
+          };
+          const repairedJSON = repairTruncatedJSON(cleanedOutput);
+          outputData = JSON.parse(repairedJSON);
+        } catch (repairError) {
+          if (startIdx !== -1) {
+            const isArray = cleanedOutput[0] === '[';
+            const endChar = isArray ? ']' : '}';
+            const lastIdx = cleanedOutput.lastIndexOf(endChar);
+            if (lastIdx !== -1) {
+              try {
+                outputData = JSON.parse(cleanedOutput.substring(0, lastIdx + 1));
+              } catch (trimError) {
+                console.error('Failed to parse AI response:', trimError);
+              }
+            }
+          }
+          console.error('Failed to repair AI response:', repairError);
+        }
+      }
+    }
 
-                // Calculate dimensions based on span
-                const colSpan = widget.position?.col_span || 1;
-                const rowSpan = widget.position?.row_span || 1;
-                
-                const settings: any = {
-                  required: widget.required,
-                  placeholder: widget.placeholder,
-                  defaultValue: widget.value,
-                  options: widget.options || []
-                };
+    if (typeof outputData === 'string') {
+      try {
+        outputData = JSON.parse(outputData);
+      } catch (e) {
+        console.error('Failed to parse nested AI response:', e);
+      }
+    }
 
-                // Special handling for specific types
-                if (type === 'layoutTable') {
-                  settings.data = widget.value;
-                  if (widget.headers) settings.headers = widget.headers;
-                }
+    const postParsedCommandScript = extractCommandsFromAny(outputData);
+    if (postParsedCommandScript) {
+      return {
+        commandScript: postParsedCommandScript,
+        pages: [] as FormPage[],
+        responsePreview,
+        summary: `AI generated ${postParsedCommandScript.split('\n').filter(Boolean).length} command(s).`
+      };
+    }
 
-                // Try to place in grid cell
-                if (grid.cells[rowIndex] && grid.cells[rowIndex][colIndex]) {
-                  const startCell = grid.cells[rowIndex][colIndex];
-                  
-                  // Handle merging if span > 1
-                  if (rowSpan > 1 || colSpan > 1) {
-                    const mergeInfo: MergeInfo = {
-                      startRow: rowIndex,
-                      endRow: rowIndex + rowSpan - 1,
-                      startCol: colIndex,
-                      endCol: colIndex + colSpan - 1,
-                      isMaster: true
-                    };
-                    
-                    // Add to mergedCells map
-                    const key = `${rowIndex}-${colIndex}`;
-                    if (grid.mergedCells) {
-                      grid.mergedCells.set(key, mergeInfo);
-                    }
-                    
-                    // Mark cells as occupied and set mergeInfo
-                    for (let r = 0; r < rowSpan; r++) {
-                      for (let c = 0; c < colSpan; c++) {
-                        if (grid.cells[rowIndex + r] && grid.cells[rowIndex + r][colIndex + c]) {
-                          const cell = grid.cells[rowIndex + r][colIndex + c];
-                          cell.isEmpty = false;
-                          cell.fieldId = fieldId;
-                          
-                          // Set merge info on cell
-                          cell.mergeInfo = {
-                            ...mergeInfo,
-                            isMaster: r === 0 && c === 0
-                          };
-                          cell.merged = true;
-                        }
-                      }
-                    }
-                  } else {
-                    // Single cell
-                    startCell.isEmpty = false;
-                    startCell.fieldId = fieldId;
-                  }
+    let pagesData: any[] = [];
+    if (outputData && Array.isArray(outputData.pages)) {
+      pagesData = outputData.pages;
+    } else if (Array.isArray(outputData)) {
+      pagesData = [{ widgets: outputData }];
+    } else if (outputData && Array.isArray(outputData.widgets)) {
+      pagesData = [outputData];
+    } else if (outputData && typeof outputData === 'object') {
+      if (outputData.type && outputData.position) {
+        pagesData = [{ widgets: [outputData] }];
+      } else if (Object.keys(outputData).length > 0) {
+        const possibleArrays = Object.values(outputData).filter(val => Array.isArray(val));
+        if (possibleArrays.length === 1) {
+          pagesData = [{ widgets: possibleArrays[0] }];
+        }
+      }
+    }
 
-                  const width = colSpan * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
-                  const height = rowSpan * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT;
-
-                  return {
-                    id: fieldId,
-                    type,
-                    label: widget.label || 'Label',
-                    settings,
-                    width,
-                    height,
-                    x: startCell.x,
-                    y: startCell.y,
-                    zIndex: 1,
-                    gridPosition: { row: rowIndex, col: colIndex },
-                    cellId: startCell.id,
-                    gridRow: rowIndex,
-                    gridCol: colIndex,
-                    span: { row: rowSpan, col: colSpan }
+    const newPages: FormPage[] = pagesData.map((pageData: any, pageIndex: number) => {
+      const maxRow = pageData.widgets?.reduce((max: number, w: any) => Math.max(max, (w.position?.row || 0) + (w.position?.row_span || 1)), 20) || 20;
+      const maxCol = pageData.widgets?.reduce((max: number, w: any) => Math.max(max, colToIndex(w.position?.col || 'A') + (w.position?.col_span || 1)), 10) || 10;
+      const grid = createInitialGrid(maxRow + 5, maxCol + 2);
+      if (!grid.mergedCells) {
+        grid.mergedCells = new Map<string, MergeInfo>();
+      }
+      const fields: FormField[] = (pageData.widgets || []).map((widget: any) => {
+        const colIndex = colToIndex(widget.position?.col || 'A');
+        const rowIndex = (widget.position?.row || 1) - 1;
+        let type = 'text';
+        if (widget.type === 'label') type = 'label';
+        if (widget.type === 'text_field') type = 'text';
+        if (widget.type === 'textarea') type = 'textarea';
+        if (widget.type === 'input_box') type = 'number';
+        if (widget.type === 'date') type = 'date';
+        if (widget.type === 'checkbox') type = 'checkbox';
+        if (widget.type === 'multiple_choice') type = 'multipleChoice';
+        if (widget.type === 'dropdown') type = 'dropdown';
+        if (widget.type === 'interval_data') type = 'intervalData';
+        if (widget.type === 'image') type = 'image';
+        if (widget.type === 'attachment') type = 'attachment';
+        if (widget.type === 'annotation') type = 'sketch';
+        if (widget.type === 'signature') type = 'signature';
+        if (widget.type === 'table') type = 'layoutTable';
+        const fieldId = widget.id || `field-${crypto.randomUUID()}`;
+        const colSpan = widget.position?.col_span || 1;
+        const rowSpan = widget.position?.row_span || 1;
+        const settings: any = {
+          required: widget.required,
+          placeholder: widget.placeholder,
+          defaultValue: widget.value,
+          options: widget.options || []
+        };
+        if (type === 'layoutTable') {
+          settings.data = widget.value;
+          if (widget.headers) settings.headers = widget.headers;
+        }
+        if (grid.cells[rowIndex] && grid.cells[rowIndex][colIndex]) {
+          const startCell = grid.cells[rowIndex][colIndex];
+          if (rowSpan > 1 || colSpan > 1) {
+            const mergeInfo: MergeInfo = {
+              startRow: rowIndex,
+              endRow: rowIndex + rowSpan - 1,
+              startCol: colIndex,
+              endCol: colIndex + colSpan - 1,
+              isMaster: true
+            };
+            const key = `${rowIndex}-${colIndex}`;
+            if (grid.mergedCells) {
+              grid.mergedCells.set(key, mergeInfo);
+            }
+            for (let r = 0; r < rowSpan; r++) {
+              for (let c = 0; c < colSpan; c++) {
+                if (grid.cells[rowIndex + r] && grid.cells[rowIndex + r][colIndex + c]) {
+                  const cell = grid.cells[rowIndex + r][colIndex + c];
+                  cell.isEmpty = false;
+                  cell.fieldId = fieldId;
+                  cell.mergeInfo = {
+                    ...mergeInfo,
+                    isMaster: r === 0 && c === 0
                   };
+                  cell.merged = true;
                 }
-
-                // Fallback calculations if grid cell issues
-                const width = colSpan * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
-                const height = rowSpan * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT;
-                const x = EXCEL_GRID_CONFIG.HEADER_WIDTH + (colIndex * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH);
-                const y = EXCEL_GRID_CONFIG.HEADER_HEIGHT + (rowIndex * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT);
-
-                return {
-                  id: fieldId,
-                  type,
-                  label: widget.label || 'Label',
-                  settings,
-                  width,
-                  height,
-                  x,
-                  y,
-                  zIndex: 1,
-                  gridPosition: { row: rowIndex, col: colIndex }
-                };
-              });
-
-              return {
-                id: `page-${crypto.randomUUID()}`,
-                fields,
-                grid,
-                dimensions: {
-                  width: 595, // A4 Portrait default
-                  height: Math.max(842, grid.totalHeight + 50),
-                  orientation: 'portrait',
-                  size: 'A4'
-                },
-                pdfPageIndex: pageIndex
-              };
-            });
-            
-            // Update form pages
-            if (newPages.length > 0) {
-              setFormPages(newPages);
-              alert('Form generated successfully from AI scan!');
-            } else {
-              alert('Scan complete but no pages generated.');
+              }
             }
           } else {
-             console.warn('Invalid output format:', outputData);
-             alert('Document scanned but received invalid format from AI. Check console.');
+            startCell.isEmpty = false;
+            startCell.fieldId = fieldId;
           }
-        } catch (parseError) {
-          console.error('Error parsing scan result:', parseError);
-          alert('Document scanned but failed to parse AI response.');
+          const width = colSpan * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
+          const height = rowSpan * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT;
+          return {
+            id: fieldId,
+            type,
+            label: widget.label || 'Label',
+            settings,
+            width,
+            height,
+            x: startCell.x,
+            y: startCell.y,
+            zIndex: 1,
+            gridPosition: { row: rowIndex, col: colIndex },
+            cellId: startCell.id,
+            gridRow: rowIndex,
+            gridCol: colIndex,
+            span: { row: rowSpan, col: colSpan }
+          };
         }
+        const width = colSpan * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH;
+        const height = rowSpan * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT;
+        const x = EXCEL_GRID_CONFIG.HEADER_WIDTH + (colIndex * EXCEL_GRID_CONFIG.DEFAULT_COL_WIDTH);
+        const y = EXCEL_GRID_CONFIG.HEADER_HEIGHT + (rowIndex * EXCEL_GRID_CONFIG.DEFAULT_ROW_HEIGHT);
+        return {
+          id: fieldId,
+          type,
+          label: widget.label || 'Label',
+          settings,
+          width,
+          height,
+          x,
+          y,
+          zIndex: 1,
+          gridPosition: { row: rowIndex, col: colIndex }
+        };
+      });
+      return {
+        id: `page-${crypto.randomUUID()}`,
+        fields,
+        grid,
+        dimensions: {
+          width: 595,
+          height: Math.max(842, grid.totalHeight + 50),
+          orientation: 'portrait',
+          size: 'A4'
+        },
+        pdfPageIndex: pageIndex
+      };
+    });
 
-      } else {
-        console.error('Scan failed:', result.error);
-        alert(`Scan failed: ${result.error}`);
+    if (newPages.length > 0) {
+      const totalFields = newPages.reduce((count, page) => count + page.fields.length, 0);
+      return {
+        commandScript: '',
+        pages: newPages,
+        responsePreview,
+        summary: `AI generated ${newPages.length} page(s) with ${totalFields} field(s).`
+      };
+    }
+
+    return {
+      commandScript: '',
+      pages: [] as FormPage[],
+      responsePreview,
+      summary: '',
+      error: 'Document scanned but AI response could not be converted.'
+    };
+  };
+
+  const handleScanWithAi = async () => {
+    if (!aiSelectedFile || isScanning) {
+      return;
+    }
+    if (!user) {
+      setAiScanError('Please login first');
+      return;
+    }
+    setAiScanError('');
+    setAiScanSummary('');
+    setAiScanResponsePreview('');
+    setAiGeneratedCommands('');
+    setAiGeneratedPages(null);
+    setAiScanProgress(8);
+    setIsScanning(true);
+
+    const progressInterval = window.setInterval(() => {
+      setAiScanProgress(prev => Math.min(prev + Math.max(2, Math.floor(Math.random() * 10)), 90));
+    }, 400);
+
+    try {
+      const result = await processAndScanDocument(aiSelectedFile, user.id);
+      if (!result.success) {
+        setAiScanError(`Scan failed: ${result.error || 'Unknown error'}`);
+        return;
       }
+      const parsed = parseAiScanOutput(result.data);
+      setAiGeneratedCommands(parsed.commandScript);
+      setAiGeneratedPages(parsed.pages.length ? parsed.pages : null);
+      setAiScanSummary(parsed.summary);
+      setAiScanResponsePreview(parsed.responsePreview || '');
+      if (parsed.error) {
+        setAiScanError(parsed.error);
+      }
+      setAiScanProgress(100);
     } catch (error: any) {
       console.error('Scan error:', error);
-      alert(`Scan error: ${error.message}`);
+      setAiScanError(`Scan error: ${error?.message || 'Unknown error'}`);
     } finally {
+      window.clearInterval(progressInterval);
       setIsScanning(false);
-      // Reset input
-      if (scanFileRef.current) {
-        scanFileRef.current.value = '';
-      }
+    }
+  };
+
+  const handleImportAiResult = () => {
+    if (aiGeneratedCommands) {
+      setCommandInput(aiGeneratedCommands);
+      executeGridCommands(aiGeneratedCommands, aiTargetPageIndex);
+      setIsAiModalOpen(false);
+      return;
+    }
+    if (aiGeneratedPages && aiGeneratedPages.length > 0) {
+      setFormPages(aiGeneratedPages);
+      setIsAiModalOpen(false);
     }
   };
 
@@ -3344,6 +3340,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       date: 'date',
       intervaldata: 'intervalData',
       image: 'image',
+      logo: 'logo',
       attachment: 'attachment',
       annotation: 'annotation',
       signature: 'signature',
@@ -3924,9 +3921,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           const defaultHeight = widgetType === 'layoutTable' || widgetType === 'dataTable' ? 200 :
             widgetType === 'signature' ? 80 :
             widgetType === 'textarea' ? 80 :
-            widgetType === 'image' || widgetType === 'attachment' ? 120 : snapped.height;
+            widgetType === 'image' || widgetType === 'logo' || widgetType === 'attachment' ? 120 : snapped.height;
           const fieldId = `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          const baseLabel = `${widgetType.charAt(0).toUpperCase() + widgetType.slice(1)} Field`;
+          const baseLabel = widgetType === 'logo' ? 'Logo' : `${widgetType.charAt(0).toUpperCase() + widgetType.slice(1)} Field`;
           let newField: FormField = {
             id: fieldId,
             type: widgetType,
@@ -3934,9 +3931,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             settings: {
               required: false,
               placeholder: '',
-              hideTitle: false,
+              hideTitle: widgetType === 'logo',
               titleLayout: 'horizontal',
-              options: widgetType === 'multipleChoice' || widgetType === 'checkbox' || widgetType === 'select' ? ['Option 1', 'Option 2'] : []
+              options: widgetType === 'multipleChoice' || widgetType === 'checkbox' || widgetType === 'select' ? ['Option 1', 'Option 2'] : [],
+              acceptedTypes: widgetType === 'logo' ? '.png,.jpg,.jpeg,.svg,.webp' : undefined
             },
             x: snapped.x,
             y: snapped.y,
@@ -4021,7 +4019,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       saveToHistory();
       setFormPages(workingPages);
     }
-    setCurrentPageIndex(activePageIndex);
+    setCurrentPageIndex(activePageIndex, true);
     setCommandPageIndex(activePageIndex);
 
     const insertedField = lastInsertedField as FormField | null;
@@ -4125,15 +4123,16 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     const newField: FormField = {
       id: fieldId,
       type,
-      label: `${type.charAt(0).toUpperCase() + type.slice(1)} Field`,
+      label: type === 'logo' ? 'Logo' : `${type.charAt(0).toUpperCase() + type.slice(1)} Field`,
       settings: {
         required: false,
         placeholder: '',
-        hideTitle: false,
+        hideTitle: type === 'logo',
         titleLayout: 'horizontal',
         options: type === 'multipleChoice' || type === 'checkbox' || type === 'select' ? ['Option 1', 'Option 2'] : [],
         allowMultiple: false,
         allowSearch: false,
+        acceptedTypes: type === 'logo' ? '.png,.jpg,.jpeg,.svg,.webp' : undefined,
         maxSize: '10MB',
         rows: 3,
         columns: 3,
@@ -4238,18 +4237,22 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     setFormPages(prev => prev.map((page, index) => {
       if (index !== currentPageIndex) return page;
       
-      // Find the field to get its grid position
-      const fieldToRemove = page.fields.find(field => field.id === fieldId);
-      
-      // Update grid to mark cell as empty
-      let updatedGrid = { ...page.grid };
-      if (fieldToRemove && fieldToRemove.gridRow !== undefined && fieldToRemove.gridCol !== undefined) {
-        updatedGrid.cells[fieldToRemove.gridRow][fieldToRemove.gridCol] = {
-          ...updatedGrid.cells[fieldToRemove.gridRow][fieldToRemove.gridCol],
-          fieldId: undefined,
-          isEmpty: true
-        };
-      }
+      const updatedGrid = {
+        ...page.grid,
+        cells: page.grid.cells.map(row =>
+          row.map(cell =>
+            cell.fieldId === fieldId
+              ? {
+                  ...cell,
+                  fieldId: undefined,
+                  isEmpty: true,
+                  hasContent: false,
+                  value: ''
+                }
+              : cell
+          )
+        )
+      };
       
       return { 
         ...page, 
@@ -5582,6 +5585,24 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           </div>
         );
 
+      case 'logo':
+        return (
+          <div className="h-full w-full p-1 bg-white flex items-center justify-center overflow-hidden">
+            {field.settings.defaultValue ? (
+              <img
+                src={field.settings.defaultValue}
+                alt={field.label || 'Logo'}
+                className="max-w-full max-h-full object-contain"
+              />
+            ) : (
+              <div className="text-gray-500 text-xs flex flex-col items-center justify-center">
+                <RiImageLine className="text-lg mb-1" />
+                <div>Upload logo</div>
+              </div>
+            )}
+          </div>
+        );
+
       case 'attachment':
         return (
           <div className="p-2">
@@ -5969,6 +5990,13 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     onDragEnd={() => setIsDragging(false)}
                   />
                   <DraggableWidget 
+                    type="logo"
+                    icon={<RiImageLine className="mr-2" />}
+                    label="Logo"
+                    onDragStart={() => setIsDragging(true)}
+                    onDragEnd={() => setIsDragging(false)}
+                  />
+                  <DraggableWidget 
                     type="attachment"
                     icon={<RiAttachmentLine className="mr-2" />}
                     label="Attachment"
@@ -6048,8 +6076,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       <div className="flex-shrink-0 flex-grow-0 flex flex-col" style={{ width: '50%' }}>
         <div className="bg-dark-800/30 rounded-lg border border-dark-700/50 flex flex-col h-full">
           {/* Enhanced Toolbar with AI and Preview buttons */}
-          <div className="flex justify-between items-center border-b border-dark-700/50 p-2 flex-shrink-0">
-            <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2 border-b border-dark-700/50 p-2 flex-shrink-0">
+            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
               <Button 
                 variant="ai-secondary" 
                 size="sm" 
@@ -6091,37 +6119,6 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 </select>
               </div>
               
-              {/* AI Form Generator Button */}
-              <input 
-                type="file" 
-                ref={scanFileRef} 
-                style={{ display: 'none' }} 
-                accept=".pdf,.docx" 
-                onChange={handleScanFile} 
-              />
-              <Button 
-                variant="ai" 
-                size="sm" 
-                onClick={() => scanFileRef.current?.click()}
-                title="Generate form from image/PDF using AI"
-                leftIcon={isScanning ? <RiLoader4Line className="animate-spin" /> : <RiRobotLine />}
-                glowing
-                disabled={isScanning}
-              >
-                {isScanning ? 'Scanning...' : 'AI Generate'}
-              </Button>
-              <Button
-                variant="ai-secondary"
-                size="sm"
-                onClick={() => {
-                  setCommandPageIndex(currentPageIndex);
-                  setIsCommandModalOpen(true);
-                }}
-                leftIcon={<RiFileEditLine />}
-              >
-                Run Commands
-              </Button>
-              
               {/* Zoom Controls */}
               <div className="flex items-center gap-1 ml-4 border-l border-dark-600/50 pl-4">
                 <Button 
@@ -6155,8 +6152,34 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                   <RiApps2Line />
                 </Button>
               </div>
+              <div className="flex flex-wrap items-center gap-2 ml-4 border-l border-dark-600/50 pl-4">
+                <Button
+                  variant="ai"
+                  size="sm"
+                  onClick={() => setIsAiModalOpen(true)}
+                  title="Generate form from file using AI"
+                  leftIcon={isScanning ? <RiLoader4Line className="animate-spin" /> : <RiRobotLine />}
+                  glowing
+                  disabled={isScanning}
+                  className="whitespace-nowrap"
+                >
+                  {isScanning ? 'Scanning...' : 'AI Generate'}
+                </Button>
+                <Button
+                  variant="ai-secondary"
+                  size="sm"
+                  onClick={() => {
+                    setCommandPageIndex(currentPageIndex);
+                    setIsCommandModalOpen(true);
+                  }}
+                  leftIcon={<RiFileEditLine />}
+                  className="whitespace-nowrap"
+                >
+                  Run Commands
+                </Button>
+              </div>
             </div>
-            <div className="text-sm text-gray-400">
+            <div className="text-xs sm:text-sm text-gray-400 ml-auto whitespace-nowrap">
               {isDragging ? 'Drop widget here' : `${getCurrentPageDimensions().width}×${getCurrentPageDimensions().height}px`}
             </div>
           </div>
@@ -6195,6 +6218,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                 if (!page.grid) {
                   page.grid = createInitialGrid();
                 }
+
+                const gridCanvasSize = getGridCanvasSize(page.grid, pageWidth, pageHeight);
+                const a4BoundarySize = { width: page.dimensions.width, height: page.dimensions.height };
                 
                 return (
                   <div key={page.id} className="relative">
@@ -6285,7 +6311,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                         const newField: FormField = {
                           id: fieldId,
                           type: draggedType,
-                          label: draggedData?.label || `${draggedType.charAt(0).toUpperCase() + draggedType.slice(1)} Field`,
+                          label: draggedType === 'logo' ? 'Logo' : (draggedData?.label || `${draggedType.charAt(0).toUpperCase() + draggedType.slice(1)} Field`),
                           x: targetCell.x,
                           y: targetCell.y,
                           width: targetCell.width,
@@ -6297,9 +6323,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                           settings: {
                             required: false,
                             placeholder: '',
-                            hideTitle: false,
+                            hideTitle: draggedType === 'logo',
                             titleLayout: 'horizontal',
-                            options: draggedType === 'multipleChoice' || draggedType === 'checkbox' || draggedType === 'select' ? ['Option 1', 'Option 2'] : []
+                            options: draggedType === 'multipleChoice' || draggedType === 'checkbox' || draggedType === 'select' ? ['Option 1', 'Option 2'] : [],
+                            acceptedTypes: draggedType === 'logo' ? '.png,.jpg,.jpeg,.svg,.webp' : undefined
                           }
                         };
                         
@@ -6325,7 +6352,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                         setSelectedField(newField);
                         setSelectedCell(null);
                         
-                        setCurrentPageIndex(pageIndex);
+                        setCurrentPageIndex(pageIndex, true);
                         e.preventDefault();
                       }}
                       onDragOver={handleDragOver}
@@ -6333,13 +6360,13 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                     >
                       {/* Excel Grid Canvas */}
                       <ExcelGridComponent
-                        width={Math.max(pageWidth + 400, 1000)} // Canvas larger than page
-                        height={Math.max(pageHeight + 400, 1000)} // Canvas larger than page
+                        width={gridCanvasSize.width}
+                        height={gridCanvasSize.height}
                         selectedCell={selectedCell}
                         isDragging={isDragging}
                         paperSize={{
-                          width: page.dimensions.width,
-                          height: page.dimensions.height,
+                          width: a4BoundarySize.width,
+                          height: a4BoundarySize.height,
                           label: page.dimensions.size
                         }}
                         rows={page.grid.rows}
@@ -6348,7 +6375,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                         mergedCells={page.grid.mergedCells}
                         onCellSelect={(row, col) => {
                           setSelectedCell({ row, col });
-                          setCurrentPageIndex(pageIndex);
+                          setSelectedField(null);
+                          setCurrentPageIndex(pageIndex, true);
                         }}
                         onCellResize={(updatedRows, updatedColumns) => {
                           // Update the grid with new row and column dimensions
@@ -6611,7 +6639,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                           const newField: FormField = {
                             id: fieldId,
                             type: draggedType,
-                            label: draggedData?.label || `${draggedType.charAt(0).toUpperCase() + draggedType.slice(1)} Field`,
+                            label: draggedType === 'logo' ? 'Logo' : (draggedData?.label || `${draggedType.charAt(0).toUpperCase() + draggedType.slice(1)} Field`),
                             x: cell.x,
                             y: cell.y,
                             width: fieldWidth,
@@ -6623,9 +6651,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                             settings: {
                               required: false,
                               placeholder: '',
-                              hideTitle: false,
+                              hideTitle: draggedType === 'logo',
                               titleLayout: 'horizontal',
-                              options: draggedType === 'multipleChoice' || draggedType === 'checkbox' || draggedType === 'select' ? ['Option 1', 'Option 2'] : []
+                              options: draggedType === 'multipleChoice' || draggedType === 'checkbox' || draggedType === 'select' ? ['Option 1', 'Option 2'] : [],
+                              acceptedTypes: draggedType === 'logo' ? '.png,.jpg,.jpeg,.svg,.webp' : undefined
                             }
                           };
                           
@@ -6716,12 +6745,14 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                               }}
                               onClick={() => {
                                 setSelectedField(field);
-                                setCurrentPageIndex(pageIndex);
+                                setSelectedCell(null);
+                                setCurrentPageIndex(pageIndex, true);
                               }}
+                              data-builder-widget="true"
                               onContextMenu={(e) => onFieldContextMenu(e, field.id)}
                             >
                               <div className="w-full h-full bg-white border border-gray-200 rounded shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-                                 <div className="w-full h-full flex flex-col">
+                                 <div className="w-full h-full flex flex-col [&_.text-base]:text-sm [&_.text-sm]:text-xs">
                                    {renderWidgetPreview(field)}
                                  </div>
                                </div>
@@ -7102,7 +7133,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
               )}
               
               {/* File upload specific settings */}
-              {(selectedField.type === 'image' || selectedField.type === 'attachment') && (
+              {(selectedField.type === 'image' || selectedField.type === 'logo' || selectedField.type === 'attachment') && (
                 <>
                   <div className="mb-3">
                     <label className="block text-sm font-medium text-gray-400 mb-1">
@@ -7130,6 +7161,29 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
                       className="input-ai bg-dark-800/50 border-portfolio-orange/30 text-white"
                     />
                   </div>
+                  {(selectedField.type === 'image' || selectedField.type === 'logo') && (
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-gray-400 mb-2">Upload Image</label>
+                      <input
+                        type="file"
+                        accept={selectedField.type === 'logo' ? '.png,.jpg,.jpeg,.svg,.webp' : 'image/*'}
+                        className="w-full text-xs text-gray-300 file:mr-3 file:px-3 file:py-1.5 file:rounded file:border-0 file:bg-portfolio-orange file:text-white file:cursor-pointer bg-dark-800/40 border border-dark-600/50 rounded p-2"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            const result = event.target?.result;
+                            if (typeof result === 'string') {
+                              updateFieldSettings(selectedField.id, { defaultValue: result });
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                          e.currentTarget.value = '';
+                        }}
+                      />
+                    </div>
+                  )}
                   <div className="flex items-center justify-between mb-3">
                     <label className="text-sm">Allow multiple files</label>
                     <input 
@@ -7855,6 +7909,126 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       )}
       
       <Dialog
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        title="AI Form Generator"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-dark-700/60 bg-dark-900/30 p-4 space-y-3">
+            <div className="text-sm text-gray-300">
+              Upload a PDF or DOCX file, run AI scan, then import the generated result.
+            </div>
+            <input
+              type="file"
+              accept=".pdf,.docx"
+              onChange={(e) => setAiSelectedFile(e.target.files?.[0] || null)}
+              className="w-full text-sm text-gray-200 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:bg-ai-blue/20 file:text-ai-blue"
+            />
+            {aiSelectedFile && (
+              <div className="text-xs text-gray-400 truncate">
+                Selected: {aiSelectedFile.name}
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button
+                variant="ai"
+                size="sm"
+                onClick={handleScanWithAi}
+                leftIcon={isScanning ? <RiLoader4Line className="animate-spin" /> : <RiRobotLine />}
+                disabled={!aiSelectedFile || isScanning}
+                isLoading={isScanning}
+              >
+                {isScanning ? 'Scanning with AI...' : 'Scan with AI'}
+              </Button>
+            </div>
+          </div>
+
+          {(isScanning || aiScanProgress > 0) && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Scan Progress</span>
+                <span>{Math.min(aiScanProgress, 100)}%</span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-dark-700/60 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-ai-blue to-ai-teal transition-all duration-300"
+                  style={{ width: `${Math.min(aiScanProgress, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {aiScanSummary && (
+            <div className="rounded-md border border-ai-blue/30 bg-ai-blue/10 px-3 py-2 text-sm text-ai-blue">
+              {aiScanSummary}
+            </div>
+          )}
+
+          {aiGeneratedCommands && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-200">AI Commands</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">Import on page</span>
+                  <select
+                    value={aiTargetPageIndex}
+                    onChange={(e) => setAiTargetPageIndex(parseInt(e.target.value, 10))}
+                    className="bg-dark-700/40 border border-dark-600/50 rounded px-2 py-1 text-xs text-white"
+                  >
+                    {formPages.map((_, pageIdx) => (
+                      <option key={pageIdx} value={pageIdx}>
+                        Page {pageIdx + 1}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <textarea
+                value={aiGeneratedCommands}
+                onChange={(e) => setAiGeneratedCommands(e.target.value)}
+                className="w-full min-h-[180px] resize-y rounded-md border border-dark-600 bg-dark-800/40 text-gray-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-portfolio-orange"
+              />
+            </div>
+          )}
+
+          {!aiGeneratedCommands && aiGeneratedPages && aiGeneratedPages.length > 0 && (
+            <div className="rounded-md border border-dark-700 bg-dark-900/30 p-3 text-sm text-gray-300">
+              Generated {aiGeneratedPages.length} page(s) and {aiGeneratedPages.reduce((sum, page) => sum + page.fields.length, 0)} field(s).
+            </div>
+          )}
+
+          {aiScanResponsePreview && !aiGeneratedCommands && (
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-gray-200">AI Response</span>
+              <pre className="max-h-56 overflow-auto rounded-md border border-dark-700 bg-dark-950/70 p-3 text-[11px] text-gray-300 whitespace-pre-wrap break-words">
+                {aiScanResponsePreview}
+              </pre>
+            </div>
+          )}
+
+          {aiScanError && (
+            <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {aiScanError}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsAiModalOpen(false)}>
+              Close
+            </Button>
+            <Button
+              variant="ai"
+              onClick={handleImportAiResult}
+              disabled={!aiGeneratedCommands && (!aiGeneratedPages || aiGeneratedPages.length === 0)}
+            >
+              Import
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
         isOpen={isCommandModalOpen}
         onClose={() => setIsCommandModalOpen(false)}
         title="Command Runner"
@@ -7935,10 +8109,14 @@ const FormsPage: React.FC = () => {
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; fieldId: string } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Context menu functions - defined early to ensure availability
   const onFieldContextMenu = (e: React.MouseEvent, fieldId: string) => {
     e.preventDefault();
+    setSelectedCell(null);
+    const targetField = formPages[currentPageIndex]?.fields.find(field => field.id === fieldId) || null;
+    setSelectedField(targetField);
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
@@ -7965,13 +8143,31 @@ const FormsPage: React.FC = () => {
         console.log('Paste widget:', fieldId);
         break;
       case 'delete':
-        // Delete widget functionality
-        setFormPages(prev => {
-          return prev.map(page => ({
+        setFormPages(prev => prev.map((page, index) => {
+          if (index !== currentPageIndex) return page;
+          return {
             ...page,
-            fields: page.fields.filter(field => field.id !== fieldId)
-          }));
-        });
+            fields: page.fields.filter(field => field.id !== fieldId),
+            grid: {
+              ...page.grid,
+              cells: page.grid.cells.map(row =>
+                row.map(cell =>
+                  cell.fieldId === fieldId
+                    ? {
+                        ...cell,
+                        fieldId: undefined,
+                        isEmpty: true,
+                        hasContent: false,
+                        value: ''
+                      }
+                    : cell
+                )
+              )
+            }
+          };
+        }));
+        setSelectedField(prev => (prev?.id === fieldId ? null : prev));
+        setSelectedCell(null);
         break;
       case 'insertRowAbove':
         // Insert row above functionality - placeholder for now
@@ -8071,7 +8267,7 @@ const FormsPage: React.FC = () => {
     // Run migration after component mounts
     migrateFieldsToGrid();
   }, []); // Empty dependency array - run only once on mount
-  
+
   // Add formsList state
   const [formsList, setFormsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -8381,11 +8577,49 @@ const FormsPage: React.FC = () => {
   };
   const [selectedField, setSelectedField] = useState<FormField | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ row: number; col: number } | null>(null);
+  const preserveSelectionOnPageChangeRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [activeTab, setActiveTab] = useState('fields');
   const [showPreview, setShowPreview] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [formFlowOpen, setFormFlowOpen] = useState(false);
+
+  const setCurrentPageIndexWithSelectionControl = useCallback((index: number, preserveSelection = false) => {
+    preserveSelectionOnPageChangeRef.current = preserveSelection;
+    setCurrentPageIndex(index);
+  }, []);
+
+  useEffect(() => {
+    if (preserveSelectionOnPageChangeRef.current) {
+      preserveSelectionOnPageChangeRef.current = false;
+      return;
+    }
+    setSelectedField(null);
+    setSelectedCell(null);
+    setContextMenu(null);
+  }, [currentPageIndex]);
+
+  useEffect(() => {
+    const handleDocumentMouseDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const clickedContextMenu = Boolean(contextMenuRef.current?.contains(target));
+      if (clickedContextMenu) {
+        return;
+      }
+      const clickedWidget = Boolean(target.closest('[data-builder-widget="true"]'));
+      const clickedGridCell = Boolean(target.closest('[data-grid-cell="true"]'));
+      if (!clickedWidget && !clickedGridCell) {
+        setSelectedField(null);
+        setSelectedCell(null);
+      }
+      if (contextMenu) {
+        closeContextMenu();
+      }
+    };
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+    return () => document.removeEventListener('mousedown', handleDocumentMouseDown);
+  }, [contextMenu]);
   
 
   
@@ -9377,7 +9611,7 @@ const FormsPage: React.FC = () => {
                     formPages={formPages}
                     setFormPages={setFormPages}
                     currentPageIndex={currentPageIndex} 
-                    setCurrentPageIndex={setCurrentPageIndex}
+                    setCurrentPageIndex={setCurrentPageIndexWithSelectionControl}
                     selectedField={selectedField}
                     setSelectedField={setSelectedField}
                     selectedCell={selectedCell}
@@ -9403,6 +9637,7 @@ const FormsPage: React.FC = () => {
       {/* Context Menu */}
       {contextMenu && (
         <div
+          ref={contextMenuRef}
           className="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-2 z-50 min-w-48"
           style={{
             left: contextMenu.x,
@@ -9411,14 +9646,14 @@ const FormsPage: React.FC = () => {
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            className="w-full px-4 py-2 text-left text-sm text-gray-800 hover:bg-gray-100 flex items-center gap-2"
             onClick={() => handleContextMenuAction('copy', contextMenu.fieldId)}
           >
             <RiFileCopyLine className="text-gray-500" />
             Copy Widget
           </button>
           <button
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            className="w-full px-4 py-2 text-left text-sm text-gray-800 hover:bg-gray-100 flex items-center gap-2"
             onClick={() => handleContextMenuAction('cut', contextMenu.fieldId)}
           >
             <RiScissorsCutLine className="text-gray-500" />
@@ -9426,7 +9661,7 @@ const FormsPage: React.FC = () => {
           </button>
           {widgetClipboard && (
             <button
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+              className="w-full px-4 py-2 text-left text-sm text-gray-800 hover:bg-gray-100 flex items-center gap-2"
               onClick={() => handleContextMenuAction('paste', contextMenu.fieldId)}
             >
               <RiClipboardLine className="text-gray-500" />
@@ -9435,21 +9670,21 @@ const FormsPage: React.FC = () => {
           )}
           <hr className="my-1" />
           <button
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            className="w-full px-4 py-2 text-left text-sm text-gray-800 hover:bg-gray-100 flex items-center gap-2"
             onClick={() => handleContextMenuAction('insertRowAbove', contextMenu.fieldId)}
           >
             <RiInsertRowTop className="text-gray-500" />
             Insert Row Above
           </button>
           <button
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            className="w-full px-4 py-2 text-left text-sm text-gray-800 hover:bg-gray-100 flex items-center gap-2"
             onClick={() => handleContextMenuAction('insertRowBelow', contextMenu.fieldId)}
           >
             <RiInsertRowBottom className="text-gray-500" />
             Insert Row Below
           </button>
           <button
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            className="w-full px-4 py-2 text-left text-sm text-gray-800 hover:bg-gray-100 flex items-center gap-2"
             onClick={() => handleContextMenuAction('deleteRow', contextMenu.fieldId)}
           >
             <RiDeleteRow className="text-red-500" />

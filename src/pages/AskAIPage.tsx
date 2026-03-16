@@ -1,15 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  RiRobot2Line, 
-  RiLightbulbLine, 
   RiCloseCircleLine,
   RiBrainLine,
   RiAddLine,
   RiHistoryLine,
-  RiPhoneLine,
-  RiUserLine,
   RiSendPlaneFill,
   RiDeleteBinLine,
   RiUpload2Line,
@@ -17,10 +13,13 @@ import {
   RiFileCopyLine,
   RiShareLine,
   RiDownload2Line,
-  RiLinksLine
+  RiLinksLine,
+  RiFileExcel2Line,
+  RiFileWord2Line,
+  RiFileLine,
+  RiExternalLinkLine
 } from 'react-icons/ri';
 import { IconContext } from 'react-icons';
-import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import html2canvas from 'html2canvas';
@@ -50,6 +49,153 @@ const extractLinkUrls = (content: string): string[] => {
 
 const stripLinkUrlBlocks = (content: string): string => {
   return content.replace(/```linkurl\s*[\s\S]*?```/gi, '').trim();
+};
+
+type GeneratedFileType = 'xlsx' | 'docx';
+
+interface GeneratedFileAttachment {
+  url: string;
+  fileType: GeneratedFileType;
+  fileName: string;
+}
+
+const extractTextFromJsonPayload = (payload: unknown): string | null => {
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim();
+    if (!trimmed) return payload;
+    if (
+      (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))
+    ) {
+      try {
+        const parsedNested = JSON.parse(trimmed);
+        return extractTextFromJsonPayload(parsedNested);
+      } catch (error) {
+        return payload;
+      }
+    }
+    return payload;
+  }
+
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const extracted = extractTextFromJsonPayload(item);
+      if (typeof extracted === 'string' && extracted.trim()) {
+        return extracted;
+      }
+    }
+    return null;
+  }
+
+  if (payload && typeof payload === 'object') {
+    const typedPayload = payload as Record<string, unknown>;
+    const keys: Array<'output' | 'response' | 'text' | 'content' | 'message'> = [
+      'output',
+      'response',
+      'text',
+      'content',
+      'message'
+    ];
+    for (const key of keys) {
+      const value = typedPayload[key];
+      const extracted = extractTextFromJsonPayload(value);
+      if (typeof extracted === 'string' && extracted.trim()) {
+        return extracted;
+      }
+    }
+  }
+
+  return null;
+};
+
+const normalizePotentialJsonMessage = (content: string): string => {
+  const trimmed = content.trim();
+  if (!trimmed) return trimmed;
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    const extracted = extractTextFromJsonPayload(parsed);
+    if (typeof extracted === 'string') {
+      return extracted;
+    }
+  } catch (error) {
+    return content;
+  }
+
+  return content;
+};
+
+const cleanExtractedUrl = (url: string): string => {
+  return url.replace(/[),.;!?]+$/g, '');
+};
+
+const extractAllUrls = (content: string): string[] => {
+  const normalized = normalizePotentialJsonMessage(content);
+  const urls: string[] = [];
+  const urlRegex = /(https?:\/\/[^\s<>"'`)\]}]+)/gi;
+  const markdownRegex = /\[[^\]]*]\((https?:\/\/[^)\s]+)\)/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = urlRegex.exec(normalized)) !== null) {
+    urls.push(cleanExtractedUrl(match[1]));
+  }
+
+  while ((match = markdownRegex.exec(normalized)) !== null) {
+    urls.push(cleanExtractedUrl(match[1]));
+  }
+
+  extractLinkUrls(content).forEach((url) => urls.push(cleanExtractedUrl(url)));
+
+  return Array.from(new Set(urls));
+};
+
+const resolveGeneratedFileType = (url: string): GeneratedFileType | null => {
+  const path = url.split('?')[0].split('#')[0].toLowerCase();
+  if (path.endsWith('.xlsx') || path.endsWith('.xls')) {
+    return 'xlsx';
+  }
+  if (path.endsWith('.docx') || path.endsWith('.doc')) {
+    return 'docx';
+  }
+  return null;
+};
+
+const getFileNameFromUrl = (url: string): string => {
+  const withoutQuery = url.split('?')[0];
+  const rawName = withoutQuery.split('/').pop() || '';
+  try {
+    return decodeURIComponent(rawName) || 'generated-file';
+  } catch (error) {
+    return rawName || 'generated-file';
+  }
+};
+
+const extractGeneratedFileAttachments = (content: string): GeneratedFileAttachment[] => {
+  const urls = extractAllUrls(content);
+  return urls
+    .map((url) => {
+      const fileType = resolveGeneratedFileType(url);
+      if (!fileType) return null;
+      return {
+        url,
+        fileType,
+        fileName: getFileNameFromUrl(url)
+      };
+    })
+    .filter((item): item is GeneratedFileAttachment => item !== null);
+};
+
+const removeGeneratedFileUrlsFromText = (content: string): string => {
+  return content
+    .replace(
+      /\[([^\]]+)\]\((https?:\/\/[^\s<>"'`]+?\.(?:xlsx|xls|docx|doc)(?:\?[^\s<>"'`]*)?(?:#[^\s<>"'`]*)?)\)/gi,
+      '$1'
+    )
+    .replace(/`?(https?:\/\/[^\s<>"'`]+?\.(?:xlsx|xls|docx|doc)(?:\?[^\s<>"'`]*)?(?:#[^\s<>"'`]*)?)`?/gi, '')
+    .replace(/\(\s*\)/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 };
 
 const TableWithActions: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -102,112 +248,155 @@ const TableWithActions: React.FC<{ children: React.ReactNode }> = ({ children })
   );
 };
 
-// Helper component to render message content with mixed types (Text, Chart, Forms)
-const MessageContentRenderer: React.FC<{ message: ChatMessage }> = ({ message }) => {
-  if (message.sender === 'user') {
-    return <>{message.content}</>;
+const MemoChartMarkdownBlock = React.memo(({ content }: { content: string }) => {
+  const parsedConfig = useMemo(() => {
+    try {
+      return JSON.parse(content);
+    } catch (error) {
+      return null;
+    }
+  }, [content]);
+
+  if (!parsedConfig) {
+    return (
+      <code className="bg-white/10 rounded px-1.5 py-0.5 text-xs font-mono text-portfolio-orange">
+        {content}
+      </code>
+    );
   }
 
-  let content = stripLinkUrlBlocks(message.content)
-    .replace(
-      /<!--FORMS_JSON_START-->([\s\S]*?)<!--FORMS_JSON_END-->/g,
-      '\n```forms-json\n$1\n```\n'
-    )
-    .replace(/```\s*chartjs/gi, '\n```chartjs')
-    .replace(/([^\n])```/g, '$1\n```');
+  return <ChartBlock config={parsedConfig} />;
+});
 
-  if (message.isStreaming) {
-    content += ' ▍';
+const MemoFormsMarkdownBlock = React.memo(({ content }: { content: string }) => {
+  const parsedData = useMemo(() => {
+    try {
+      return JSON.parse(content);
+    } catch (error) {
+      return null;
+    }
+  }, [content]);
+
+  if (!parsedData || !parsedData.forms || !Array.isArray(parsedData.forms)) {
+    return null;
+  }
+
+  return <AIFormLink forms={parsedData.forms} />;
+});
+
+const markdownComponents: any = {
+  h1: (props: any) => <h1 className="text-2xl font-bold text-white mt-6 mb-4 pb-2 border-b border-white/10" {...props} />,
+  h2: (props: any) => <h2 className="text-xl font-bold text-white mt-5 mb-3" {...props} />,
+  h3: (props: any) => <h3 className="text-lg font-semibold text-portfolio-orange mt-4 mb-2" {...props} />,
+  h4: (props: any) => <h4 className="text-base font-semibold text-white mt-3 mb-2" {...props} />,
+  p: (props: any) => <p className="mb-3 leading-relaxed text-gray-300 last:mb-0 whitespace-pre-wrap" {...props} />,
+  a: (props: any) => <a className="text-portfolio-orange hover:text-white underline transition-colors" target="_blank" rel="noopener noreferrer" {...props} />,
+  ul: (props: any) => <ul className="list-disc pl-5 mb-4 space-y-1 text-gray-300" {...props} />,
+  ol: (props: any) => <ol className="list-decimal pl-5 mb-4 space-y-1 text-gray-300" {...props} />,
+  li: (props: any) => <li className="pl-1" {...props} />,
+  blockquote: (props: any) => <blockquote className="border-l-4 border-portfolio-orange/50 pl-4 py-1 my-4 bg-white/5 rounded-r italic text-gray-400" {...props} />,
+  hr: (props: any) => <hr className="border-white/10 my-6" {...props} />,
+  table: (props: any) => (
+    <TableWithActions>
+      <div className="overflow-x-auto rounded-lg border border-white/10">
+        <table className="min-w-full divide-y divide-white/10" {...props} />
+      </div>
+    </TableWithActions>
+  ),
+  thead: (props: any) => <thead className="bg-white/5" {...props} />,
+  th: (props: any) => <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" {...props} />,
+  tbody: (props: any) => <tbody className="divide-y divide-white/5 bg-transparent" {...props} />,
+  tr: (props: any) => <tr className="hover:bg-white/5 transition-colors" {...props} />,
+  td: (props: any) => <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-300" {...props} />,
+  code: ({ className, children, ...props }: any) => {
+    const match = /language-([\w-]+)/.exec(className || '');
+    const language = match ? match[1] : '';
+    const contentStr = String(children).replace(/\n$/, '');
+    
+    if (language === 'chartjs') {
+      return <MemoChartMarkdownBlock content={contentStr} />;
+    }
+
+    if (language === 'forms-json') {
+      return <MemoFormsMarkdownBlock content={contentStr} />;
+    }
+
+    return match ? (
+      <div className="rounded-lg bg-[#1e1e1e] my-4 overflow-hidden border border-white/10 shadow-lg">
+        <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
+          <span className="text-xs text-gray-400 font-mono">{match[1]}</span>
+          <div className="flex space-x-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500/20"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/20"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-green-500/20"></div>
+          </div>
+        </div>
+        <div className="p-4 overflow-x-auto">
+          <code className={`${className} font-mono text-sm`} {...props}>
+            {children}
+          </code>
+        </div>
+      </div>
+    ) : (
+      <code className="bg-white/10 rounded px-1.5 py-0.5 text-xs font-mono text-portfolio-orange" {...props}>
+        {children}
+      </code>
+    );
+  },
+  pre: (props: any) => <pre className="bg-transparent p-0 m-0" {...props} />,
+  img: (props: any) => <img className="rounded-lg max-w-full h-auto my-4 border border-white/10" {...props} alt={props.alt || 'AI generated image'} />,
+};
+
+// Helper component to render message content with mixed types (Text, Chart, Forms)
+const MessageContentRenderer: React.FC<{ message: ChatMessage }> = React.memo(({ message }) => {
+  const isUserMessage = message.sender === 'user';
+
+  const content = useMemo(() => {
+    if (isUserMessage) {
+      return message.content;
+    }
+
+    let normalizedContent = normalizePotentialJsonMessage(stripLinkUrlBlocks(message.content))
+      .replace(/`(https?:\/\/[^`\s]+)`/gi, '[$1]($1)')
+      .replace(
+        /<!--FORMS_JSON_START-->([\s\S]*?)<!--FORMS_JSON_END-->/g,
+        '\n```forms-json\n$1\n```\n'
+      )
+      .replace(/```\s*chartjs/gi, '\n```chartjs')
+      .replace(/([^\n])```/g, '$1\n```');
+
+    normalizedContent = removeGeneratedFileUrlsFromText(normalizedContent);
+
+    if (message.isStreaming) {
+      normalizedContent += ' ▍';
+    }
+
+    return normalizedContent;
+  }, [isUserMessage, message.content, message.isStreaming]);
+
+  if (isUserMessage) {
+    return <>{message.content}</>;
   }
 
   return (
     <div className="markdown-container w-full max-w-full min-w-0 break-words overflow-x-hidden">
       <ReactMarkdown 
         remarkPlugins={[remarkGfm]}
-        components={{
-          h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-white mt-6 mb-4 pb-2 border-b border-white/10" {...props} />,
-          h2: ({node, ...props}) => <h2 className="text-xl font-bold text-white mt-5 mb-3" {...props} />,
-          h3: ({node, ...props}) => <h3 className="text-lg font-semibold text-portfolio-orange mt-4 mb-2" {...props} />,
-          h4: ({node, ...props}) => <h4 className="text-base font-semibold text-white mt-3 mb-2" {...props} />,
-          p: ({node, ...props}) => <p className="mb-3 leading-relaxed text-gray-300 last:mb-0 whitespace-pre-wrap" {...props} />,
-          a: ({node, ...props}) => <a className="text-portfolio-orange hover:text-white underline transition-colors" target="_blank" rel="noopener noreferrer" {...props} />,
-          ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-1 text-gray-300" {...props} />,
-          ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4 space-y-1 text-gray-300" {...props} />,
-          li: ({node, ...props}) => <li className="pl-1" {...props} />,
-          blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-portfolio-orange/50 pl-4 py-1 my-4 bg-white/5 rounded-r italic text-gray-400" {...props} />,
-          hr: ({node, ...props}) => <hr className="border-white/10 my-6" {...props} />,
-          table: ({node, ...props}) => (
-            <TableWithActions>
-              <div className="overflow-x-auto rounded-lg border border-white/10">
-                <table className="min-w-full divide-y divide-white/10" {...props} />
-              </div>
-            </TableWithActions>
-          ),
-          thead: ({node, ...props}) => <thead className="bg-white/5" {...props} />,
-          th: ({node, ...props}) => <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" {...props} />,
-          tbody: ({node, ...props}) => <tbody className="divide-y divide-white/5 bg-transparent" {...props} />,
-          tr: ({node, ...props}) => <tr className="hover:bg-white/5 transition-colors" {...props} />,
-          td: ({node, ...props}) => <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-300" {...props} />,
-          code: ({node, className, children, ...props}) => {
-            const match = /language-([\w-]+)/.exec(className || '')
-            const language = match ? match[1] : '';
-
-            // Check if the content looks like a chart config even if language is not set
-            // This is a fallback for when the language tag is missing but content is clearly a chart config
-            const contentStr = String(children).replace(/\n$/, '');
-            
-            if (language === 'chartjs') {
-              try {
-                const config = JSON.parse(contentStr);
-                return <ChartBlock config={config} />;
-              } catch (e) {
-                console.error('Failed to parse chart config:', e);
-                // Fallback to displaying code if parsing fails
-              }
-            }
-
-            if (language === 'forms-json') {
-              try {
-                const data = JSON.parse(contentStr);
-                if (data.forms && Array.isArray(data.forms)) {
-                  return <AIFormLink forms={data.forms} />;
-                }
-              } catch (e) {
-                console.error('Failed to parse forms JSON:', e);
-              }
-            }
-
-            return match ? (
-              <div className="rounded-lg bg-[#1e1e1e] my-4 overflow-hidden border border-white/10 shadow-lg">
-                <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
-                  <span className="text-xs text-gray-400 font-mono">{match[1]}</span>
-                  <div className="flex space-x-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full bg-red-500/20"></div>
-                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/20"></div>
-                    <div className="w-2.5 h-2.5 rounded-full bg-green-500/20"></div>
-                  </div>
-                </div>
-                <div className="p-4 overflow-x-auto">
-                  <code className={`${className} font-mono text-sm`} {...props}>
-                    {children}
-                  </code>
-                </div>
-              </div>
-            ) : (
-              <code className="bg-white/10 rounded px-1.5 py-0.5 text-xs font-mono text-portfolio-orange" {...props}>
-                {children}
-              </code>
-            )
-          },
-          pre: ({node, ...props}) => <pre className="bg-transparent p-0 m-0" {...props} />,
-          img: ({node, ...props}) => <img className="rounded-lg max-w-full h-auto my-4 border border-white/10" {...props} alt={props.alt || 'AI generated image'} />,
-        }}
+        components={markdownComponents}
       >
         {content}
       </ReactMarkdown>
     </div>
   );
-};
+}, (prevProps, nextProps) => (
+  prevProps.message === nextProps.message ||
+  (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.isStreaming === nextProps.message.isStreaming &&
+    prevProps.message.sender === nextProps.message.sender
+  )
+));
 
 const AskAIPage: React.FC = () => {
   const { t } = useTranslation();
@@ -230,11 +419,13 @@ const AskAIPage: React.FC = () => {
   const [showChatHistory, setShowChatHistory] = useState(false);
   const [activeReasoningId, setActiveReasoningId] = useState<string | null>(null);
   const [activeLinksMessageId, setActiveLinksMessageId] = useState<string | null>(null);
+  const [generationType, setGenerationType] = useState<'docx' | 'xlsx' | null>(null);
+  const [previewFile, setPreviewFile] = useState<GeneratedFileAttachment | null>(null);
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const pdfVisionInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     scrollToBottom();
@@ -265,14 +456,16 @@ const AskAIPage: React.FC = () => {
   };
 
   const handleSendMessage = async (messageText: string = input) => {
+    if (generationType && !messageText.trim()) return;
     if (!messageText.trim() && !selectedFile) return;
     const fileToSend = selectedFile;
-    const mode = isSearchEnabled && !fileToSend ? 'search' : 'text';
+    const mode = generationType || (isSearchEnabled && !fileToSend ? 'search' : 'text');
     const uploadMode = fileToSend ? selectedUploadMode || (fileToSend.type.startsWith('image/') ? 'image' : 'document') : undefined;
     setInput('');
     setSelectedFile(null);
     setSelectedUploadMode(null);
     setIsSearchEnabled(false);
+    setGenerationType(null);
     
     try {
       await sendMessage(messageText, selectedProject?.id, { mode, file: fileToSend, uploadMode });
@@ -294,6 +487,7 @@ const AskAIPage: React.FC = () => {
     setSelectedFile(null);
     setSelectedUploadMode(null);
     setIsSearchEnabled(false);
+    setGenerationType(null);
     setShowChatHistory(false);
   };
 
@@ -301,6 +495,7 @@ const AskAIPage: React.FC = () => {
     setSelectedFile(file);
     setSelectedUploadMode(file ? uploadMode : null);
     setIsSearchEnabled(false);
+    setGenerationType(null);
   };
 
   const handleImageFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -356,17 +551,13 @@ const AskAIPage: React.FC = () => {
     }
   };
 
-  const handleSwitchToVoice = () => {
-    navigate('/voice-call');
-  };
-
-  const copyAiMessage = async (content: string) => {
-    const clean = stripLinkUrlBlocks(content);
+  const copyMessage = async (content: string) => {
+    const clean = normalizePotentialJsonMessage(stripLinkUrlBlocks(content));
     await navigator.clipboard.writeText(clean);
   };
 
-  const shareAiMessage = async (content: string) => {
-    const clean = stripLinkUrlBlocks(content);
+  const shareMessage = async (content: string) => {
+    const clean = normalizePotentialJsonMessage(stripLinkUrlBlocks(content));
     if (navigator.share) {
       try {
         await navigator.share({ text: clean, title: 'MatrixTwin AI' });
@@ -396,17 +587,17 @@ const AskAIPage: React.FC = () => {
       <div className="flex flex-col h-full z-10">
         {/* Fixed Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between py-4 px-6 border-b border-white/10 bg-black/20 backdrop-blur-md flex-shrink-0">
-          <div className="flex items-center">
-            <div className="h-10 w-10 rounded-full bg-portfolio-orange/10 flex items-center justify-center border border-portfolio-orange/20 mr-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-portfolio-orange/10 flex items-center justify-center border border-portfolio-orange/20">
               <IconContext.Provider value={{ className: "text-portfolio-orange text-xl" }}>
                 <RiBrainLine />
               </IconContext.Provider>
             </div>
-            <div>
-              <h1 className="text-xl font-display font-bold text-white">
-                Matrix AI
+            <div className="flex flex-col justify-center">
+              <h1 className="text-xl font-display font-bold text-white leading-none">
+                MatrixTwin AI
               </h1>
-              <div className="text-gray-400 text-xs flex items-center">
+              <div className="text-gray-400 text-xs flex items-center mt-1">
                 <span>{t('askAI.subtitle', 'Ask anything about your projects')}</span>
               </div>
             </div>
@@ -433,15 +624,6 @@ const AskAIPage: React.FC = () => {
               History
             </Button>
             
-            <Button
-              onClick={handleSwitchToVoice}
-              variant="outline"
-              size="sm"
-              className="rounded-lg border-white/10 text-gray-300 hover:bg-white/5 w-9 h-9 p-0 flex items-center justify-center"
-              title={t('askAI.switchToVoice', 'Switch to Voice Call')}
-            >
-              <RiPhoneLine />
-            </Button>
           </div>
         </div>
         
@@ -546,6 +728,7 @@ const AskAIPage: React.FC = () => {
                 const messageReasoning = window.sessionStorage.getItem(`reasoning-${message.id}`);
                 const isReasoningActive = activeReasoningId === message.id;
                 const links = message.sender === 'ai' ? extractLinkUrls(message.content) : [];
+                const generatedFiles = message.sender === 'ai' ? extractGeneratedFileAttachments(message.content) : [];
                 const isLinksPanelOpen = activeLinksMessageId === message.id;
                 
                 return (
@@ -554,36 +737,34 @@ const AskAIPage: React.FC = () => {
                     className={`flex w-full ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`flex items-start ${
+                      className={`flex ${
                         message.sender === 'user'
-                          ? 'max-w-[90%] sm:max-w-[85%] flex-row-reverse'
-                          : 'w-[70vw] max-w-[70vw] min-w-0'
+                          ? 'items-end max-w-[90%] sm:max-w-[85%] flex-col'
+                          : 'w-[70vw] max-w-[70vw] min-w-0 flex-col'
                       }`}
                     >
-                      <div className={`h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center mx-2 ${
-                        message.sender === 'user' 
-                          ? 'bg-portfolio-orange text-white' 
-                          : message.isStreaming 
-                            ? 'bg-portfolio-orange text-white animate-pulse' 
-                            : 'bg-transparent text-portfolio-orange border border-white/10'
-                      }`}>
-                        <IconContext.Provider value={{ className: "text-sm" }}>
-                          {message.sender === 'user' ? <RiUserLine /> : <RiRobot2Line />}
-                        </IconContext.Provider>
-                      </div>
+                      {message.sender !== 'user' && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`h-10 w-10 rounded-full flex-shrink-0 flex items-center justify-center ${
+                            message.isStreaming
+                              ? 'bg-portfolio-orange text-white animate-pulse'
+                              : 'bg-transparent text-portfolio-orange border border-white/10'
+                          }`}>
+                            <IconContext.Provider value={{ className: "text-base" }}>
+                              <RiBrainLine />
+                            </IconContext.Provider>
+                          </div>
+                          <span className="text-lg font-bold text-white leading-none">
+                            MatrixTwin AI
+                          </span>
+                        </div>
+                      )}
                       
                       <div className={`rounded-2xl px-4 py-3 text-sm ${
                         message.sender === 'user'
-                          ? 'bg-portfolio-orange text-white shadow-md'
-                          : 'bg-transparent text-gray-200 pl-0 border-none shadow-none w-full'
+                          ? 'bg-portfolio-orange text-white shadow-md rounded-tr-none'
+                          : 'bg-transparent text-gray-200 pl-0 pt-0 border-none shadow-none w-full'
                       }`}>
-                        <div className={`mb-1 text-[10px] opacity-80 flex items-center ${message.sender === 'user' ? 'text-white/80' : 'text-portfolio-orange'}`}>
-                          <IconContext.Provider value={{ className: "mr-1" }}>
-                            <RiLightbulbLine />
-                          </IconContext.Provider>
-                          {message.sender === 'user' ? message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'MatrixTwin AI'}
-                        </div>
-                        
                         {/* Display uploaded image in user message */}
                         {message.attachments && message.attachments.length > 0 && (
                           <div className="mb-3 space-y-2">
@@ -632,6 +813,36 @@ const AskAIPage: React.FC = () => {
                             </div>
                           )}
                         </div>
+                        {message.sender === 'ai' && generatedFiles.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            {generatedFiles.map((file, fileIndex) => (
+                              <button
+                                key={`${message.id}-generated-file-${fileIndex}`}
+                                onClick={() => setPreviewFile(file)}
+                                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 hover:bg-white/5 transition-colors text-left"
+                              >
+                                <span className="flex items-center justify-between gap-2">
+                                  <span className="inline-flex items-center gap-2 min-w-0">
+                                    {file.fileType === 'xlsx' ? (
+                                      <RiFileExcel2Line className="text-portfolio-orange text-base flex-shrink-0" />
+                                    ) : file.fileType === 'docx' ? (
+                                      <RiFileWord2Line className="text-portfolio-orange text-base flex-shrink-0" />
+                                    ) : (
+                                      <RiFileLine className="text-portfolio-orange text-base flex-shrink-0" />
+                                    )}
+                                    <span className="text-xs text-white truncate">
+                                      {file.fileType === 'xlsx' ? 'Attached Excel' : 'Attached Word'} · {file.fileName}
+                                    </span>
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 text-[11px] text-portfolio-orange flex-shrink-0">
+                                    Open
+                                    <RiExternalLinkLine className="text-xs" />
+                                  </span>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         {message.sender === 'ai' && (
                           <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2">
                             <span className="text-[10px] text-gray-500">
@@ -648,14 +859,14 @@ const AskAIPage: React.FC = () => {
                                 </button>
                               )}
                               <button
-                                onClick={() => copyAiMessage(message.content)}
+                                onClick={() => copyMessage(message.content)}
                                 className="w-6 h-6 rounded-full border border-white/20 text-gray-300 hover:bg-white/10 inline-flex items-center justify-center"
                                 title="Copy"
                               >
                                 <RiFileCopyLine className="text-xs" />
                               </button>
                               <button
-                                onClick={() => shareAiMessage(message.content)}
+                                onClick={() => shareMessage(message.content)}
                                 className="w-6 h-6 rounded-full border border-white/20 text-gray-300 hover:bg-white/10 inline-flex items-center justify-center"
                                 title="Share"
                               >
@@ -699,6 +910,27 @@ const AskAIPage: React.FC = () => {
                           </div>
                         )}
                       </div>
+                      {message.sender === 'user' && (
+                        <div className="mt-1 flex items-center justify-end gap-1.5">
+                          <span className="text-[10px] text-white/70">
+                            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <button
+                            onClick={() => copyMessage(message.content)}
+                            className="w-6 h-6 rounded-full border border-white/25 text-white/80 hover:bg-white/10 hover:text-white inline-flex items-center justify-center"
+                            title="Copy"
+                          >
+                            <RiFileCopyLine className="text-xs" />
+                          </button>
+                          <button
+                            onClick={() => shareMessage(message.content)}
+                            className="w-6 h-6 rounded-full border border-white/25 text-white/80 hover:bg-white/10 hover:text-white inline-flex items-center justify-center"
+                            title="Share"
+                          >
+                            <RiShareLine className="text-xs" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -725,7 +957,37 @@ const AskAIPage: React.FC = () => {
                   </button>
                 </div>
               )}
-              <div className="flex items-end gap-2 bg-black/40 border border-white/10 rounded-xl p-2 focus-within:ring-1 focus-within:ring-portfolio-orange focus-within:border-portfolio-orange transition-all">
+              {(currentChat.messages.length === 0 || isInputFocused || generationType !== null) && (
+                <div className="mb-2 flex items-center gap-2">
+                  <Button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setGenerationType('docx');
+                      setIsSearchEnabled(false);
+                      setSelectedFile(null);
+                      setSelectedUploadMode(null);
+                    }}
+                    variant={generationType === 'docx' ? 'ai' : 'outline'}
+                    className={`rounded-lg h-9 px-3 text-xs ${generationType === 'docx' ? 'shadow-lg shadow-portfolio-orange/30' : 'border-white/15 text-gray-300 hover:bg-white/10'}`}
+                  >
+                    Generate DOCX
+                  </Button>
+                  <Button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setGenerationType('xlsx');
+                      setIsSearchEnabled(false);
+                      setSelectedFile(null);
+                      setSelectedUploadMode(null);
+                    }}
+                    variant={generationType === 'xlsx' ? 'ai' : 'outline'}
+                    className={`rounded-lg h-9 px-3 text-xs ${generationType === 'xlsx' ? 'shadow-lg shadow-portfolio-orange/30' : 'border-white/15 text-gray-300 hover:bg-white/10'}`}
+                  >
+                    Generate XLSX
+                  </Button>
+                </div>
+              )}
+              <div className="flex items-end gap-2 bg-black/40 border border-white/10 rounded-xl p-2 transition-all">
                 <input
                   ref={imageInputRef}
                   type="file"
@@ -759,13 +1021,18 @@ const AskAIPage: React.FC = () => {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  onFocus={() => setIsInputFocused(true)}
+                  onBlur={() => setIsInputFocused(false)}
                   placeholder={t('askAI.inputPlaceholder', 'Ask me anything about your project...')}
-                  className="flex-1 bg-transparent border-none focus:ring-0 resize-none text-sm text-white placeholder-gray-500 min-h-[44px] max-h-[120px] py-2.5 px-2 scrollbar-hide"
+                  className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none focus-visible:outline-none resize-none text-sm text-white placeholder-gray-500 min-h-[44px] max-h-[120px] py-2.5 px-2 scrollbar-hide"
                   rows={1}
                   style={{ height: 'auto', minHeight: '44px' }}
                 />
                 <Button
-                  onClick={() => setIsSearchEnabled(prev => !prev)}
+                  onClick={() => {
+                    setGenerationType(null);
+                    setIsSearchEnabled(prev => !prev);
+                  }}
                   variant={isSearchEnabled ? 'ai' : 'outline'}
                   className={`rounded-lg h-10 px-3 flex items-center justify-center transition-all ${isSearchEnabled ? 'shadow-lg shadow-portfolio-orange/30' : 'border-white/15 text-gray-300 hover:bg-white/10'}`}
                   title="Search mode"
@@ -776,7 +1043,7 @@ const AskAIPage: React.FC = () => {
                 <Button 
                   onClick={() => handleSendMessage()}
                   className="rounded-lg w-10 h-10 p-0 flex items-center justify-center bg-portfolio-orange hover:bg-portfolio-orange/80 transition-all shadow-md text-white disabled:opacity-50 disabled:cursor-not-allowed mb-0.5"
-                  disabled={!input.trim() && !selectedFile}
+                  disabled={generationType ? !input.trim() : (!input.trim() && !selectedFile)}
                 >
                   <RiSendPlaneFill className="text-lg" />
                 </Button>
@@ -819,6 +1086,38 @@ const AskAIPage: React.FC = () => {
             >
               Document Upload
             </Button>
+          </div>
+        </Dialog>
+      )}
+      {previewFile && (
+        <Dialog
+          isOpen={Boolean(previewFile)}
+          onClose={() => setPreviewFile(null)}
+          title={previewFile.fileType === 'xlsx' ? 'Excel Preview' : 'Word Preview'}
+          size="full"
+          maxWidth="1100px"
+          fullWidth
+        >
+          <div className="space-y-3">
+            <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-gray-300 break-all">
+              {previewFile.fileName}
+            </div>
+            <div className="h-[70vh] w-full rounded-lg overflow-hidden border border-white/10 bg-black/40">
+              <iframe
+                title="Generated file preview"
+                src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(previewFile.url)}`}
+                className="w-full h-full border-0"
+              />
+            </div>
+            <a
+              href={previewFile.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-portfolio-orange hover:text-white"
+            >
+              Open original file
+              <RiExternalLinkLine className="text-xs" />
+            </a>
           </div>
         </Dialog>
       )}

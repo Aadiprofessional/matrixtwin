@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../../contexts/AuthContext';
 import { IconContext } from 'react-icons';
 import { useTranslation } from 'react-i18next';
 import { IconWrapper } from '../ui/IconWrapper';
@@ -36,15 +35,15 @@ import { useFormCounts } from '../../contexts/FormCountsContext';
 // Logo component
 const Logo: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
   return (
-    <div className="flex items-center justify-center my-6">
+    <div className="flex items-center justify-center pt-3 pb-2">
       {collapsed ? (
         <motion.div 
-          className="h-10 w-10 rounded-xl flex items-center justify-center relative"
+          className="h-9 w-9 rounded-lg flex items-center justify-center relative"
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
         >
-          <div className="absolute inset-0"></div>
-       
+          <div className="absolute inset-0 overflow-hidden"></div>
+          <img src={matrixAILogo} alt="MatrixAI Logo" className="h-10 w-10 object-contain relative z-10" />
         </motion.div>
       ) : (
         <div className="flex items-center">
@@ -56,7 +55,7 @@ const Logo: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
             <div className="absolute inset-0  overflow-hidden"></div>
             <img src={matrixAILogo} alt="MatrixAI Logo" className="h-10 w-10 object-contain relative z-10" />
           </motion.div>
-          <div className="font-display font-bold text-xl">
+          <div className="font-display font-bold text-xl leading-none h-10 flex items-center">
             <span className="text-white">
               Matrix<span className="text-portfolio-orange">Twin</span>
             </span>
@@ -87,8 +86,6 @@ interface SidebarItem {
 }
 
 const NavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, badgeCount = 0, mobile, onClick, end }) => {
-  const location = useLocation();
-  const auth = useAuth();
   const { t } = useTranslation();
   const { selectedProject } = useProjects();
   const [isPressed, setIsPressed] = useState(false);
@@ -206,8 +203,6 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCollapseChange }) => {
   const [collapsed, setCollapsed] = useState(false);
-  const { logout, user } = useAuth();
-  const navigate = useNavigate();
   const { t } = useTranslation();
   const { diaryCount, safetyCount, labourCount, cleansingCount, rfiCount, formsCount } = useFormCounts();
   
@@ -366,11 +361,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
     setCollapsed(!collapsed);
   };
 
-  const handleLogout = () => {
-    logout();
-    if (onClose) onClose();
-  };
-
   const handleNavItemClick = () => {
     if (mobile && onClose) {
       onClose();
@@ -380,8 +370,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
   return (
     <motion.aside 
       className={`
-        ${mobile ? 'fixed top-0 left-0 h-screen z-50' : 'fixed top-0 left-0 h-screen'}
-        bg-portfolio-dark border-r border-white/5 shadow-xl flex flex-col
+        fixed top-0 left-0 h-screen z-50
+        bg-portfolio-dark border-r border-white/5 shadow-xl flex flex-col overflow-visible
         transition-all duration-300 ease-in-out 
         ${mobile ? 'w-64' : collapsed ? 'w-16' : 'w-64'}
       `}
@@ -398,7 +388,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
         </motion.button>
       )}
 
-      <div className="relative overflow-hidden h-full">
+      {!mobile && (
+        <motion.button
+          onClick={toggleCollapsed}
+          className="absolute left-full top-1/2 -translate-x-[85%] -translate-y-1/2 -ml-[15px] -mt-[30px] z-50 h-14 w-8 flex items-center justify-center rounded-xl border border-white/20 bg-white/10 backdrop-blur-md text-white shadow-[0_10px_24px_rgba(0,0,0,0.35)] hover:bg-white/20 transition-colors duration-200"
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.94 }}
+        >
+          <motion.div
+            animate={{
+              rotate: collapsed ? 0 : 180
+            }}
+            transition={{ duration: 0.3 }}
+          >
+            <div><IconWrapper icon="RiArrowRightSLine" className="text-xl" /></div>
+          </motion.div>
+        </motion.button>
+      )}
+
+      <div className="relative overflow-hidden h-full flex flex-col">
         {/* Beautiful gradient backdrop */}
         <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-portfolio-orange/5 to-transparent pointer-events-none" />
         
@@ -419,7 +427,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
         
         <div 
           id="sidebar-content"
-          className="flex-1 py-8 px-2 overflow-y-auto scrollbar-thin scrollbar-thumb-dark-700 scrollbar-track-dark-900 overflow-x-hidden h-[calc(100vh-240px)]"
+          className="flex-1 pt-6 pb-4 px-2 overflow-y-auto overflow-x-hidden scrollbar-hide"
         >
           <AnimatePresence>
             <motion.nav layout className="space-y-6">
@@ -512,39 +520,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
             </motion.nav>
           </AnimatePresence>
         </div>
-      </div>
-      
-      <div className="p-4 border-t border-dark-800">
-        {!mobile && (
-          <motion.button 
-            onClick={toggleCollapsed}
-            className="w-full py-2 flex items-center justify-center rounded-xl bg-dark-900/50 hover:bg-dark-800/80 text-gray-400 hover:text-white transition-colors duration-200"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <motion.div
-              animate={{ 
-                rotate: collapsed ? 0 : 180
-              }}
-              transition={{ duration: 0.3 }}
-            >
-              <div><IconWrapper icon="RiArrowRightSLine" className="text-xl" /></div>
-            </motion.div>
-            {(!collapsed || mobile) && <span className="ml-2">{t('common.collapse', 'Collapse')}</span>}
-          </motion.button>
-        )}
-        
-        <motion.button 
-          onClick={handleLogout}
-          className="w-full mt-2 py-2 flex items-center justify-center rounded-xl bg-error/10 hover:bg-error/20 text-error hover:text-white transition-colors duration-200"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          <div className="text-xl">
-            <div><IconWrapper icon="RiLogoutBoxRLine" className="text-xl" /></div>
-          </div>
-          {(!collapsed || mobile) && <span className="ml-2">{t('auth.logout')}</span>}
-        </motion.button>
       </div>
     </motion.aside>
   );

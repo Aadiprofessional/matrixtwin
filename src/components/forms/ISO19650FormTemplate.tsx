@@ -6,6 +6,7 @@ import { Input } from '../ui/Input';
 import { IconContext } from 'react-icons';
 import { Icons } from '../../utils/iconUtils';
 import { RiInformationLine, RiArrowLeftLine, RiArrowRightLine, RiCheckLine } from 'react-icons/ri';
+import { TemplateUploadPickerModal } from './TemplateUploadPickerModal';
 
 interface FormField {
   id: string;
@@ -31,6 +32,11 @@ interface ISO19650FormTemplateProps {
   formType: 'labour' | 'safety' | 'cleansing';
 }
 
+interface AttachmentItem {
+  name: string;
+  url?: string;
+}
+
 export const ISO19650FormTemplate: React.FC<ISO19650FormTemplateProps> = ({
   title,
   description,
@@ -48,7 +54,8 @@ export const ISO19650FormTemplate: React.FC<ISO19650FormTemplateProps> = ({
     }, {} as Record<string, any>)
   );
   
-  const [attachments, setAttachments] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [isAttachmentPickerOpen, setIsAttachmentPickerOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
@@ -78,17 +85,15 @@ export const ISO19650FormTemplate: React.FC<ISO19650FormTemplateProps> = ({
     }
   };
   
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      setAttachments([...attachments, ...newFiles]);
-    }
-  };
-  
   const removeAttachment = (index: number) => {
     const newAttachments = [...attachments];
     newAttachments.splice(index, 1);
     setAttachments(newAttachments);
+  };
+
+  const handleAttachmentSelect = (url: string, file: { name: string }) => {
+    setAttachments([...attachments, { name: file.name || 'Uploaded file', url }]);
+    setIsAttachmentPickerOpen(false);
   };
   
   const validateCurrentStep = () => {
@@ -377,18 +382,12 @@ export const ISO19650FormTemplate: React.FC<ISO19650FormTemplateProps> = ({
               </label>
               <div className="space-y-2">
                 <div className="flex items-center">
-                  <label className={`cursor-pointer flex items-center justify-center px-4 py-2 bg-dark-800/80 text-white text-sm rounded-md border border-${formColor}-500/30 hover:bg-${formColor}-500/10`}>
+                  <button type="button" onClick={() => setIsAttachmentPickerOpen(true)} className={`cursor-pointer flex items-center justify-center px-4 py-2 bg-dark-800/80 text-white text-sm rounded-md border border-${formColor}-500/30 hover:bg-${formColor}-500/10`}>
                     <IconContext.Provider value={{ className: "mr-2" }}>
                       <Icons.RiUpload2Line />
                     </IconContext.Provider>
                     <span>Upload Files</span>
-                    <input
-                      type="file"
-                      multiple
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                  </label>
+                  </button>
                 </div>
                 
                 {attachments.length > 0 && (
@@ -467,6 +466,14 @@ export const ISO19650FormTemplate: React.FC<ISO19650FormTemplateProps> = ({
           </div>
         </div>
       </form>
+      <TemplateUploadPickerModal
+        isOpen={isAttachmentPickerOpen}
+        onClose={() => setIsAttachmentPickerOpen(false)}
+        onSelect={handleAttachmentSelect}
+        title="Select Attachment"
+        uploadType="attachment"
+        accept="*/*"
+      />
     </Card>
   );
 }; 

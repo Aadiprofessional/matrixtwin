@@ -67,20 +67,20 @@ export const ProjectSelector: React.FC<ProjectSelectorProps> = ({ collapsed = fa
   }
 
   return (
-    <div className="relative px-4 py-3">
+    <div className={`relative py-3 ${collapsed ? 'px-2' : 'px-4'}`}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full flex items-center justify-between p-2 rounded-lg bg-dark-800/50 border border-dark-700 hover:bg-dark-700 transition-colors ${
-          collapsed ? 'justify-center' : ''
+          collapsed ? 'justify-center p-0 h-10 w-10 mx-auto' : ''
         }`}
       >
-        <div className="flex items-center min-w-0">
-          <div className="flex-shrink-0 h-8 w-8 rounded-lg overflow-hidden">
+        <div className={`flex items-center ${collapsed ? 'justify-center w-full' : 'min-w-0'}`}>
+          <div className={`flex-shrink-0 rounded-lg overflow-hidden ${collapsed ? 'h-10 w-10' : 'h-8 w-8'}`}>
             {selectedProject?.image_url ? (
               <img
                 src={selectedProject.image_url}
                 alt={selectedProject.name}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-cover object-center"
               />
             ) : (
               <div className="h-full w-full bg-ai-blue/10 flex items-center justify-center">

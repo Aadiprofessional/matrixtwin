@@ -102,17 +102,17 @@ interface HistoryAction {
 }
 
 const GRID_CONFIG = {
-  DEFAULT_ROW_HEIGHT: 40,
-  DEFAULT_COL_WIDTH: 100,
-  MIN_ROW_HEIGHT: 20,
-  MIN_COL_WIDTH: 50,
+  DEFAULT_ROW_HEIGHT: 20,
+  DEFAULT_COL_WIDTH: 80,
+  MIN_ROW_HEIGHT: 16,
+  MIN_COL_WIDTH: 56,
   MAX_ROW_HEIGHT: 200,
   MAX_COL_WIDTH: 400,
   HEADER_HEIGHT: 30,
   HEADER_WIDTH: 50,
-  RESIZE_HANDLE_SIZE: 4,
-  INITIAL_ROWS: 20,
-  INITIAL_COLS: 10
+  RESIZE_HANDLE_SIZE: 8,
+  INITIAL_ROWS: 70,
+  INITIAL_COLS: 15
 };
 
 // Context Menu Component
@@ -237,7 +237,6 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [resizeType, setResizeType] = useState<'row' | 'col' | null>(null);
   const [resizeIndex, setResizeIndex] = useState<number>(-1);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   
   // New state for Excel-like features
   const [selectedRange, setSelectedRange] = useState<CellRange | null>(null);
@@ -249,6 +248,14 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
   const [history, setHistory] = useState<HistoryAction[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [cellData, setCellData] = useState<Map<string, { value: string; style: CellStyle }>>(new Map());
+  const rowsRef = useRef<GridRow[]>(propRows || []);
+  const columnsRef = useRef<GridColumn[]>(propColumns || []);
+  const resizeStartRef = useRef<{
+    mouseX: number;
+    mouseY: number;
+    baseSize: number;
+    basePositions: number[];
+  } | null>(null);
 
   // Initialize grid
   useEffect(() => {
@@ -256,6 +263,19 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
       setRows(propRows);
       setColumns(propColumns);
       setCells(propCells);
+      setCellData(prev => {
+        const next = new Map(prev);
+        for (let row = 0; row < propCells.length; row++) {
+          for (let col = 0; col < (propCells[row]?.length || 0); col++) {
+            const cell = propCells[row][col];
+            const key = getCellKey(row, col);
+            if (!cell.hasContent && !cell.value) {
+              next.delete(key);
+            }
+          }
+        }
+        return next;
+      });
       if (propMergedCells) {
         setMergedCells(propMergedCells);
       }
@@ -263,6 +283,14 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
       initializeGrid();
     }
   }, [width, height, propRows, propColumns, propCells, propMergedCells]);
+
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+
+  useEffect(() => {
+    columnsRef.current = columns;
+  }, [columns]);
 
   // Notify parent when merged cells change
   const onMergedCellsChangeRef = useRef(onMergedCellsChange);
@@ -291,6 +319,35 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
     return row >= range.startRow && row <= range.endRow && 
            col >= range.startCol && col <= range.endCol;
   };
+
+  const getMergeRangeKey = (mergeInfo: MergeInfo) =>
+    `${mergeInfo.startRow}-${mergeInfo.startCol}-${mergeInfo.endRow}-${mergeInfo.endCol}`;
+
+  const getMergeInfoForCell = useCallback((row: number, col: number): MergeInfo | null => {
+    for (const mergeInfo of Array.from(mergedCells.values())) {
+      if (
+        row >= mergeInfo.startRow &&
+        row <= mergeInfo.endRow &&
+        col >= mergeInfo.startCol &&
+        col <= mergeInfo.endCol
+      ) {
+        return mergeInfo;
+      }
+    }
+    return null;
+  }, [mergedCells]);
+
+  const resolveCellToMergeMaster = useCallback((row: number, col: number) => {
+    const mergeInfo = getMergeInfoForCell(row, col);
+    if (!mergeInfo) {
+      return { row, col, mergeInfo: null as MergeInfo | null };
+    }
+    return {
+      row: mergeInfo.startRow,
+      col: mergeInfo.startCol,
+      mergeInfo
+    };
+  }, [getMergeInfoForCell]);
 
   const getCellsInRange = (range: CellRange): GridCell[] => {
     const cellsInRange: GridCell[] = [];
@@ -461,13 +518,36 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
   const handleUnmergeCells = useCallback(() => {
     if (!selectedRange) return;
     
+    const targetMergeRanges = new Set<string>();
+
+    for (const mergeInfo of Array.from(mergedCells.values())) {
+      const overlapsSelection =
+        !(selectedRange.endRow < mergeInfo.startRow ||
+          selectedRange.startRow > mergeInfo.endRow ||
+          selectedRange.endCol < mergeInfo.startCol ||
+          selectedRange.startCol > mergeInfo.endCol);
+
+      if (overlapsSelection) {
+        targetMergeRanges.add(getMergeRangeKey(mergeInfo));
+      }
+    }
+
+    if (!targetMergeRanges.size) return;
+
     const cellsToUnmerge: string[] = [];
-    
-    for (let row = selectedRange.startRow; row <= selectedRange.endRow; row++) {
-      for (let col = selectedRange.startCol; col <= selectedRange.endCol; col++) {
-        const cellKey = getCellKey(row, col);
-        if (mergedCells.has(cellKey)) {
-          cellsToUnmerge.push(cellKey);
+    for (const [key, mergeInfo] of Array.from(mergedCells.entries())) {
+      if (targetMergeRanges.has(getMergeRangeKey(mergeInfo))) {
+        cellsToUnmerge.push(key);
+      }
+    }
+
+    if (!cellsToUnmerge.length) {
+      for (let row = selectedRange.startRow; row <= selectedRange.endRow; row++) {
+        for (let col = selectedRange.startCol; col <= selectedRange.endCol; col++) {
+          const cellKey = getCellKey(row, col);
+          if (mergedCells.has(cellKey)) {
+            cellsToUnmerge.push(cellKey);
+          }
         }
       }
     }
@@ -900,26 +980,16 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
         selected: selectedCell?.row === cell.row && selectedCell?.col === cell.col
       }))
     ));
+    if (!selectedCell) {
+      setSelectedRange(null);
+      setSelectionStart(null);
+    }
   }, [selectedCell]);
 
   const handleCellClick = useCallback((e: React.MouseEvent, row: number, col: number) => {
     e.preventDefault();
     
-    // Check if this cell is part of a merged cell and get the master cell coordinates
-    const cellKey = getCellKey(row, col);
-    let actualRow = row;
-    let actualCol = col;
-    
-    // Find if this cell is part of a merged cell
-    for (const [key, mergeInfo] of Array.from(mergedCells.entries())) {
-      if (row >= mergeInfo.startRow && row <= mergeInfo.endRow && 
-          col >= mergeInfo.startCol && col <= mergeInfo.endCol) {
-        // Use the master cell coordinates for selection
-        actualRow = mergeInfo.startRow;
-        actualCol = mergeInfo.startCol;
-        break;
-      }
-    }
+    const { row: actualRow, col: actualCol } = resolveCellToMergeMaster(row, col);
     
     if (e.shiftKey && selectionStart) {
       // Extend selection
@@ -951,47 +1021,21 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
     }
     
     onCellSelect?.(actualRow, actualCol);
-  }, [onCellSelect, selectionStart, selectedRange, mergedCells, getCellKey]);
+  }, [onCellSelect, selectionStart, selectedRange, resolveCellToMergeMaster]);
 
   const handleCellMouseDown = useCallback((e: React.MouseEvent, row: number, col: number) => {
     if (e.button === 2) return; // Right click
     
-    // Check if this cell is part of a merged cell and get the master cell coordinates
-    let actualRow = row;
-    let actualCol = col;
-    
-    // Find if this cell is part of a merged cell
-    for (const [key, mergeInfo] of Array.from(mergedCells.entries())) {
-      if (row >= mergeInfo.startRow && row <= mergeInfo.endRow && 
-          col >= mergeInfo.startCol && col <= mergeInfo.endCol) {
-        // Use the master cell coordinates for selection
-        actualRow = mergeInfo.startRow;
-        actualCol = mergeInfo.startCol;
-        break;
-      }
-    }
+    const { row: actualRow, col: actualCol } = resolveCellToMergeMaster(row, col);
     
     setIsSelecting(true);
     setSelectionStart({ row: actualRow, col: actualCol });
     setSelectedRange({ startRow: actualRow, endRow: actualRow, startCol: actualCol, endCol: actualCol });
-  }, [mergedCells]);
+  }, [resolveCellToMergeMaster]);
 
   const handleCellMouseEnter = useCallback((row: number, col: number) => {
     if (isSelecting && selectionStart) {
-      // Check if this cell is part of a merged cell and get the master cell coordinates
-      let actualRow = row;
-      let actualCol = col;
-      
-      // Find if this cell is part of a merged cell
-      for (const [key, mergeInfo] of Array.from(mergedCells.entries())) {
-        if (row >= mergeInfo.startRow && row <= mergeInfo.endRow && 
-            col >= mergeInfo.startCol && col <= mergeInfo.endCol) {
-          // Use the master cell coordinates for selection
-          actualRow = mergeInfo.startRow;
-          actualCol = mergeInfo.startCol;
-          break;
-        }
-      }
+      const { row: actualRow, col: actualCol } = resolveCellToMergeMaster(row, col);
       
       const newRange: CellRange = {
         startRow: Math.min(selectionStart.row, actualRow),
@@ -1001,15 +1045,16 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
       };
       setSelectedRange(newRange);
     }
-  }, [isSelecting, selectionStart, mergedCells]);
+  }, [isSelecting, selectionStart, resolveCellToMergeMaster]);
 
   const handleCellRightClick = useCallback((e: React.MouseEvent, row: number, col: number) => {
     e.preventDefault();
+    const { row: actualRow, col: actualCol } = resolveCellToMergeMaster(row, col);
     
     // If right-clicking outside current selection, select the clicked cell
-    if (!selectedRange || !isCellInRange(row, col, selectedRange)) {
-      setSelectedRange({ startRow: row, endRow: row, startCol: col, endCol: col });
-      setSelectionStart({ row, col });
+    if (!selectedRange || !isCellInRange(actualRow, actualCol, selectedRange)) {
+      setSelectedRange({ startRow: actualRow, endRow: actualRow, startCol: actualCol, endCol: actualCol });
+      setSelectionStart({ row: actualRow, col: actualCol });
     }
     
     // Get the cell element to position menu relative to it
@@ -1027,7 +1072,7 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
       // Fallback to absolute positioning
       setContextMenu({ x: e.clientX, y: e.clientY });
     }
-  }, [selectedRange]);
+  }, [selectedRange, resolveCellToMergeMaster]);
 
   const handleColumnHeaderClick = useCallback((e: React.MouseEvent, colIndex: number) => {
     e.preventDefault();
@@ -1111,7 +1156,14 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
 
   // Keyboard shortcuts
   useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) return false;
+      const tagName = target.tagName.toLowerCase();
+      return tagName === 'input' || tagName === 'textarea' || target.isContentEditable;
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return;
       if (!selectedRange) return;
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
@@ -1186,30 +1238,29 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
       draggedData = { type: e.dataTransfer.getData('text/plain') };
     }
 
-    // Immediately update cell data to show the widget
-    const cellKey = getCellKey(actualRow, actualCol);
-    setCellData(prev => {
-      const newData = new Map(prev);
-      const existingData = newData.get(cellKey) || { value: '', style: {} };
-      newData.set(cellKey, {
-        value: draggedData?.type || 'Widget',
-        style: {
-          ...existingData.style,
-          backgroundColor: '#f0f9ff',
-          border: '2px solid #3b82f6'
-        }
+    if (!onCellDrop) {
+      const cellKey = getCellKey(actualRow, actualCol);
+      setCellData(prev => {
+        const newData = new Map(prev);
+        const existingData = newData.get(cellKey) || { value: '', style: {} };
+        newData.set(cellKey, {
+          value: draggedData?.type || 'Widget',
+          style: {
+            ...existingData.style,
+            backgroundColor: '#f0f9ff',
+            border: '2px solid #3b82f6'
+          }
+        });
+        return newData;
       });
-      return newData;
-    });
-
-    // Update the cell to show it has content
-    setCells(prev => prev.map(row => 
-      row.map(cell => 
-        cell.row === actualRow && cell.col === actualCol 
-          ? { ...cell, hasContent: true }
-          : cell
-      )
-    ));
+      setCells(prev => prev.map(row => 
+        row.map(cell => 
+          cell.row === actualRow && cell.col === actualCol 
+            ? { ...cell, hasContent: true }
+            : cell
+        )
+      ));
+    }
 
     // Clear any selection to show the dropped widget immediately
     setSelectedRange(null);
@@ -1221,64 +1272,78 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
   const startResize = useCallback((e: React.MouseEvent, type: 'row' | 'col', index: number) => {
     e.preventDefault();
     e.stopPropagation();
+    if (type === 'col') {
+      const col = columnsRef.current[index];
+      if (!col) return;
+      resizeStartRef.current = {
+        mouseX: e.clientX,
+        mouseY: e.clientY,
+        baseSize: col.width,
+        basePositions: columnsRef.current.map(item => item.x)
+      };
+    } else {
+      const row = rowsRef.current[index];
+      if (!row) return;
+      resizeStartRef.current = {
+        mouseX: e.clientX,
+        mouseY: e.clientY,
+        baseSize: row.height,
+        basePositions: rowsRef.current.map(item => item.y)
+      };
+    }
     setIsResizing(true);
     setResizeType(type);
     setResizeIndex(index);
-    setDragStart({ x: e.clientX, y: e.clientY });
   }, []);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizing || resizeType === null || resizeIndex === -1) return;
-
-    const deltaX = e.clientX - dragStart.x;
-    const deltaY = e.clientY - dragStart.y;
+    const resizeStart = resizeStartRef.current;
+    if (!resizeStart) return;
 
     if (resizeType === 'col') {
+      const deltaX = e.clientX - resizeStart.mouseX;
       setColumns(prev => {
         const newColumns = [...prev];
         const newWidth = Math.max(
           GRID_CONFIG.MIN_COL_WIDTH,
-          Math.min(GRID_CONFIG.MAX_COL_WIDTH, newColumns[resizeIndex].width + deltaX)
+          Math.min(GRID_CONFIG.MAX_COL_WIDTH, resizeStart.baseSize + deltaX)
         );
-        
-        // Update column width and adjust subsequent column positions
-        const widthDiff = newWidth - newColumns[resizeIndex].width;
+        const widthDiff = newWidth - resizeStart.baseSize;
         newColumns[resizeIndex].width = newWidth;
-        
         for (let i = resizeIndex + 1; i < newColumns.length; i++) {
-          newColumns[i].x += widthDiff;
+          newColumns[i].x = (resizeStart.basePositions[i] ?? newColumns[i].x) + widthDiff;
         }
-        
         return newColumns;
       });
     } else if (resizeType === 'row') {
+      const deltaY = e.clientY - resizeStart.mouseY;
       setRows(prev => {
         const newRows = [...prev];
         const newHeight = Math.max(
           GRID_CONFIG.MIN_ROW_HEIGHT,
-          Math.min(GRID_CONFIG.MAX_ROW_HEIGHT, newRows[resizeIndex].height + deltaY)
+          Math.min(GRID_CONFIG.MAX_ROW_HEIGHT, resizeStart.baseSize + deltaY)
         );
-        
-        // Update row height and adjust subsequent row positions
-        const heightDiff = newHeight - newRows[resizeIndex].height;
+        const heightDiff = newHeight - resizeStart.baseSize;
         newRows[resizeIndex].height = newHeight;
-        
         for (let i = resizeIndex + 1; i < newRows.length; i++) {
-          newRows[i].y += heightDiff;
+          newRows[i].y = (resizeStart.basePositions[i] ?? newRows[i].y) + heightDiff;
         }
-        
         return newRows;
       });
     }
-
-    setDragStart({ x: e.clientX, y: e.clientY });
-  }, [isResizing, resizeType, resizeIndex, dragStart]);
+  }, [isResizing, resizeType, resizeIndex]);
 
   const handleMouseUp = useCallback(() => {
+    const wasResizing = isResizing;
     setIsResizing(false);
     setResizeType(null);
     setResizeIndex(-1);
-  }, []);
+    resizeStartRef.current = null;
+    if (wasResizing && onCellResize) {
+      onCellResize(rowsRef.current, columnsRef.current);
+    }
+  }, [isResizing, onCellResize]);
 
   useEffect(() => {
     if (isResizing) {
@@ -1292,12 +1357,6 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
   }, [isResizing, handleMouseMove, handleMouseUp]);
 
   // Update cells when rows or columns change
-  const onCellResizeRef = useRef(onCellResize);
-  
-  useEffect(() => {
-    onCellResizeRef.current = onCellResize;
-  }, [onCellResize]);
-
   useEffect(() => {
     setCells(prev => {
       const newCells: GridCell[][] = [];
@@ -1318,16 +1377,7 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
       }
       return newCells;
     });
-    
-    // Notify parent component of cell dimension changes
-    // Only when rows or columns change, not when selection changes
   }, [rows, columns, selectedCell]);
-
-  useEffect(() => {
-    if (onCellResizeRef.current && rows.length > 0 && columns.length > 0) {
-      onCellResizeRef.current(rows, columns);
-    }
-  }, [rows, columns]);
 
   return (
     <div 
@@ -1356,50 +1406,15 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
 
       {/* Paper Size Visualization */}
       {paperSize && (
-        <>
-          {/* Blue border for page boundary */}
-          <div
-            className="absolute border-r-4 border-b-4 border-blue-600 border-dashed pointer-events-none z-10"
-            style={{
-              left: GRID_CONFIG.HEADER_WIDTH,
-              top: GRID_CONFIG.HEADER_HEIGHT,
-              width: paperSize.width,
-              height: paperSize.height,
-              borderColor: '#1d4ed8' // darker blue (blue-700) for more contrast
-            }}
-          />
-          
-          {/* Page Label overlay */}
-          {paperSize.label && (
-            <div 
-              className="absolute pointer-events-none select-none flex items-center justify-center"
-              style={{
-                left: GRID_CONFIG.HEADER_WIDTH,
-                top: GRID_CONFIG.HEADER_HEIGHT,
-                width: paperSize.width,
-                height: paperSize.height,
-                zIndex: 5
-              }}
-            >
-              <div className="text-6xl font-bold text-gray-200 opacity-50 transform -rotate-12">
-                {paperSize.label}
-              </div>
-            </div>
-          )}
-
-          {/* Page dimensions badge */}
-          {paperSize.label && (
-            <div 
-              className="absolute bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded shadow-sm border border-blue-200 font-medium z-20"
-              style={{
-                left: GRID_CONFIG.HEADER_WIDTH + paperSize.width - 100,
-                top: GRID_CONFIG.HEADER_HEIGHT - 24
-              }}
-            >
-              {paperSize.label} ({paperSize.width}x{paperSize.height})
-            </div>
-          )}
-        </>
+        <div
+          className="absolute border-2 border-blue-600 pointer-events-none z-10"
+          style={{
+            left: GRID_CONFIG.HEADER_WIDTH,
+            top: GRID_CONFIG.HEADER_HEIGHT,
+            width: paperSize.width,
+            height: paperSize.height
+          }}
+        />
       )}
 
       {/* Column headers */}
@@ -1426,7 +1441,7 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
           
           {/* Column resize handle */}
           <div
-            className="absolute bg-transparent hover:bg-blue-500 cursor-col-resize"
+            className="absolute bg-blue-200/40 hover:bg-blue-500/60 cursor-col-resize transition-colors"
             style={{
               left: col.x + col.width - GRID_CONFIG.RESIZE_HANDLE_SIZE / 2,
               top: 0,
@@ -1462,7 +1477,7 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
           
           {/* Row resize handle */}
           <div
-            className="absolute bg-transparent hover:bg-blue-500 cursor-row-resize"
+            className="absolute bg-blue-200/40 hover:bg-blue-500/60 cursor-row-resize transition-colors"
             style={{
               left: 0,
               top: row.y + row.height - GRID_CONFIG.RESIZE_HANDLE_SIZE / 2,
@@ -1478,11 +1493,11 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
       {columns.map((col, index) => (
         <div
           key={`col-resize-full-${col.index}`}
-          className="absolute bg-transparent hover:bg-blue-500 hover:opacity-60 cursor-col-resize z-20 transition-all duration-150 hover:shadow-lg"
+          className="absolute bg-blue-200/10 hover:bg-blue-500/30 cursor-col-resize z-20 transition-colors"
           style={{
-            left: col.x + col.width - GRID_CONFIG.RESIZE_HANDLE_SIZE,
+            left: col.x + col.width - Math.ceil(GRID_CONFIG.RESIZE_HANDLE_SIZE / 2),
             top: GRID_CONFIG.HEADER_HEIGHT,
-            width: GRID_CONFIG.RESIZE_HANDLE_SIZE * 2,
+            width: GRID_CONFIG.RESIZE_HANDLE_SIZE,
             height: height - GRID_CONFIG.HEADER_HEIGHT
           }}
           onMouseDown={(e) => startResize(e, 'col', index)}
@@ -1494,12 +1509,12 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
       {rows.map((row, index) => (
         <div
           key={`row-resize-full-${row.index}`}
-          className="absolute bg-transparent hover:bg-blue-500 hover:opacity-60 cursor-row-resize z-20 transition-all duration-150 hover:shadow-lg"
+          className="absolute bg-blue-200/10 hover:bg-blue-500/30 cursor-row-resize z-20 transition-colors"
           style={{
             left: GRID_CONFIG.HEADER_WIDTH,
-            top: row.y + row.height - GRID_CONFIG.RESIZE_HANDLE_SIZE,
+            top: row.y + row.height - Math.ceil(GRID_CONFIG.RESIZE_HANDLE_SIZE / 2),
             width: width - GRID_CONFIG.HEADER_WIDTH,
-            height: GRID_CONFIG.RESIZE_HANDLE_SIZE * 2
+            height: GRID_CONFIG.RESIZE_HANDLE_SIZE
           }}
           onMouseDown={(e) => startResize(e, 'row', index)}
           title={`Resize row ${row.index + 1}`}
@@ -1511,12 +1526,15 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
         row.map((cell, colIndex) => {
           const cellKey = getCellKey(cell.row, cell.col);
           const cellInfo = cellData.get(cellKey);
-          const mergeInfo = mergedCells.get(cellKey);
+          const mergeInfo = getMergeInfoForCell(cell.row, cell.col) || undefined;
+          const isMasterCell = mergeInfo
+            ? cell.row === mergeInfo.startRow && cell.col === mergeInfo.startCol
+            : false;
           const isSelected = selectedRange && isCellInRange(cell.row, cell.col, selectedRange);
           const isHidden = rows[cell.row]?.hidden || columns[cell.col]?.hidden;
           
           // Don't render merged cells that are not the master cell
-          if (mergeInfo && !mergeInfo.isMaster) {
+          if (mergeInfo && !isMasterCell) {
             return null;
           }
           
@@ -1529,7 +1547,7 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
           let cellWidth = cell.width;
           let cellHeight = cell.height;
           
-          if (mergeInfo && mergeInfo.isMaster) {
+          if (mergeInfo && isMasterCell) {
             cellWidth = 0;
             cellHeight = 0;
             
@@ -1550,8 +1568,8 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
             <div
               key={`cell-${cell.row}-${cell.col}`}
               className={`absolute border-r border-b border-gray-300 hover:bg-blue-50 cursor-pointer transition-all duration-200 ${
-                isSelected ? 'bg-blue-100 ring-2 ring-blue-500 shadow-md' : 'bg-white'
-              } ${isDragging ? 'bg-green-50 border-green-400 shadow-lg' : ''}`}
+                isDragging ? 'bg-green-50 border-green-400 shadow-lg' : 'bg-white'
+              }`}
               style={{
                 left: cell.x,
                 top: cell.y,
@@ -1563,7 +1581,8 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
                 fontStyle: cellInfo?.style?.fontStyle || 'normal',
                 textAlign: cellInfo?.style?.textAlign || 'left',
                 border: cellInfo?.style?.border || '1px solid #d1d5db',
-                zIndex: isSelected ? 10 : 1
+                boxShadow: isSelected ? 'inset 0 0 0 1px rgba(59,130,246,0.45)' : undefined,
+                zIndex: 1
               }}
               onClick={(e) => handleCellClick(e, cell.row, cell.col)}
               onMouseDown={(e) => handleCellMouseDown(e, cell.row, cell.col)}
@@ -1580,6 +1599,7 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
                 // Reset background for all cells
                 e.currentTarget.style.backgroundColor = cellInfo?.style?.backgroundColor || 'white';
               }}
+              data-grid-cell="true"
               data-cell-type={mergeInfo ? 'merged' : 'normal'}
               data-merge-dimensions={mergeInfo ? `${mergeInfo.endCol - mergeInfo.startCol + 1}x${mergeInfo.endRow - mergeInfo.startRow + 1}` : undefined}
             >
@@ -1598,7 +1618,7 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
               )}
               
               {/* Merge indicator */}
-              {mergeInfo && mergeInfo.isMaster && (
+              {mergeInfo && isMasterCell && (
                 <div className="absolute top-1 left-1 flex items-center space-x-1">
                   <div className="text-xs text-blue-600 font-bold bg-blue-100 px-1 rounded">
                     ⚏ {mergeInfo.endCol - mergeInfo.startCol + 1}×{mergeInfo.endRow - mergeInfo.startRow + 1}
@@ -1607,7 +1627,7 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
               )}
               
               {/* Widget drop zone indicator for merged cells */}
-              {mergeInfo && mergeInfo.isMaster && (
+              {mergeInfo && isMasterCell && (
                 <div className="absolute inset-0 border-2 border-dashed border-blue-300 opacity-0 hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
                   <div className="text-blue-600 text-xs font-medium bg-white/90 px-2 py-1 rounded shadow">
                     Drop Widget Here
@@ -1645,7 +1665,7 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
       {/* Selection indicator overlay */}
       {selectedRange && (
         <div
-          className="absolute pointer-events-none border-2 border-blue-500 bg-blue-100 bg-opacity-20"
+          className="absolute pointer-events-none border-2 border-blue-500"
           style={{
             left: columns[selectedRange.startCol]?.x || 0,
             top: rows[selectedRange.startRow]?.y || 0,
