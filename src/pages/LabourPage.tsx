@@ -1119,7 +1119,7 @@ const LabourPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-dvh items-center justify-center">
         <div className="text-center">
           <RiLoader4Line className="mx-auto mb-4 animate-spin text-4xl text-[#6b7785]" />
           <p className="text-secondary-600 dark:text-secondary-400">Loading labour entries...</p>
@@ -1129,17 +1129,17 @@ const LabourPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+    <div className="mx-auto max-w-7xl space-y-6 px-3 sm:px-0 pb-12">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#2f3740] via-[#4a5663] to-[#6b7785] p-6 md:p-8"
+        className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#2f3740] via-[#4a5663] to-[#6b7785] p-4 sm:p-6 md:p-8"
       >
         <div className="absolute inset-0 bg-ai-dots opacity-20" />
         <div className="relative z-10">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
-              <h1 className="flex items-center text-3xl font-display font-bold text-white md:text-4xl">
+              <h1 className="flex items-center text-2xl sm:text-3xl font-display font-bold text-white md:text-4xl">
                 <RiGroupLine className="mr-3 text-[#d2d9e0]" />
                 {t('labour.title')}
               </h1>
@@ -1155,7 +1155,7 @@ const LabourPage: React.FC = () => {
                 {selectedProject ? `Project: ${selectedProject.name}` : 'No project selected'}
               </div>
             </div>
-            <div className="flex flex-nowrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {user?.role === 'admin' && selectedProject && (
                 <Button
                   variant="primary"

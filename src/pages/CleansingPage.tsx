@@ -1184,7 +1184,7 @@ const CleansingPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-dvh">
         <div className="text-center">
           <RiLoader4Line className="animate-spin text-4xl text-teal-600 mx-auto mb-4" />
           <p className="text-secondary-600 dark:text-secondary-400">Loading cleansing entries...</p>
@@ -1194,17 +1194,17 @@ const CleansingPage: React.FC = () => {
   }
   
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+    <div className="mx-auto max-w-7xl space-y-6 px-3 sm:px-0 pb-12">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative mb-8 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-teal-900 via-emerald-800 to-cyan-800 p-6 md:p-8"
+        className="relative mb-8 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-teal-900 via-emerald-800 to-cyan-800 p-4 sm:p-6 md:p-8"
       >
         <div className="absolute inset-0 bg-ai-dots opacity-20" />
         <div className="relative z-10">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
-              <h1 className="flex items-center text-3xl font-display font-bold text-white md:text-4xl">
+              <h1 className="flex items-center text-2xl sm:text-3xl font-display font-bold text-white md:text-4xl">
                 <RiBrushLine className="mr-3 text-teal-200" />
                 {t('cleansing.title')}
               </h1>
@@ -1220,7 +1220,7 @@ const CleansingPage: React.FC = () => {
                 {selectedProject ? `Project: ${selectedProject.name}` : 'No project selected'}
               </div>
             </div>
-            <div className="mt-2 flex flex-nowrap items-center gap-3 lg:mt-0">
+            <div className="mt-2 flex flex-wrap items-center gap-3 lg:mt-0">
               <Button
                 variant="primary"
                 leftIcon={<RiAddLine />}

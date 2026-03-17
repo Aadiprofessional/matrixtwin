@@ -1315,7 +1315,7 @@ const DiaryPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-dvh">
         <div className="text-center">
           <RiIcons.RiLoader4Line className="animate-spin text-4xl text-[#647f31] mx-auto mb-4" />
           <p className="text-secondary-600 dark:text-secondary-400">Loading diary entries...</p>
@@ -1325,17 +1325,17 @@ const DiaryPage: React.FC = () => {
   }
   
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+    <div className="mx-auto max-w-7xl space-y-6 px-3 sm:px-0 pb-12">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#1f2710] via-[#2f3a17] to-[#526728] p-6 md:p-8"
+        className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#1f2710] via-[#2f3a17] to-[#526728] p-4 sm:p-6 md:p-8"
       >
         <div className="absolute inset-0 bg-ai-dots opacity-20" />
         <div className="relative z-10">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
-              <h1 className="flex items-center text-3xl font-display font-bold text-white md:text-4xl">
+              <h1 className="flex items-center text-2xl sm:text-3xl font-display font-bold text-white md:text-4xl">
                 <RiIcons.RiCalendarCheckLine className="mr-3 text-[#cbdcab]" />
                 {t('diary.title')}
               </h1>

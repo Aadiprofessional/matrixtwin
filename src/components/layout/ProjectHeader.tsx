@@ -38,8 +38,8 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   };
   
   return (
-    <header className="fixed top-0 left-0 right-0 h-20 bg-portfolio-dark/80 backdrop-blur-md border-b border-white/5 z-50 w-full transition-all duration-300">
-      <div className="flex items-center justify-between h-full w-full px-6 md:px-12 max-w-7xl mx-auto">
+    <header className="fixed top-0 left-0 right-0 h-16 sm:h-20 bg-portfolio-dark/80 backdrop-blur-md border-b border-white/5 z-50 w-full transition-all duration-300">
+      <div className="flex items-center justify-between h-full w-full px-3 sm:px-6 md:px-12 max-w-7xl mx-auto">
         <div className="flex-1 flex items-center">
           {/* Mobile menu toggle */}
           {isMobile && (
@@ -58,10 +58,10 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           {/* Logo and title */}
           <Link to="/" className="flex items-center group">
             <div className="flex items-center">
-              <div className="mr-3 text-3xl text-portfolio-orange group-hover:scale-110 transition-transform duration-300">
+              <div className="mr-2 sm:mr-3 text-2xl sm:text-3xl text-portfolio-orange group-hover:scale-110 transition-transform duration-300">
                 <RiIcons.RiBuilding2Fill />
               </div>
-              <h1 className="text-xl font-bold text-white tracking-tight group-hover:text-portfolio-orange transition-colors duration-300">
+              <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight group-hover:text-portfolio-orange transition-colors duration-300">
                 MT<span className="text-portfolio-orange">.</span>
               </h1>
             </div>
@@ -69,7 +69,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
         </div>
         
         {/* Right Actions */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1 sm:gap-4">
           {/* Quick Actions Button - Hide on small screens */}
           <motion.button
             onClick={onQuickActionsToggle}
@@ -125,7 +125,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                 <>
                   <div className="fixed inset-0 z-20" onClick={closeAllMenus} />
                   <motion.div
-                    className="absolute right-0 mt-2 w-56 bg-dark-900/95 rounded-xl shadow-ai-glow border border-ai-blue/20 z-30 overflow-hidden backdrop-blur-sm"
+                    className="absolute right-0 mt-2 w-[calc(100vw-1rem)] max-w-56 bg-dark-900/95 rounded-xl shadow-ai-glow border border-ai-blue/20 z-30 overflow-hidden backdrop-blur-sm"
                     variants={dropdownAnimation}
                     initial="hidden"
                     animate="visible"

@@ -417,7 +417,7 @@ const VoiceCallPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-b from-dark-950 to-dark-900 overflow-hidden relative">
+    <div className="flex flex-col min-h-dvh bg-gradient-to-b from-dark-950 to-dark-900 overflow-hidden relative">
       {/* Background elements */}
       <div className="absolute inset-0 bg-ai-dots opacity-20 pointer-events-none z-0"></div>
       <div className="absolute inset-0 bg-gradient-radial from-ai-blue/10 to-transparent pointer-events-none z-0"></div>
@@ -451,7 +451,7 @@ const VoiceCallPage: React.FC = () => {
       </div>
       
       {/* Header */}
-      <div className="bg-dark-900 shadow-lg z-10 px-4 py-3 flex items-center">
+      <div className="bg-dark-900 shadow-lg z-10 px-3 sm:px-4 py-3 flex items-center">
         <Button 
           onClick={() => navigate(-1)} 
           variant="ghost" 
@@ -460,11 +460,11 @@ const VoiceCallPage: React.FC = () => {
           <RiArrowLeftLine className="text-2xl" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-ai-blue via-ai-purple to-ai-teal">
+          <h1 className="text-base sm:text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-ai-blue via-ai-purple to-ai-teal">
             Matrix AI Assistant
           </h1>
           <div className="flex items-center">
-            <p className="text-sm text-gray-400 mr-2">
+            <p className="text-xs sm:text-sm text-gray-400 mr-2">
               {callStatus === 'connecting' && 'Connecting...'}
               {callStatus === 'connected' && `Voice call · ${formatTime(callDuration)}`}
               {callStatus === 'disconnected' && 'Call ended'}
@@ -507,7 +507,7 @@ const VoiceCallPage: React.FC = () => {
       </div>
       
       {/* Main call area */}
-      <div className="flex-1 flex flex-col items-center justify-start relative overflow-hidden p-4 z-10">
+      <div className="flex-1 flex flex-col items-center justify-start relative overflow-hidden p-3 sm:p-4 z-10">
         {/* Profile avatar */}
         <div className="mb-6 relative">
           <div className={`h-24 w-24 rounded-full bg-gradient-to-r from-ai-blue to-ai-purple flex items-center justify-center shadow-ai-glow ${
@@ -526,7 +526,7 @@ const VoiceCallPage: React.FC = () => {
         </div>
         
         {/* Conversation transcript (WhatsApp style bubbles) */}
-        <div className="w-full max-w-md h-[50vh] overflow-y-auto mb-4 bg-dark-800/50 backdrop-blur-md rounded-xl p-4 border border-dark-700/50">
+        <div className="w-full max-w-md h-[42vh] sm:h-[50vh] overflow-y-auto mb-4 bg-dark-800/50 backdrop-blur-md rounded-xl p-3 sm:p-4 border border-dark-700/50">
           <AnimatePresence>
             {responses.map((response, index) => (
               <motion.div 
@@ -560,13 +560,13 @@ const VoiceCallPage: React.FC = () => {
       </div>
       
       {/* Call controls */}
-      <div className="bg-dark-900/80 backdrop-blur-md border-t border-dark-800 p-6 z-10">
+      <div className="bg-dark-900/80 backdrop-blur-md border-t border-dark-800 p-3 sm:p-6 z-10">
         <div className="flex justify-around max-w-md mx-auto">
           {/* Mute button */}
           <Button
             onClick={toggleMute}
             variant="ghost"
-            className={`p-5 rounded-full ${isMuted ? 'bg-red-500/20 text-red-400' : 'bg-dark-800 text-gray-300'}`}
+            className={`p-3 sm:p-5 rounded-full ${isMuted ? 'bg-red-500/20 text-red-400' : 'bg-dark-800 text-gray-300'}`}
           >
             <IconContext.Provider value={{ className: "text-2xl" }}>
               {isMuted ? <RiMicOffFill /> : <RiMicLine />}
@@ -577,7 +577,7 @@ const VoiceCallPage: React.FC = () => {
           <Button
             onClick={toggleCallActive}
             variant="ghost"
-            className={`p-5 rounded-full ${!isCallActive ? 'bg-amber-500/20 text-amber-400' : 'bg-dark-800 text-gray-300'}`}
+            className={`p-3 sm:p-5 rounded-full ${!isCallActive ? 'bg-amber-500/20 text-amber-400' : 'bg-dark-800 text-gray-300'}`}
           >
             <IconContext.Provider value={{ className: "text-2xl" }}>
               {isCallActive ? <RiPauseCircleFill /> : <RiPlayCircleFill />}
@@ -588,7 +588,7 @@ const VoiceCallPage: React.FC = () => {
           <Button
             onClick={handleHangUp}
             variant="ai"
-            className="p-5 rounded-full bg-red-600 hover:bg-red-700 text-white"
+            className="p-3 sm:p-5 rounded-full bg-red-600 hover:bg-red-700 text-white"
           >
             <IconContext.Provider value={{ className: "text-2xl" }}>
               <RiCloseLine />
@@ -599,7 +599,7 @@ const VoiceCallPage: React.FC = () => {
           <Button
             onClick={toggleSpeaker}
             variant="ghost"
-            className={`p-5 rounded-full ${!isSpeakerOn ? 'bg-red-500/20 text-red-400' : 'bg-dark-800 text-gray-300'}`}
+            className={`p-3 sm:p-5 rounded-full ${!isSpeakerOn ? 'bg-red-500/20 text-red-400' : 'bg-dark-800 text-gray-300'}`}
           >
             <IconContext.Provider value={{ className: "text-2xl" }}>
               {isSpeakerOn ? <RiVolumeUpLine /> : <RiVolumeMuteFill />}
@@ -609,7 +609,7 @@ const VoiceCallPage: React.FC = () => {
       </div>
       
       {/* Status indicator */}
-      <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-20 text-center">
+      <div className="absolute bottom-20 sm:bottom-24 left-1/2 transform -translate-x-1/2 z-20 text-center hidden sm:block">
         <div className={`inline-flex items-center justify-center px-4 py-2 rounded-full ${
           isListening ? 'bg-green-800/40 text-green-300' : 
           isProcessingVoice ? 'bg-yellow-800/40 text-yellow-300' : 

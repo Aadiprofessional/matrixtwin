@@ -1,9 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Card } from './Card';
-import { Button } from './Button';
-import { RiCloseLine } from 'react-icons/ri';
-import { icon } from '../../utils/iconUtils';
 import { IconWrapper } from './IconWrapper';
 
 export interface DialogProps {
@@ -72,21 +68,7 @@ export const Dialog: React.FC<DialogProps> = ({
     onClose();
   };
 
-  // Modal animation variants
-  const modalVariants = {
-    hidden: { opacity: 0, y: 20, scale: 0.95 },
-    visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.3, ease: 'easeOut' } },
-    exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2, ease: 'easeIn' } }
-  };
-
-  // Determine width based on size prop
-  const sizeClasses = {
-    sm: 'max-w-sm',
-    md: 'max-w-md',
-    lg: 'max-w-lg',
-    xl: 'max-w-3xl',
-    full: 'max-w-5xl'
-  };
+  const resolvedWidth = fullWidth ? '100%' : `min(calc(100vw - 1.5rem), ${maxWidth})`;
 
   return (
     <AnimatePresence>
@@ -99,15 +81,15 @@ export const Dialog: React.FC<DialogProps> = ({
             transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
           />
-          <div className="fixed inset-0 flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-4 z-50">
             <motion.div
               ref={dialogRef}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.2 }}
-              style={{ maxWidth, width: fullWidth ? '100%' : 'auto' }}
-              className={`bg-black/70 backdrop-blur-2xl border border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden ${className}`}
+              style={{ width: resolvedWidth, maxHeight: 'calc(100dvh - 1.5rem)' }}
+              className={`w-full bg-black/70 backdrop-blur-2xl border border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden ${className}`}
             >
               {title && (
                 <div className="flex items-center justify-between p-4 border-b border-dark-800">
@@ -123,7 +105,7 @@ export const Dialog: React.FC<DialogProps> = ({
                   )}
                 </div>
               )}
-              <div className={disablePadding ? '' : 'p-4'}>
+              <div className={`${disablePadding ? '' : 'p-4'} overflow-y-auto max-h-[calc(100dvh-11rem)]`}>
                 {children}
               </div>
               {actions && (

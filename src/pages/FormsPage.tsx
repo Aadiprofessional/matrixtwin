@@ -5883,9 +5883,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   };
   
   return (
-    <div className="flex h-screen gap-4">
+    <div className="flex flex-col lg:flex-row min-h-[calc(100dvh-5rem)] gap-3 lg:gap-4">
       {/* Left panel - Widget palette - Fixed 20% */}
-      <div className="w-1/5 flex-shrink-0 flex-grow-0" style={{ width: '20%' }}>
+      <div className="w-full lg:w-1/5 lg:flex-shrink-0 lg:flex-grow-0 min-h-[260px] lg:min-h-0">
         <div className="bg-dark-800/70 rounded-lg border border-dark-700/50 h-full flex flex-col">
           <div className="p-4 border-b border-dark-700/50">
             <h3 className="text-lg font-semibold mb-4">Form Elements</h3>
@@ -6073,7 +6073,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       </div>
       
       {/* Center panel - MS Word-like Form builder - Fixed 50% */}
-      <div className="flex-shrink-0 flex-grow-0 flex flex-col" style={{ width: '50%' }}>
+      <div className="w-full lg:w-1/2 lg:flex-shrink-0 lg:flex-grow-0 flex flex-col min-h-[420px] lg:min-h-0">
         <div className="bg-dark-800/30 rounded-lg border border-dark-700/50 flex flex-col h-full">
           {/* Enhanced Toolbar with AI and Preview buttons */}
           <div className="flex flex-wrap items-center gap-2 border-b border-dark-700/50 p-2 flex-shrink-0">
@@ -6199,14 +6199,14 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
             <div 
               className={`transition-transform duration-300 ease-out ${
                 zoomLevel <= minZoom && formPages.length > 1 
-                  ? 'grid grid-cols-2 gap-8 justify-items-center max-w-none' 
+                  ? 'grid grid-cols-1 md:grid-cols-2 gap-8 justify-items-center max-w-none' 
                   : 'flex flex-col items-center space-y-6'
               }`}
               style={{ 
                 transform: `scale(${zoomLevel})`,
                 transformOrigin: zoomLevel <= minZoom ? 'top left' : 'top center',
-                width: zoomLevel <= minZoom && formPages.length > 1 ? 'fit-content' : 'auto',
-                minWidth: zoomLevel <= minZoom && formPages.length > 1 ? '1400px' : 'auto'
+                width: zoomLevel <= minZoom && formPages.length > 1 ? '100%' : 'auto',
+                minWidth: zoomLevel <= minZoom && formPages.length > 1 ? 'min(1400px, 100%)' : 'auto'
               }}
             >
               {formPages.map((page, pageIndex) => {
@@ -6806,7 +6806,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
       </div>
       
       {/* Right panel - Widget settings - Fixed 30% */}
-      <div className="flex-shrink-0 flex-grow-0 min-w-0" style={{ width: '30%' }}>
+      <div className="w-full lg:w-[30%] lg:flex-shrink-0 lg:flex-grow-0 min-w-0 min-h-[260px] lg:min-h-0">
         <div className="bg-dark-800/70 rounded-lg border border-dark-700/50 h-full flex flex-col overflow-hidden">
           <div className="p-4 border-b border-dark-700/50">
             <h3 className="text-lg font-semibold flex items-center">
@@ -6815,7 +6815,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
           </div>
           
           {selectedField ? (
-            <div className="flex-1 overflow-y-auto p-4 pr-12">
+            <div className="flex-1 overflow-y-auto p-4 pr-4 sm:pr-12">
               <div className="space-y-4">
               {/* Common settings for all fields */}
               <div className="mb-3">
@@ -9210,17 +9210,17 @@ const FormsPage: React.FC = () => {
   };
   
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+    <div className="mx-auto max-w-7xl space-y-6 px-3 sm:px-0 pb-12">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#1f2432] via-[#2d3650] to-[#3f567f] p-6 md:p-8"
+        className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#1f2432] via-[#2d3650] to-[#3f567f] p-4 sm:p-6 md:p-8"
       >
         <div className="absolute inset-0 bg-ai-dots opacity-20" />
         <div className="relative z-10">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
-              <h1 className="flex items-center text-3xl font-display font-bold text-white md:text-4xl">
+              <h1 className="flex items-center text-2xl sm:text-3xl font-display font-bold text-white md:text-4xl">
                 <RiFileEditLine className="mr-3 text-[#d7e3f7]" />
                 {t('forms.title', 'Forms')}
               </h1>

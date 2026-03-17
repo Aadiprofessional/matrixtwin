@@ -579,14 +579,14 @@ const AskAIPage: React.FC = () => {
     : chatHistory;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-5rem)] relative -mx-6">
+    <div className="flex flex-col h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] relative">
       {/* Background decorations - Subtle Orange Theme */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-portfolio-orange/5 via-transparent to-transparent opacity-20 pointer-events-none"></div>
       
       {/* Fixed Layout with 3 sections: Header, Scrollable Chat, Footer */}
       <div className="flex flex-col h-full z-10">
         {/* Fixed Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between py-4 px-6 border-b border-white/10 bg-black/20 backdrop-blur-md flex-shrink-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 py-3 sm:py-4 px-3 sm:px-6 border-b border-white/10 bg-black/20 backdrop-blur-md flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-portfolio-orange/10 flex items-center justify-center border border-portfolio-orange/20">
               <IconContext.Provider value={{ className: "text-portfolio-orange text-xl" }}>
@@ -604,7 +604,7 @@ const AskAIPage: React.FC = () => {
           </div>
           
           {/* Action Buttons */}
-          <div className="flex items-center space-x-2 self-end sm:self-auto mt-2 sm:mt-0">
+          <div className="flex items-center gap-2 self-end sm:self-auto">
             <Button
               onClick={handleNewChat}
               size="sm"
@@ -646,7 +646,7 @@ const AskAIPage: React.FC = () => {
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="fixed top-0 right-0 bottom-0 z-50 w-80 h-full shadow-2xl"
+                className="fixed top-0 right-0 bottom-0 z-50 w-[92vw] max-w-sm sm:w-80 h-full shadow-2xl"
               >
                 <Card variant="ai-dark" className="p-0 h-full flex flex-col border-l border-white/10 bg-black/90 backdrop-blur-xl">
                   <div className="flex justify-between items-center p-4 border-b border-white/10 bg-black/40">
@@ -710,7 +710,7 @@ const AskAIPage: React.FC = () => {
         {/* Main Chat Area - Middle section with scrollable content */}
         <div className="flex-grow overflow-hidden flex flex-col relative">
           {/* Only this area should scroll */}
-          <div className="flex-grow overflow-y-auto py-4 px-4 ai-scrollbar">
+          <div className="flex-grow overflow-y-auto py-3 sm:py-4 px-2 sm:px-4 ai-scrollbar">
             <div className="space-y-6 w-full">
               {currentChat.messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 mt-10">
@@ -740,7 +740,7 @@ const AskAIPage: React.FC = () => {
                       className={`flex ${
                         message.sender === 'user'
                           ? 'items-end max-w-[90%] sm:max-w-[85%] flex-col'
-                          : 'w-[70vw] max-w-[70vw] min-w-0 flex-col'
+                          : 'w-full sm:w-[70vw] sm:max-w-[70vw] min-w-0 flex-col'
                       }`}
                     >
                       {message.sender !== 'user' && (
@@ -941,7 +941,7 @@ const AskAIPage: React.FC = () => {
           </div>
           
           {/* Fixed Input area at bottom */}
-          <div className="border-t border-white/10 py-4 px-6 bg-black/20 backdrop-blur-md flex-shrink-0">
+          <div className="border-t border-white/10 py-3 sm:py-4 px-3 sm:px-6 bg-black/20 backdrop-blur-md flex-shrink-0">
             <div className="w-full max-w-none">
               {selectedFile && (
                 <div className="mb-2 inline-flex items-center rounded-lg border border-white/15 bg-black/40 px-3 py-1.5 text-xs text-gray-200 max-w-full">
@@ -958,7 +958,7 @@ const AskAIPage: React.FC = () => {
                 </div>
               )}
               {(currentChat.messages.length === 0 || isInputFocused || generationType !== null) && (
-                <div className="mb-2 flex items-center gap-2">
+                <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
                   <Button
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
@@ -987,7 +987,7 @@ const AskAIPage: React.FC = () => {
                   </Button>
                 </div>
               )}
-              <div className="flex items-end gap-2 bg-black/40 border border-white/10 rounded-xl p-2 transition-all">
+              <div className="flex items-center sm:items-end gap-1.5 sm:gap-2 bg-black/40 border border-white/10 rounded-xl p-1.5 sm:p-2 transition-all">
                 <input
                   ref={imageInputRef}
                   type="file"
@@ -1034,11 +1034,11 @@ const AskAIPage: React.FC = () => {
                     setIsSearchEnabled(prev => !prev);
                   }}
                   variant={isSearchEnabled ? 'ai' : 'outline'}
-                  className={`rounded-lg h-10 px-3 flex items-center justify-center transition-all ${isSearchEnabled ? 'shadow-lg shadow-portfolio-orange/30' : 'border-white/15 text-gray-300 hover:bg-white/10'}`}
+                  className={`rounded-lg h-10 px-2 sm:px-3 flex items-center justify-center transition-all ${isSearchEnabled ? 'shadow-lg shadow-portfolio-orange/30' : 'border-white/15 text-gray-300 hover:bg-white/10'}`}
                   title="Search mode"
                 >
-                  <RiSearchLine className="mr-1" />
-                  Search
+                  <RiSearchLine className="sm:mr-1" />
+                  <span className="hidden sm:inline">Search</span>
                 </Button>
                 <Button 
                   onClick={() => handleSendMessage()}
@@ -1102,7 +1102,7 @@ const AskAIPage: React.FC = () => {
             <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-gray-300 break-all">
               {previewFile.fileName}
             </div>
-            <div className="h-[70vh] w-full rounded-lg overflow-hidden border border-white/10 bg-black/40">
+            <div className="h-[60dvh] sm:h-[70vh] w-full rounded-lg overflow-hidden border border-white/10 bg-black/40">
               <iframe
                 title="Generated file preview"
                 src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(previewFile.url)}`}

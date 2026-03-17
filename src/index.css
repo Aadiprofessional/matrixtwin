@@ -335,3 +335,32 @@ a:hover {
     transform: rotate(0);
   }
 }
+
+@media (max-width: 767px) {
+  .grid.grid-cols-2,
+  .grid.grid-cols-3,
+  .grid.grid-cols-4,
+  .grid.grid-cols-5,
+  .grid.grid-cols-6 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  table,
+  pre {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  iframe,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}

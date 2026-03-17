@@ -239,34 +239,34 @@ const CompanyPage: React.FC = () => {
 
       <ProjectHeader />
       
-      <main className="relative z-10 pt-32 px-6 md:px-12 max-w-7xl mx-auto pb-12">
+      <main className="relative z-10 pt-24 sm:pt-32 px-3 sm:px-6 md:px-12 max-w-7xl mx-auto pb-10 sm:pb-12">
         {/* Hero Section */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="mb-16"
+          className="mb-10 sm:mb-16"
         >
            <h5 className="text-portfolio-orange font-mono text-sm tracking-widest mb-4 uppercase">
               // Onboarding
             </h5>
-            <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tighter leading-[0.9] mb-6">
+            <h1 className="text-3xl sm:text-5xl md:text-7xl font-bold text-white tracking-tighter leading-[0.9] mb-4 sm:mb-6">
               COMPANY <br />
               <span className="text-gray-800 text-stroke-white">SETUP</span>
             </h1>
-            <p className="text-gray-400 text-lg max-w-xl leading-relaxed border-l-2 border-portfolio-orange pl-6">
+            <p className="text-gray-400 text-base sm:text-lg max-w-xl leading-relaxed border-l-2 border-portfolio-orange pl-4 sm:pl-6">
               Join an existing team to collaborate on projects, or register a new organization to manage your own workspace.
             </p>
         </motion.div>
 
         {/* Options Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
           {/* Option 1: Register */}
           <motion.div 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2, duration: 0.5 }}
-            className="group relative bg-white/5 border border-white/10 p-8 hover:bg-white/10 transition-all duration-300 cursor-pointer overflow-hidden"
+            className="group relative bg-white/5 border border-white/10 p-5 sm:p-8 hover:bg-white/10 transition-all duration-300 cursor-pointer overflow-hidden"
             onClick={() => setShowAdminModal(true)}
           >
             <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -277,7 +277,7 @@ const CompanyPage: React.FC = () => {
               <RiAdminLine className="text-3xl" />
             </div>
             
-            <h3 className="text-2xl font-bold mb-3 text-white group-hover:text-portfolio-orange transition-colors">
+            <h3 className="text-xl sm:text-2xl font-bold mb-3 text-white group-hover:text-portfolio-orange transition-colors">
               Register New Company
             </h3>
             <p className="text-gray-400 mb-8 leading-relaxed">
@@ -306,7 +306,7 @@ const CompanyPage: React.FC = () => {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3, duration: 0.5 }}
-            className="group relative bg-white/5 border border-white/10 p-8 hover:bg-white/10 transition-all duration-300 cursor-pointer overflow-hidden"
+            className="group relative bg-white/5 border border-white/10 p-5 sm:p-8 hover:bg-white/10 transition-all duration-300 cursor-pointer overflow-hidden"
             onClick={() => setShowJoinModal(true)}
           >
             <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -317,7 +317,7 @@ const CompanyPage: React.FC = () => {
               <RiTeamLine className="text-3xl" />
             </div>
             
-            <h3 className="text-2xl font-bold mb-3 text-white group-hover:text-portfolio-orange transition-colors">
+            <h3 className="text-xl sm:text-2xl font-bold mb-3 text-white group-hover:text-portfolio-orange transition-colors">
               Join Existing Company
             </h3>
             <p className="text-gray-400 mb-8 leading-relaxed">
@@ -336,7 +336,7 @@ const CompanyPage: React.FC = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="mt-24 flex justify-center"
+          className="mt-14 sm:mt-24 flex justify-center"
         >
            <button 
              onClick={handleLogout} 

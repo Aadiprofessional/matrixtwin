@@ -320,7 +320,7 @@ const Login: React.FC = () => {
 
   if (showTwoFactor) {
     return (
-      <div className="min-h-screen relative flex items-center justify-center">
+      <div className="min-h-screen relative flex items-center justify-center px-4 py-20 sm:py-8">
         {/* Background Video */}
         <div className="absolute inset-0 overflow-hidden">
           <video
@@ -335,33 +335,33 @@ const Login: React.FC = () => {
         </div>
         
         {/* Logo and branding at top left */}
-        <div className="absolute top-8 left-8 z-20 flex items-center">
-          <div className="w-16 h-16 mr-4">
+        <div className="absolute top-4 left-4 sm:top-8 sm:left-8 z-20 flex items-center">
+          <div className="w-10 h-10 sm:w-16 sm:h-16 mr-2 sm:mr-4">
             <img src={MatrixAILogo} alt="MatrixAI Logo" className="w-full h-full object-contain" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-ai-blue">MatrixTwin</h1>
-            <p className="text-sm text-gray-300">Intelligent Construction Management</p>
+            <h1 className="text-lg sm:text-2xl font-bold text-ai-blue">MatrixTwin</h1>
+            <p className="text-xs sm:text-sm text-gray-300">Intelligent Construction Management</p>
           </div>
         </div>
         
         {/* Company footer at bottom right */}
-        <div className="absolute bottom-4 right-8 z-20 text-right">
-          <p className="text-gray-400 text-sm">Powered by: MatrixAI Company Ltd</p>
+        <div className="absolute bottom-3 left-0 right-0 sm:right-8 sm:left-auto z-20 text-center sm:text-right px-4">
+          <p className="text-gray-400 text-xs sm:text-sm">Powered by: MatrixAI Company Ltd</p>
         </div>
         
         {/* Content */}
-        <div className="relative z-10 w-full max-w-md mx-auto p-6">
+        <div className="relative z-10 w-full max-w-md mx-auto p-2 sm:p-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <Card variant="ai-dark" className="p-6 border border-ai-blue/20 shadow-ai-glow bg-dark-950/40 backdrop-blur-sm">
-              <div className="p-8">
-                <div className="text-center mb-8">
-                  <img src={MatrixAILogo} alt="MatrixAI Logo" className="h-16 mx-auto mb-4" />
-                  <h1 className="text-3xl font-bold text-white mb-2">
+            <Card variant="ai-dark" className="p-4 sm:p-6 border border-ai-blue/20 shadow-ai-glow bg-dark-950/40 backdrop-blur-sm">
+              <div className="p-2 sm:p-8">
+                <div className="text-center mb-6 sm:mb-8">
+                  <img src={MatrixAILogo} alt="MatrixAI Logo" className="h-12 sm:h-16 mx-auto mb-4" />
+                  <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
                     {t('auth.twoFactorAuth')}
                   </h1>
                   <p className="text-white/80">
@@ -413,7 +413,7 @@ const Login: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center">
+    <div className="min-h-screen relative flex items-center justify-center px-4 py-20 sm:py-8">
       {/* Background Video */}
       <div className="absolute inset-0 overflow-hidden">
         <video
@@ -428,23 +428,23 @@ const Login: React.FC = () => {
       </div>
       
       {/* Logo and branding at top left */}
-      <div className="absolute top-8 left-8 z-20 flex items-center">
-        <div className="w-16 h-16 mr-4">
+      <div className="absolute top-4 left-4 sm:top-8 sm:left-8 z-20 flex items-center">
+        <div className="w-10 h-10 sm:w-16 sm:h-16 mr-2 sm:mr-4">
           <img src={MatrixAILogo} alt="MatrixAI Logo" className="w-full h-full object-contain" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-ai-blue">MatrixTwin</h1>
-          <p className="text-sm text-gray-300">Intelligent Construction Management</p>
+          <h1 className="text-lg sm:text-2xl font-bold text-ai-blue">MatrixTwin</h1>
+          <p className="text-xs sm:text-sm text-gray-300">Intelligent Construction Management</p>
         </div>
       </div>
       
       {/* Company footer at bottom right */}
-      <div className="absolute bottom-4 right-8 z-20 text-right">
-        <p className="text-gray-400 text-sm">Powered by: MatrixAI Company Ltd</p>
+      <div className="absolute bottom-3 left-0 right-0 sm:right-8 sm:left-auto z-20 text-center sm:text-right px-4">
+        <p className="text-gray-400 text-xs sm:text-sm">Powered by: MatrixAI Company Ltd</p>
       </div>
       
       {/* Top Controls */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-3">
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-2 sm:gap-3">
         <button
           onClick={toggleLanguage}
           className="p-2 rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-colors"
@@ -462,17 +462,17 @@ const Login: React.FC = () => {
       </div>
       
       {/* Content */}
-      <div className="relative z-10 w-full max-w-md mx-auto p-6">
+      <div className="relative z-10 w-full max-w-md mx-auto p-2 sm:p-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <Card variant="ai-dark" className="p-6 border border-ai-blue/20 shadow-ai-glow bg-dark-950/40 backdrop-blur-sm">
-            <div className="p-8">
-              <div className="text-center mb-8">
-                <img src={MatrixAILogo} alt="MatrixAI Logo" className="h-16 mx-auto mb-4" />
-                <h1 className="text-3xl font-bold text-white mb-2">
+          <Card variant="ai-dark" className="p-4 sm:p-6 border border-ai-blue/20 shadow-ai-glow bg-dark-950/40 backdrop-blur-sm">
+            <div className="p-2 sm:p-8">
+              <div className="text-center mb-6 sm:mb-8">
+                <img src={MatrixAILogo} alt="MatrixAI Logo" className="h-12 sm:h-16 mx-auto mb-4" />
+                <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
                   {t('auth.welcomeBack')}
                 </h1>
                 <p className="text-white/80">

@@ -345,8 +345,8 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
   ];
   
   return (
-    <header className={`fixed top-0 right-0 left-0 ${!isMobile ? (sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64') : ''} h-20 bg-portfolio-dark/95 backdrop-blur-md border-b border-white/5 z-50 flex items-center justify-between transition-all duration-300 ease-in-out`}>
-      <div className="flex-1 flex items-center px-4 md:px-6">
+    <header className={`fixed top-0 right-0 left-0 ${!isMobile ? (sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64') : ''} h-16 sm:h-20 bg-portfolio-dark/95 backdrop-blur-md border-b border-white/5 z-50 flex items-center justify-between transition-all duration-300 ease-in-out`}>
+      <div className="flex-1 flex items-center px-3 sm:px-4 md:px-6 min-w-0">
         {/* Mobile menu toggle */}
         {isMobile && (
           <motion.button 
@@ -376,7 +376,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
         )}
         
         {/* Container for search with max width */}
-        <div className="flex-1 max-w-[60%]">
+        <div className="flex-1 min-w-0 md:max-w-[60%]">
           {/* Search Bar with Expanded State */}
           {isSearchVisible && (
             <motion.form 
@@ -511,7 +511,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
       </div>
       
       {/* Right Actions */}
-      <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 md:px-6">
+      <div className="flex items-center gap-0.5 sm:gap-2 px-1.5 sm:px-4 md:px-6">
         {/* Quick Actions Button - Hide on small screens */}
         <motion.button
           onClick={onQuickActionsToggle}
@@ -543,7 +543,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
         )}
         
         {/* Help Menu */}
-        <div className="relative">
+        <div className={`${isMobile ? 'hidden' : 'relative'}`}>
           <button
             onClick={() => {
               setShowHelpMenu(!showHelpMenu);
@@ -565,7 +565,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
               <>
                 <div className="fixed inset-0 z-20" onClick={closeAllMenus} />
                 <motion.div
-                  className="absolute right-0 mt-2 w-64 bg-[#121212] rounded-none shadow-2xl border border-white/10 z-30 overflow-hidden"
+                  className="absolute right-0 mt-2 w-[calc(100vw-1rem)] max-w-64 bg-[#121212] rounded-none shadow-2xl border border-white/10 z-30 overflow-hidden"
                   variants={dropdownAnimation}
                   initial="hidden"
                   animate="visible"
@@ -645,18 +645,18 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
               <>
                 <div className="fixed inset-0 z-20" onClick={closeAllMenus} />
                 <motion.div
-                  className="absolute right-0 mt-2 w-80 bg-[#121212] rounded-none shadow-2xl border border-white/10 z-30 overflow-hidden"
+                  className={`${isMobile ? 'fixed top-[4.25rem] left-2 right-2 w-auto max-h-[calc(100dvh-5rem)]' : 'absolute right-0 mt-2 w-[calc(100vw-1rem)] max-w-sm sm:w-80'} bg-[#121212] rounded-xl shadow-2xl border border-white/10 z-30 overflow-hidden`}
                   variants={dropdownAnimation}
                   initial="hidden"
                   animate="visible"
                   exit="exit"
                 >
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-white/10">
                     <h3 className="font-mono text-sm uppercase tracking-widest text-gray-400">Notifications</h3>
-                    <div className="flex">
+                    <div className="flex items-center gap-3">
                       <button
                         onClick={markAllAsRead}
-                        className="text-xs text-portfolio-orange hover:text-portfolio-orange-hover mr-3 font-mono uppercase tracking-wider"
+                        className="text-xs text-portfolio-orange hover:text-portfolio-orange-hover font-mono uppercase tracking-wider"
                       >
                         Mark read
                       </button>
@@ -669,7 +669,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                     </div>
                   </div>
                   
-                  <div className="max-h-72 overflow-y-auto scrollbar-hide">
+                  <div className={`${isMobile ? 'max-h-[calc(100dvh-10rem)]' : 'max-h-72'} overflow-y-auto scrollbar-hide`}>
                     {notifications.length > 0 ? (
                       notifications.map(notification => (
                         <motion.div
@@ -726,7 +726,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
         {/* Theme Toggle */}
         <motion.button
           onClick={toggleDarkMode}
-          className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors duration-200"
+          className="hidden sm:flex p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors duration-200"
           whileTap={{ scale: 0.95 }}
         >
           <div className="text-xl">
@@ -737,7 +737,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
         </motion.button>
         
         {/* Language Menu */}
-        <div className="relative">
+        <div className="relative hidden sm:block">
           <button
             onClick={() => {
               setShowLanguageMenu(!showLanguageMenu);
@@ -759,7 +759,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
               <>
                 <div className="fixed inset-0 z-20" onClick={closeAllMenus} />
                 <motion.div
-                  className="absolute right-0 mt-2 w-48 bg-[#121212] rounded-none shadow-2xl border border-white/10 z-30 overflow-hidden"
+                  className="absolute right-0 mt-2 w-[calc(100vw-1rem)] max-w-48 bg-[#121212] rounded-none shadow-2xl border border-white/10 z-30 overflow-hidden"
                   variants={dropdownAnimation}
                   initial="hidden"
                   animate="visible"
@@ -795,7 +795,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
         </div>
         
         {/* Profile Menu */}
-        <div className="relative ml-2">
+        <div className="relative ml-1 sm:ml-2">
           <motion.button
             onClick={() => {
               setShowProfileMenu(!showProfileMenu);
@@ -817,7 +817,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
               <>
                 <div className="fixed inset-0 z-20" onClick={closeAllMenus} />
                 <motion.div
-                  className="absolute right-0 mt-2 w-56 bg-dark-900/95 rounded-xl shadow-ai-glow border border-ai-blue/20 z-30 overflow-hidden backdrop-blur-sm"
+                  className={`${isMobile ? 'fixed top-[4.25rem] left-2 right-2 w-auto max-h-[calc(100dvh-5rem)]' : 'absolute right-0 mt-2 w-[calc(100vw-1rem)] max-w-56'} bg-dark-900/95 rounded-xl shadow-ai-glow border border-ai-blue/20 z-30 overflow-hidden backdrop-blur-sm`}
                   variants={dropdownAnimation}
                   initial="hidden"
                   animate="visible"
@@ -840,7 +840,7 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
                     </div>
                   </div>
                   
-                  <div className="p-2">
+                  <div className={`${isMobile ? 'max-h-[calc(100dvh-12rem)] overflow-y-auto' : ''} p-2`}>
                     <motion.button
                       className="w-full text-left px-3 py-2 rounded-lg flex items-center text-white hover:bg-dark-800/80"
                       onClick={() => {

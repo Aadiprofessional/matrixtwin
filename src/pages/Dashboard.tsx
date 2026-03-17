@@ -280,18 +280,18 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-dark-950 p-6 md:p-8 pt-24 md:pt-4 space-y-8 text-white font-sans relative z-0">
+    <div className="min-h-screen bg-dark-950 p-3 sm:p-6 md:p-8 pt-20 sm:pt-24 md:pt-4 space-y-6 sm:space-y-8 text-white font-sans relative z-0">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6 relative z-10">
         <div>
-          <h1 className="text-3xl md:text-4xl font-display font-bold text-white tracking-tight">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold text-white tracking-tight">
             {selectedProject?.name?.toUpperCase() || 'PROJECT'} <span className="text-portfolio-orange">DASHBOARD</span>
           </h1>
           <p className="text-gray-500 mt-1 font-mono text-xs uppercase tracking-widest">
             Real-time Matrix Data Stream
           </p>
         </div>
-        <div className="flex items-center space-x-2 bg-dark-900 px-4 py-2 rounded-lg border border-white/5">
+        <div className="flex items-center space-x-2 bg-dark-900 px-3 sm:px-4 py-2 rounded-lg border border-white/5">
           <div className="w-2 h-2 rounded-full bg-portfolio-orange animate-pulse"></div>
           <span className="text-sm font-mono text-gray-400">{new Date().toLocaleDateString()}</span>
         </div>
@@ -327,7 +327,7 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-xs font-mono font-medium text-white/60 tracking-widest mb-1">{card.title}</p>
-                  <p className="text-4xl font-display font-bold text-white">{card.value}</p>
+                  <p className="text-3xl sm:text-4xl font-display font-bold text-white">{card.value}</p>
                 </div>
               </div>
             </div>
@@ -344,7 +344,7 @@ const Dashboard: React.FC = () => {
           transition={{ delay: 0.3 }}
           className="lg:col-span-2"
         >
-          <div className="bg-dark-900/50 backdrop-blur-md rounded-2xl p-6 border border-white/5 h-[400px] shadow-xl relative overflow-hidden group">
+          <div className="bg-dark-900/50 backdrop-blur-md rounded-2xl p-4 sm:p-6 border border-white/5 h-[320px] sm:h-[400px] shadow-xl relative overflow-hidden group">
             {/* Corner Accents */}
             <div className="absolute top-0 left-0 w-20 h-20 border-l-2 border-t-2 border-portfolio-orange/30 rounded-tl-2xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
             <div className="absolute bottom-0 right-0 w-20 h-20 border-r-2 border-b-2 border-portfolio-orange/30 rounded-br-2xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
@@ -353,7 +353,7 @@ const Dashboard: React.FC = () => {
               <RiBarChartLine className="mr-2 text-portfolio-orange" /> 
               FORM STATUS ANALYTICS
             </h3>
-            <div className="h-[300px] w-full">
+            <div className="h-[220px] sm:h-[300px] w-full">
               <Bar data={barChartData} options={barChartOptions} />
             </div>
           </div>
@@ -366,7 +366,7 @@ const Dashboard: React.FC = () => {
           transition={{ delay: 0.4 }}
           className="lg:col-span-1"
         >
-          <div className="bg-dark-900/50 backdrop-blur-md rounded-2xl p-6 border border-white/5 h-[400px] shadow-xl relative overflow-hidden group">
+          <div className="bg-dark-900/50 backdrop-blur-md rounded-2xl p-4 sm:p-6 border border-white/5 h-[320px] sm:h-[400px] shadow-xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-20 h-20 border-r-2 border-t-2 border-portfolio-orange/30 rounded-tr-2xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
             <div className="absolute bottom-0 left-0 w-20 h-20 border-l-2 border-b-2 border-portfolio-orange/30 rounded-bl-2xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
 
@@ -374,7 +374,7 @@ const Dashboard: React.FC = () => {
               <RiPieChartLine className="mr-2 text-portfolio-orange" /> 
               DISTRIBUTION
             </h3>
-            <div className="h-[280px] w-full flex items-center justify-center relative">
+            <div className="h-[200px] sm:h-[280px] w-full flex items-center justify-center relative">
               <Doughnut data={doughnutData} options={doughnutOptions} plugins={[textCenter]} />
             </div>
           </div>

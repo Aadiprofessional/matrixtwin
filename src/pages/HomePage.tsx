@@ -53,7 +53,7 @@ const HomePage: React.FC = () => {
     <div className={`min-h-screen overflow-hidden ${darkMode ? 'bg-black' : 'bg-white'}`}>
       {/* Home Navbar */}
       <HomeNavbar />
-      <section className="relative min-h-screen w-full overflow-hidden flex items-center justify-center">
+      <section className="relative min-h-screen w-full overflow-hidden flex items-center justify-center py-20 sm:py-16">
         {/* Video Background with Dark Overlay */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
           {/* Video Background */}
@@ -100,7 +100,7 @@ const HomePage: React.FC = () => {
                 </Link> 
               </motion.div> 
             </div> 
-            <div className="flex items-center justify-center gap-8 text-gray-400 text-sm"> 
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-gray-400 text-xs sm:text-sm"> 
               <div className="flex items-center"> 
                 <span>{t('homePage.projectCount', '500+ projects')}</span> 
               </div> 

@@ -803,10 +803,10 @@ const ModelViewerPage: React.FC = () => {
   const [rightPanelVisible, setRightPanelVisible] = useState(true);
   const [assetPanelVisible, setAssetPanelVisible] = useState(false);
   
-  // Screen width calculations
-  const screenWidth = window.innerWidth;
-  const maxLeftWidth = screenWidth * 0.7;
-  const maxRightWidth = screenWidth * 0.7;
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  const isMobileView = viewportWidth < 1024;
+  const maxLeftWidth = viewportWidth * 0.7;
+  const maxRightWidth = viewportWidth * 0.7;
   const minPanelWidth = 280;
   
   const location = useLocation();
@@ -840,6 +840,24 @@ const ModelViewerPage: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (isMobileView) {
+      setLeftPanelVisible(false);
+      setRightPanelVisible(false);
+      setAssetPanelVisible(false);
+      return;
+    }
+    setLeftPanelVisible(true);
+    setRightPanelVisible(true);
+    setAssetPanelVisible(false);
+  }, [isMobileView]);
+
   // Panel resize handlers
   const handleResizeStart = (e: React.MouseEvent, panel: 'left' | 'right') => {
     e.preventDefault();
@@ -849,13 +867,13 @@ const ModelViewerPage: React.FC = () => {
       if (panel === 'left') {
         const newWidth = Math.min(maxLeftWidth, Math.max(minPanelWidth, e.clientX));
         // Ensure right panel doesn't get squeezed
-        if (newWidth + rightPanelWidth < screenWidth - 100) {
+        if (newWidth + rightPanelWidth < viewportWidth - 100) {
           setLeftPanelWidth(newWidth);
         }
       } else if (panel === 'right') {
-        const newWidth = Math.min(maxRightWidth, Math.max(minPanelWidth, screenWidth - e.clientX));
+        const newWidth = Math.min(maxRightWidth, Math.max(minPanelWidth, viewportWidth - e.clientX));
         // Ensure left panel doesn't get squeezed
-        if (leftPanelWidth + newWidth < screenWidth - 100) {
+        if (leftPanelWidth + newWidth < viewportWidth - 100) {
           setRightPanelWidth(newWidth);
         }
       }
@@ -1808,14 +1826,14 @@ const ModelViewerPage: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-screen bg-gradient-to-br from-slate-900/20 via-slate-950/15 to-black/30 relative overflow-hidden">
+    <div className="min-h-dvh w-screen bg-gradient-to-br from-slate-900/20 via-slate-950/15 to-black/30 relative overflow-hidden">
       {/* UI Layer - Above 3D Viewer */}
       <div className="absolute inset-0 z-10 pointer-events-none">
         {/* Top Header Bar - Solid Style */}
-        <div className="fixed top-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-xl border-b border-slate-600/30 h-12">
-          <div className="flex items-center justify-between px-4 h-full">
+        <div className="fixed top-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-xl border-b border-slate-600/30 min-h-12">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2">
             {/* Left Section - Back Button and Date/Time */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -1826,11 +1844,11 @@ const ModelViewerPage: React.FC = () => {
                 <span className="text-xs font-medium">Back</span>
               </motion.button>
               
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-lg flex items-center justify-center shadow-lg">
                   <span className="text-white font-bold text-xs">UAT</span>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-slate-100 font-bold text-xs">
                     {currentTime.toLocaleDateString('en-US', { 
                       day: '2-digit', 
@@ -1848,7 +1866,7 @@ const ModelViewerPage: React.FC = () => {
             </div>
             
             {/* Center Section - Connection Status */}
-                <div className="flex items-center gap-3">
+                <div className="hidden lg:flex items-center gap-3">
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                     <span className="text-green-300 text-xs font-medium">PQM</span>
@@ -1868,7 +1886,7 @@ const ModelViewerPage: React.FC = () => {
             </div>
             
             {/* Right Section - System Controls */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 ml-auto">
               {/* Notifications */}
               <div className="relative">
                 <button 
@@ -1890,12 +1908,12 @@ const ModelViewerPage: React.FC = () => {
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      className="absolute top-full right-0 mt-2 w-80 bg-slate-900/95 backdrop-blur-xl rounded-lg border border-slate-600/30 shadow-2xl z-50"
+                      className={`${isMobileView ? 'fixed top-14 left-2 right-2 w-auto max-h-[calc(100dvh-5rem)]' : 'absolute top-full right-0 mt-2 w-[calc(100vw-1rem)] max-w-80'} bg-slate-900/95 backdrop-blur-xl rounded-lg border border-slate-600/30 shadow-2xl z-50`}
                     >
                       <div className="p-3 border-b border-slate-600/30">
                         <h3 className="text-white font-medium text-sm">Notifications</h3>
                       </div>
-                      <div className="max-h-64 overflow-y-auto">
+                      <div className={`${isMobileView ? 'max-h-[calc(100dvh-8rem)]' : 'max-h-64'} overflow-y-auto`}>
                         {[
                           {
                             id: 1,
@@ -1966,7 +1984,7 @@ const ModelViewerPage: React.FC = () => {
               </div>
               
               {/* System Dropdown */}
-              <select className="bg-slate-700/30 border border-slate-500/20 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500/50 text-sm">
+              <select className="hidden sm:block bg-slate-700/30 border border-slate-500/20 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500/50 text-sm">
                 <option>System</option>
                 <option>HVAC</option>
                 <option>Lighting</option>
@@ -1998,19 +2016,19 @@ const ModelViewerPage: React.FC = () => {
                 <button className="bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all">
                   <RiSettings3Line className="text-lg" />
                 </button>
-                <button className="bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all">
+                <button className="hidden sm:block bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all">
                   <RiRefreshLine className="text-lg" />
                 </button>
-                <button className="bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all">
+                <button className="hidden sm:block bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all">
                   <RiFullscreenLine className="text-lg" />
                 </button>
-                <button className="bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all">
+                <button className="hidden sm:block bg-slate-700/30 hover:bg-slate-600/40 border border-slate-500/20 rounded-lg p-2 text-slate-100 hover:text-white transition-all">
                   <RiMoreLine className="text-lg" />
                 </button>
               </div>
               
               {/* User Profile */}
-              <div className="flex items-center gap-2 bg-slate-700/30 border border-slate-500/20 rounded-lg px-3 py-2">
+              <div className="hidden sm:flex items-center gap-2 bg-slate-700/30 border border-slate-500/20 rounded-lg px-3 py-2">
                 <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                   <span className="text-white font-bold text-xs">C</span>
                 </div>
@@ -2020,23 +2038,25 @@ const ModelViewerPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="h-full flex" style={{ top: '48px', position: 'absolute', left: 0, right: 0, bottom: 0 }}>
+        <div className={`${isMobileView ? 'h-full' : 'h-full flex'}`} style={{ top: isMobileView ? '92px' : '48px', position: 'absolute', left: 0, right: 0, bottom: 0 }}>
           {/* Left Panel */}
       <AnimatePresence>
             {leftPanelVisible && (
           <motion.div 
-                initial={{ x: -leftPanelWidth }}
-                animate={{ x: 0 }}
-                exit={{ x: -leftPanelWidth }}
+                initial={isMobileView ? { y: 420, opacity: 0 } : { x: -leftPanelWidth }}
+                animate={isMobileView ? { y: 0, opacity: 1 } : { x: 0 }}
+                exit={isMobileView ? { y: 420, opacity: 0 } : { x: -leftPanelWidth }}
                 transition={{ duration: 0.3 }}
-                className="relative bg-slate-900/10 backdrop-blur-xl border-r border-slate-600/20 shadow-2xl flex flex-col z-20 pointer-events-auto"
-                style={{ width: leftPanelWidth }}
+                className={`${isMobileView ? 'fixed left-2 right-2 bottom-[4.5rem] bg-slate-900/95 rounded-2xl border border-slate-600/30' : 'relative bg-slate-900/10 border-r border-slate-600/20'} backdrop-blur-xl shadow-2xl flex flex-col z-20 pointer-events-auto`}
+                style={isMobileView ? { width: 'calc(100vw - 1rem)', height: '56dvh' } : { width: leftPanelWidth }}
               >
                 {/* Resize Handle */}
-                <div
-                  className="absolute top-0 right-0 w-1 h-full bg-slate-600/50 hover:bg-blue-500/70 cursor-col-resize transition-colors z-10"
-                  onMouseDown={(e) => handleResizeStart(e, 'left')}
-                />
+                {!isMobileView && (
+                  <div
+                    className="absolute top-0 right-0 w-1 h-full bg-slate-600/50 hover:bg-blue-500/70 cursor-col-resize transition-colors z-10"
+                    onMouseDown={(e) => handleResizeStart(e, 'left')}
+                  />
+                )}
                 
                 {/* Panel Header */}
                 <div className="p-4 border-b border-slate-600/20 flex-shrink-0 bg-slate-800/10 backdrop-blur-md">
@@ -3101,18 +3121,20 @@ const ModelViewerPage: React.FC = () => {
       <AnimatePresence>
             {rightPanelVisible && (
           <motion.div 
-                initial={{ x: rightPanelWidth }}
-                animate={{ x: 0 }}
-                exit={{ x: rightPanelWidth }}
+                initial={isMobileView ? { y: 420, opacity: 0 } : { x: rightPanelWidth }}
+                animate={isMobileView ? { y: 0, opacity: 1 } : { x: 0 }}
+                exit={isMobileView ? { y: 420, opacity: 0 } : { x: rightPanelWidth }}
                 transition={{ duration: 0.3 }}
-                className="relative bg-slate-900/10 backdrop-blur-xl border-l border-slate-600/20 shadow-2xl z-20 pointer-events-auto"
-                style={{ width: rightPanelWidth }}
+                className={`${isMobileView ? 'fixed left-2 right-2 bottom-[4.5rem] bg-slate-900/95 rounded-2xl border border-slate-600/30' : 'relative bg-slate-900/10 border-l border-slate-600/20'} backdrop-blur-xl shadow-2xl z-20 pointer-events-auto`}
+                style={isMobileView ? { width: 'calc(100vw - 1rem)', height: '56dvh' } : { width: rightPanelWidth }}
               >
                 {/* Resize Handle */}
-                <div
-                  className="absolute top-0 left-0 w-1 h-full bg-slate-600/50 hover:bg-blue-500/70 cursor-col-resize transition-colors z-10"
-                  onMouseDown={(e) => handleResizeStart(e, 'right')}
-                />
+                {!isMobileView && (
+                  <div
+                    className="absolute top-0 left-0 w-1 h-full bg-slate-600/50 hover:bg-blue-500/70 cursor-col-resize transition-colors z-10"
+                    onMouseDown={(e) => handleResizeStart(e, 'right')}
+                  />
+                )}
                 
                 {/* Header */}
                 <div className="p-4 border-b border-slate-600/20 bg-slate-800/10 backdrop-blur-md">
@@ -3908,7 +3930,7 @@ const ModelViewerPage: React.FC = () => {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-slate-900/95 backdrop-blur-xl rounded-lg border border-slate-600/30 shadow-2xl w-96 max-h-[80vh] overflow-hidden pointer-events-auto z-[9999]"
+                className="absolute top-16 sm:top-20 left-1/2 transform -translate-x-1/2 bg-slate-900/95 backdrop-blur-xl rounded-lg border border-slate-600/30 shadow-2xl w-[calc(100vw-1rem)] max-w-96 max-h-[80dvh] overflow-hidden pointer-events-auto z-[9999]"
                 drag
                 dragMomentum={false}
                 dragConstraints={{
@@ -4420,18 +4442,18 @@ const ModelViewerPage: React.FC = () => {
         </AnimatePresence>
 
         {/* Floating Panel Toggle Buttons - Centered below header */}
-        <div className="fixed top-16 left-1/2 transform -translate-x-1/2 z-30 flex items-center gap-4">
+        <div className={`${isMobileView ? 'fixed bottom-2 left-2 right-2' : 'fixed top-16 left-1/2 transform -translate-x-1/2'} z-30 flex items-center gap-2 sm:gap-4 justify-center`}>
           {/* Left Panel Button */}
         {!leftPanelVisible && (
           <motion.button
               initial={{ y: -20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
             onClick={() => setLeftPanelVisible(true)}
-              className="bg-slate-800/40 hover:bg-slate-700/50 backdrop-blur-md border border-slate-600/30 rounded-lg px-4 py-2 text-slate-100 hover:text-white shadow-lg pointer-events-auto transition-all"
+              className={`${isMobileView ? 'flex-1' : ''} bg-slate-800/40 hover:bg-slate-700/50 backdrop-blur-md border border-slate-600/30 rounded-lg px-4 py-2 text-slate-100 hover:text-white shadow-lg pointer-events-auto transition-all`}
           >
               <div className="flex items-center gap-2">
                 <RiMenuLine className="text-lg" />
-                <span className="text-sm font-medium">Left Panel</span>
+                <span className="text-sm font-medium">{isMobileView ? 'Events' : 'Left Panel'}</span>
               </div>
           </motion.button>
         )}
@@ -4442,11 +4464,11 @@ const ModelViewerPage: React.FC = () => {
               initial={{ y: -20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
             onClick={() => setRightPanelVisible(true)}
-              className="bg-slate-800/40 hover:bg-slate-700/50 backdrop-blur-md border border-slate-600/30 rounded-lg px-4 py-2 text-slate-100 hover:text-white shadow-lg pointer-events-auto transition-all"
+              className={`${isMobileView ? 'flex-1' : ''} bg-slate-800/40 hover:bg-slate-700/50 backdrop-blur-md border border-slate-600/30 rounded-lg px-4 py-2 text-slate-100 hover:text-white shadow-lg pointer-events-auto transition-all`}
           >
               <div className="flex items-center gap-2">
                 <RiAppsLine className="text-lg" />
-                <span className="text-sm font-medium">Right Panel</span>
+                <span className="text-sm font-medium">{isMobileView ? 'Systems' : 'Right Panel'}</span>
               </div>
           </motion.button>
         )}
@@ -4457,11 +4479,11 @@ const ModelViewerPage: React.FC = () => {
               initial={{ y: -20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
             onClick={() => setAssetPanelVisible(true)}
-              className="bg-slate-800/40 hover:bg-slate-700/50 backdrop-blur-md border border-slate-600/30 rounded-lg px-4 py-2 text-slate-100 hover:text-white shadow-lg pointer-events-auto transition-all"
+              className={`${isMobileView ? 'flex-1' : ''} bg-slate-800/40 hover:bg-slate-700/50 backdrop-blur-md border border-slate-600/30 rounded-lg px-4 py-2 text-slate-100 hover:text-white shadow-lg pointer-events-auto transition-all`}
           >
             <div className="flex items-center gap-2">
               <RiInformationLine className="text-lg" />
-              <span className="text-sm font-medium">Asset Information</span>
+              <span className="text-sm font-medium">{isMobileView ? 'Assets' : 'Asset Information'}</span>
             </div>
           </motion.button>
         )}
@@ -4471,12 +4493,12 @@ const ModelViewerPage: React.FC = () => {
         <AnimatePresence>
           {assetPanelVisible && !rightPanelVisible && (
             <motion.div
-              initial={{ x: rightPanelWidth }}
-              animate={{ x: 0 }}
-              exit={{ x: rightPanelWidth }}
+              initial={isMobileView ? { y: 420, opacity: 0 } : { x: rightPanelWidth }}
+              animate={isMobileView ? { y: 0, opacity: 1 } : { x: 0 }}
+              exit={isMobileView ? { y: 420, opacity: 0 } : { x: rightPanelWidth }}
               transition={{ duration: 0.3 }}
-              className="absolute right-0 bottom-0 bg-slate-900/95 backdrop-blur-xl border-l border-slate-600/30 shadow-2xl z-40 pointer-events-auto"
-              style={{ width: rightPanelWidth, top: '48px' }}
+              className={`${isMobileView ? 'fixed left-2 right-2 bottom-[4.5rem] rounded-2xl border border-slate-600/30' : 'absolute right-0 bottom-0 border-l border-slate-600/30'} bg-slate-900/95 backdrop-blur-xl shadow-2xl z-40 pointer-events-auto`}
+              style={isMobileView ? { width: 'calc(100vw - 1rem)', height: '56dvh' } : { width: rightPanelWidth, top: '48px' }}
             >
               {/* Header */}
               <div className="p-4 border-b border-slate-600/20 bg-slate-800/20 backdrop-blur-md">

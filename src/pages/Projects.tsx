@@ -494,15 +494,15 @@ const Projects: React.FC = () => {
   const statusOptions = ['upcoming', 'in_progress', 'completed', 'on_hold', 'cancelled'];
   
   return (
-    <div className="min-h-screen bg-dark-950 text-white">
+    <div className="min-h-dvh bg-dark-950 text-white">
       {/* Use the custom ProjectHeader component */}
       <ProjectHeader />
       
       {company && (
-        <div className="bg-portfolio-dark/50 backdrop-blur-md border-b border-white/5 py-8">
-          <div className="max-w-[1800px] mx-auto px-6 md:px-12">
+        <div className="bg-portfolio-dark/50 backdrop-blur-md border-b border-white/5 py-6 sm:py-8">
+          <div className="max-w-[1800px] mx-auto px-3 sm:px-6 md:px-12">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              <div className="flex items-center gap-6">
+              <div className="flex items-start sm:items-center gap-3 sm:gap-6">
                 {company.logo_url ? (
                   <div className="w-20 h-20 rounded-xl overflow-hidden bg-white/5 border border-white/10">
                     <img src={company.logo_url} alt={company.name} className="w-full h-full object-cover" />
@@ -514,7 +514,7 @@ const Projects: React.FC = () => {
                 )}
                 
                 <div>
-                  <h1 className="text-3xl font-bold text-white mb-2">{company.name}</h1>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 break-words">{company.name}</h1>
                   <div className="flex flex-wrap gap-6 text-gray-400 text-sm">
                     {company.address && (
                       <div className="flex items-center gap-2">
@@ -545,7 +545,7 @@ const Projects: React.FC = () => {
                 </div>
               </div>
               
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                  {/* Company specific actions */}
                  {user?.role === 'admin' && (
                    <Button
@@ -585,8 +585,8 @@ const Projects: React.FC = () => {
         onShowRequests={() => setShowJoinRequests(true)}
       />
       
-      <div className="bg-portfolio-dark min-h-screen">
-        <div className="mx-auto px-6 md:px-12 py-12 max-w-[1800px]">
+      <div className="bg-portfolio-dark min-h-dvh">
+        <div className="mx-auto px-3 sm:px-6 md:px-12 py-8 sm:py-12 max-w-[1800px]">
           {/* Section Title - Removed as it's in Hero now */}
 
         
@@ -627,7 +627,7 @@ const Projects: React.FC = () => {
           {selectedProject && (
             <div className="overflow-hidden">
                 {/* Project header with image */}
-                <div className="relative h-[400px]">
+                <div className="relative h-[220px] sm:h-[300px] md:h-[400px]">
                   <img 
                     src={selectedProject.image_url} 
                     alt={selectedProject.name} 
@@ -635,7 +635,7 @@ const Projects: React.FC = () => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-portfolio-dark via-portfolio-dark/50 to-transparent"></div>
                   
-                  <div className="absolute bottom-0 left-0 right-0 p-8 md:p-12">
+                  <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-12">
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                       <div>
                         <div className="flex items-center gap-3 mb-4">
@@ -643,7 +643,7 @@ const Projects: React.FC = () => {
                             {selectedProject.status.replace('_', ' ')}
                           </span>
                         </div>
-                        <h2 className="text-4xl md:text-5xl font-bold text-white tracking-tight mb-2">{selectedProject.name}</h2>
+                        <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-white tracking-tight mb-2">{selectedProject.name}</h2>
                         <div className="flex items-center text-gray-400 font-mono text-sm">
                           <RiIcons.RiMapPinLine className="mr-2" />
                           {selectedProject.location}
@@ -670,7 +670,7 @@ const Projects: React.FC = () => {
                 </div>
                 
                 {/* Project details content */}
-                <div className="p-8 md:p-12 bg-transparent">
+                <div className="p-4 sm:p-6 md:p-12 bg-transparent">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
                     <div className="md:col-span-2">
                       <h3 className="text-sm font-mono text-portfolio-orange uppercase tracking-widest mb-4">About the Project</h3>
@@ -1249,7 +1249,7 @@ const Projects: React.FC = () => {
                             </span>
                           </div>
                           
-                          <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
+                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                             <div>
                               <span className="text-gray-400">Client:</span>
                               <span className="ml-2 text-white">{project.client}</span>
@@ -1273,7 +1273,7 @@ const Projects: React.FC = () => {
                 </div>
 
                 {/* Activity Stats */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="bg-dark-800 rounded-lg p-4 text-center">
                     <div className="text-2xl font-bold text-white mb-1">
                       {selectedUser.assigned_projects.length}

@@ -3,8 +3,7 @@ import { AnimatePresence } from 'framer-motion';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { QuickActions } from './QuickActions';
-import { IconContext } from 'react-icons';
-import { RiMenuLine, RiBrainLine, RiCloseLine } from 'react-icons/ri';
+import { RiBrainLine, RiCloseLine } from 'react-icons/ri';
 import { useLocation } from 'react-router-dom';
 import { AIChatPopup } from '../ai/AIChatPopup';
 
@@ -69,7 +68,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, hideHeader = false }) 
   }, [isAIPage]);
 
   return (
-    <div className="flex min-h-screen h-screen bg-dark-950 text-white">
+    <div className="flex min-h-dvh bg-dark-950 text-white">
       {/* Sidebar for large screens */}
       {!isMobile && (
         <Sidebar 
@@ -126,8 +125,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, hideHeader = false }) 
           )}
         </AnimatePresence>
         
-        <main ref={mainRef} className={`flex-1 overflow-auto ${!hideHeader ? 'pt-20' : 'pt-0'} pl-4`}>
-          <div className="min-h-full px-6">
+        <main ref={mainRef} className={`flex-1 overflow-auto ${!hideHeader ? 'pt-16 sm:pt-20' : 'pt-0'}`}>
+          <div className="min-h-full px-3 pb-4 sm:px-4 sm:pb-6 lg:px-6">
             {children}
           </div>
         </main>
@@ -139,16 +138,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, hideHeader = false }) 
         {!isAIPage && (
           <button 
             onClick={toggleAIPopup}
-            className="fixed right-6 bottom-6 bg-portfolio-orange hover:bg-orange-600 text-white rounded-full p-5 shadow-lg hover:shadow-xl transition-all z-50"
+            className="fixed right-3 bottom-3 sm:right-6 sm:bottom-6 bg-portfolio-orange hover:bg-orange-600 text-white rounded-full p-3 sm:p-5 shadow-lg hover:shadow-xl transition-all z-50"
             title={showAIPopup ? "Close AI Assistant" : "Ask AI Assistant"}
           >
             {showAIPopup ? (
               <div className="rotate-in">
-                <RiCloseLine className="text-3xl" />
+                <RiCloseLine className="text-xl sm:text-3xl" />
               </div>
             ) : (
               <div>
-                <RiBrainLine className="text-3xl" />
+                <RiBrainLine className="text-xl sm:text-3xl" />
               </div>
             )}
           </button>

@@ -9,25 +9,14 @@ import matrixAILogo from '../../assets/MatrixAILogo.png';
 import { 
   RiDashboardLine,
   RiBuilding4Line, 
-  RiHome2Line,
-  RiFileList3Line,
-  RiBookmarkLine,
   RiShieldCheckLine,
   RiGroupLine,
   RiBrushLine,
   RiFileUserLine,
   RiSettings3Line,
   RiArrowRightSLine,
-  RiArrowLeftSLine,
-  RiLogoutBoxRLine,
-  RiBarChartBoxLine,
-  RiPieChartLine,
-  RiListCheck2,
-  RiTeamLine,
-  RiCalendarTodoLine,
   RiCloseLine,
-  RiBrainLine,
-  RiVolumeUpLine
+  RiBrainLine
 } from 'react-icons/ri';
 import { useProjects } from '../../contexts/ProjectContext';
 import { useFormCounts } from '../../contexts/FormCountsContext';
@@ -245,13 +234,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
       label: 'nav.askAI',
       badgeCount: 0
     },
-    { 
-      to: '/analytics', 
-      icon: (
-        <div><IconWrapper icon="RiPieChartLine" className="text-xl" /></div>
-      ), 
-      label: 'analytics.title'
-    }
   ];
   
   // DWSS Modules
@@ -308,28 +290,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
   
   // Management nav items
   const managementItems: SidebarItem[] = [
-    { 
-      to: '/tasks', 
-      icon: (
-        <div><IconWrapper icon="RiCalendarTodoLine" className="text-xl" /></div>
-      ), 
-      label: 'tasks.title',
-      badgeCount: 5
-    },
-    { 
+   { 
       to: '/team', 
       icon: (
         <div><IconWrapper icon="RiTeamLine" className="text-xl" /></div>
       ), 
       label: 'team.title'
     },
-    { 
-      to: '/reports', 
-      icon: (
-        <div><IconWrapper icon="RiBarChartBoxLine" className="text-xl" /></div>
-      ), 
-      label: 'reports.title'
-    },
+  
     { 
       to: '/settings', 
       icon: (

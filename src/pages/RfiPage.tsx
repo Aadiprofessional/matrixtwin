@@ -1717,17 +1717,17 @@ const RfiPage: React.FC = () => {
 
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+    <div className="mx-auto max-w-7xl space-y-6 px-3 sm:px-0 pb-12">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative mb-8 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-900 p-6 md:p-8"
+        className="relative mb-8 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-900 p-4 sm:p-6 md:p-8"
       >
         <div className="absolute inset-0 bg-ai-dots opacity-20" />
         <div className="relative z-10">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
-              <h1 className="flex items-center text-3xl font-display font-bold text-white md:text-4xl">
+              <h1 className="flex items-center text-2xl sm:text-3xl font-display font-bold text-white md:text-4xl">
                 <RiIcons.RiFileList3Line className="mr-3 text-indigo-200" />
                 Requests for Information
               </h1>
@@ -1735,7 +1735,7 @@ const RfiPage: React.FC = () => {
                 Manage information requests with faster scanning, stronger status visibility, and cleaner workflow context.
               </p>
             </div>
-            <div className="mt-2 flex flex-nowrap items-center gap-3 lg:mt-0">
+            <div className="mt-2 flex flex-wrap items-center gap-3 lg:mt-0">
               <Button
                 variant="primary"
                 leftIcon={<RiIcons.RiAddLine />}

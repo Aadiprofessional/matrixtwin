@@ -1245,17 +1245,17 @@ const SafetyPage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+    <div className="mx-auto max-w-7xl space-y-6 px-3 sm:px-0 pb-12">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#5a2f0f] via-[#8a4b14] to-[#d8a126] p-6 md:p-8"
+        className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#5a2f0f] via-[#8a4b14] to-[#d8a126] p-4 sm:p-6 md:p-8"
       >
         <div className="absolute inset-0 bg-ai-dots opacity-20" />
         <div className="relative z-10">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
-              <h1 className="flex items-center text-3xl font-display font-bold text-white md:text-4xl">
+              <h1 className="flex items-center text-2xl sm:text-3xl font-display font-bold text-white md:text-4xl">
                 <RiShieldCheckLine className="mr-3 text-[#ffe9b8]" />
                 {t('safety.title')}
               </h1>
@@ -1271,7 +1271,7 @@ const SafetyPage: React.FC = () => {
                 {selectedProject ? `Project: ${selectedProject.name}` : 'No project selected'}
               </div>
             </div>
-            <div className="mt-2 flex flex-nowrap items-center gap-3 lg:mt-0">
+            <div className="mt-2 flex flex-wrap items-center gap-3 lg:mt-0">
               {user?.role === 'admin' && selectedProject && (
                 <Button
                   variant="primary"

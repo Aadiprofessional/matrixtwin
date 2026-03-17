@@ -1061,7 +1061,7 @@ const IoTDashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-dvh bg-black">
       {/* Modern Header */}
       <motion.div 
         className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/10"
@@ -1069,10 +1069,10 @@ const IoTDashboardPage: React.FC = () => {
         animate={{ y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+        <div className="container mx-auto px-3 sm:px-6 py-3 sm:py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             {/* Left section */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
               <Link 
                 to="/dashboard" 
                 className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors duration-200 group"
@@ -1083,10 +1083,10 @@ const IoTDashboardPage: React.FC = () => {
                 >
             <RiArrowGoBackLine className="text-xl" />
                 </motion.div>
-                <span className="text-sm font-medium">Back to Dashboard</span>
+                <span className="hidden sm:inline text-sm font-medium">Back to Dashboard</span>
           </Link>
               
-              <div className="w-px h-6 bg-zinc-800"></div>
+              <div className="hidden sm:block w-px h-6 bg-zinc-800"></div>
               
               <div className="flex items-center gap-3">
                 <motion.div
@@ -1097,10 +1097,10 @@ const IoTDashboardPage: React.FC = () => {
                   <RiBuilding4Line className="text-xl text-white" />
                 </motion.div>
                 <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+                  <h1 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
             Digital Twin Dashboard
           </h1>
-                  <p className="text-sm text-zinc-400">
+                  <p className="text-xs sm:text-sm text-zinc-400">
                     Real-time building intelligence & control
                   </p>
                 </div>
@@ -1108,7 +1108,7 @@ const IoTDashboardPage: React.FC = () => {
             </div>
             
             {/* Right section */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 self-end lg:self-auto">
               <motion.button
             onClick={handleRefresh}
             disabled={refreshing}
@@ -1134,7 +1134,7 @@ const IoTDashboardPage: React.FC = () => {
       </motion.div>
       
       {/* Main Content */}
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-3 sm:px-6 py-6 sm:py-8">
       {/* Tab Navigation */}
         <motion.div 
           className="mb-8"
