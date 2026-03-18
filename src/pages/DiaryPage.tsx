@@ -29,6 +29,7 @@ import * as RiIcons from 'react-icons/ri';
 import { SiteDiaryFormTemplate } from '../components/forms/SiteDiaryFormTemplate';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
 import { PeopleSelectorModal } from '../components/ui/PeopleSelectorModal';
+import { useFeedback } from '../contexts/FeedbackContext';
 
 // Add interfaces for process flow
 interface ProcessNode {
@@ -106,6 +107,7 @@ ChartJS.register(
 const DiaryPage: React.FC = () => {
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://server.matrixtwin.com';
   const { t } = useTranslation();
+  const { showToast, showConfirm, showPrompt } = useFeedback();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
   const location = useLocation();
@@ -418,18 +420,18 @@ const DiaryPage: React.FC = () => {
 
     const diaryName = pendingDiaryName.trim();
     if (!diaryName) {
-      alert('Please provide a diary name.');
+      showToast('Please provide a diary name.');
       return;
     }
 
     if (!pendingDiaryExpiry) {
-      alert('Please select an expiry date and time.');
+      showToast('Please select an expiry date and time.');
       return;
     }
 
     const parsedExpiry = new Date(pendingDiaryExpiry);
     if (Number.isNaN(parsedExpiry.getTime())) {
-      alert('Please select a valid expiry date and time.');
+      showToast('Please select a valid expiry date and time.');
       return;
     }
     
@@ -492,15 +494,15 @@ const DiaryPage: React.FC = () => {
         ]);
         
         // Show success message
-        alert('Diary entry created successfully! Notifications have been sent to assigned users.');
+        showToast('Diary entry created successfully! Notifications have been sent to assigned users.');
       } else {
         const error = await response.json();
         console.error('Failed to create diary entry:', error);
-        alert(`Failed to create diary entry: ${error.error}`);
+        showToast(`Failed to create diary entry: ${error.error}`);
       }
     } catch (error) {
       console.error('Error creating diary entry:', error);
-      alert('Failed to create diary entry. Please try again.');
+      showToast('Failed to create diary entry. Please try again.');
     }
   };
   
@@ -542,7 +544,7 @@ const DiaryPage: React.FC = () => {
   const handleRestore = async (history: HistoryEntry) => {
     if (!selectedDiaryEntry) return;
     
-    if (!window.confirm('Are you sure you want to restore this version? This will create a new history entry with the current state.')) {
+    if (!(await showConfirm('Are you sure you want to restore this version? This will create a new history entry with the current state.'))) {
       return;
     }
 
@@ -557,18 +559,18 @@ const DiaryPage: React.FC = () => {
       });
 
       if (response.ok) {
-        alert('Diary entry restored successfully!');
+        showToast('Diary entry restored successfully!');
         setShowHistory(false);
         fetchDiaryEntries();
         setSelectedDiaryEntry(null);
         setShowDetails(false);
       } else {
         const error = await response.json();
-        alert(`Failed to restore diary entry: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to restore diary entry: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error restoring diary entry:', error);
-      alert('Failed to restore diary entry. Please try again.');
+      showToast('Failed to restore diary entry. Please try again.');
     }
   };
 
@@ -610,9 +612,14 @@ const DiaryPage: React.FC = () => {
 
     let comment = '';
     if (action === 'reject' || action === 'back') {
-      const promptResult = prompt(`Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`);
+      const promptResult = await showPrompt({
+        title: action === 'reject' ? 'Reason Required' : 'Comment Required',
+        message: `Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`,
+        placeholder: action === 'reject' ? 'Enter rejection reason' : 'Enter send-back comment',
+        confirmLabel: 'Submit'
+      });
       if (promptResult === null || promptResult.trim() === '') {
-        alert(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
+        showToast(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
         return;
       }
       comment = promptResult.trim();
@@ -637,9 +644,9 @@ const DiaryPage: React.FC = () => {
         
         // Handle permanent rejection
         if (result.permanently_rejected) {
-          alert('Entry has been permanently rejected - no more edits are allowed as all nodes have reached their completion limit.');
+          showToast('Entry has been permanently rejected - no more edits are allowed as all nodes have reached their completion limit.');
         } else {
-          alert(`Entry ${action}d successfully! Notifications have been sent.`);
+          showToast(`Entry ${action}d successfully! Notifications have been sent.`);
         }
         
         // Refresh diary entries and entry details
@@ -650,16 +657,16 @@ const DiaryPage: React.FC = () => {
         
         // Handle specific error cases
         if (error.error?.includes('completion limit')) {
-          alert(`Cannot ${action}: ${error.error}\n${error.details || ''}`);
+          showToast(`Cannot ${action}: ${error.error}\n${error.details || ''}`);
         } else if (error.error?.includes('No previous node available')) {
-          alert(`Cannot send back: ${error.error}\n${error.details || ''}`);
+          showToast(`Cannot send back: ${error.error}\n${error.details || ''}`);
         } else {
-          alert(`Failed to ${action} entry: ${error.error}`);
+          showToast(`Failed to ${action} entry: ${error.error}`);
         }
       }
     } catch (error) {
       console.error(`Error ${action}ing entry:`, error);
-      alert(`Failed to ${action} entry. Please try again.`);
+      showToast(`Failed to ${action} entry. Please try again.`);
     }
   };
 
@@ -685,20 +692,20 @@ const DiaryPage: React.FC = () => {
         // Refresh diary entries
         await fetchDiaryEntries();
         setShowFormView(false);
-        alert('Form updated successfully!');
+        showToast('Form updated successfully!');
       } else {
         const error = await response.json();
         
         // Handle completion limit errors
         if (error.error?.includes('completion limit')) {
-          alert(`Cannot update form: ${error.error}\n${error.details || ''}`);
+          showToast(`Cannot update form: ${error.error}\n${error.details || ''}`);
         } else {
-          alert(`Failed to update form: ${error.error}`);
+          showToast(`Failed to update form: ${error.error}`);
         }
       }
     } catch (error) {
       console.error('Error updating form:', error);
-      alert('Failed to update form. Please try again.');
+      showToast('Failed to update form. Please try again.');
     }
   };
   
@@ -835,11 +842,11 @@ const DiaryPage: React.FC = () => {
   // Delete diary entry (admin only)
   const handleDeleteEntry = async (entry: DiaryEntry) => {
     if (!user?.id || user.role !== 'admin') {
-      alert('Only admins can delete diary entries.');
+      showToast('Only admins can delete diary entries.');
       return;
     }
 
-    const confirmDelete = window.confirm(`Are you sure you want to delete this diary entry from ${entry.date}? This action cannot be undone.`);
+    const confirmDelete = await showConfirm(`Are you sure you want to delete this diary entry from ${entry.date}? This action cannot be undone.`);
     if (!confirmDelete) return;
 
     try {
@@ -853,14 +860,14 @@ const DiaryPage: React.FC = () => {
       if (response.ok) {
         // Refresh diary entries
         await fetchDiaryEntries();
-        alert('Diary entry deleted successfully!');
+        showToast('Diary entry deleted successfully!');
       } else {
         const error = await response.json();
-        alert(`Failed to delete diary entry: ${error.error}`);
+        showToast(`Failed to delete diary entry: ${error.error}`);
       }
     } catch (error) {
       console.error('Error deleting diary entry:', error);
-      alert('Failed to delete diary entry. Please try again.');
+      showToast('Failed to delete diary entry. Please try again.');
     }
   };
 
@@ -869,13 +876,13 @@ const DiaryPage: React.FC = () => {
 
     const selectedExpiry = expiryDrafts[entry.id];
     if (!selectedExpiry) {
-      alert('Please choose an expiry date first.');
+      showToast('Please choose an expiry date first.');
       return;
     }
 
     const expiryDate = new Date(selectedExpiry);
     if (Number.isNaN(expiryDate.getTime())) {
-      alert('Please provide a valid expiry date.');
+      showToast('Please provide a valid expiry date.');
       return;
     }
 
@@ -894,18 +901,18 @@ const DiaryPage: React.FC = () => {
       });
 
       if (response.ok) {
-        alert('Expiry date updated successfully.');
+        showToast('Expiry date updated successfully.');
         await fetchDiaryEntries();
         if (selectedDiaryEntry?.id === entry.id) {
           await handleViewDetails(entry);
         }
       } else {
         const error = await response.json();
-        alert(`Failed to set expiry date: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to set expiry date: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error setting expiry date:', error);
-      alert('Failed to set expiry date. Please try again.');
+      showToast('Failed to set expiry date. Please try again.');
     } finally {
       setSavingExpiry((prev) => ({ ...prev, [entry.id]: false }));
     }
@@ -929,18 +936,18 @@ const DiaryPage: React.FC = () => {
       });
 
       if (response.ok) {
-        alert(nextActive ? 'Diary entry reactivated.' : 'Diary entry marked as expired.');
+        showToast(nextActive ? 'Diary entry reactivated.' : 'Diary entry marked as expired.');
         await fetchDiaryEntries();
         if (selectedDiaryEntry?.id === entry.id) {
           await handleViewDetails(entry);
         }
       } else {
         const error = await response.json();
-        alert(`Failed to update expiry status: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to update expiry status: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error updating expiry status:', error);
-      alert('Failed to update expiry status. Please try again.');
+      showToast('Failed to update expiry status. Please try again.');
     } finally {
       setUpdatingExpiryStatus((prev) => ({ ...prev, [entry.id]: false }));
     }
@@ -950,12 +957,18 @@ const DiaryPage: React.FC = () => {
     if (!user?.id || user.role !== 'admin') return;
 
     const currentName = getDiaryDisplayName(entry);
-    const nextNamePrompt = prompt('Enter new diary name:', currentName);
+    const nextNamePrompt = await showPrompt({
+      title: 'Rename Diary',
+      message: 'Enter new diary name:',
+      defaultValue: currentName,
+      placeholder: 'Enter diary name',
+      confirmLabel: 'Rename'
+    });
     if (nextNamePrompt === null) return;
     const nextName = nextNamePrompt.trim();
 
     if (!nextName) {
-      alert('Diary name cannot be empty.');
+      showToast('Diary name cannot be empty.');
       return;
     }
 
@@ -978,18 +991,18 @@ const DiaryPage: React.FC = () => {
       });
 
       if (response.ok) {
-        alert('Diary renamed successfully.');
+        showToast('Diary renamed successfully.');
         await fetchDiaryEntries();
         if (selectedDiaryEntry?.id === entry.id) {
           await handleViewDetails(entry);
         }
       } else {
         const error = await response.json();
-        alert(`Failed to rename diary: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to rename diary: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error renaming diary:', error);
-      alert('Failed to rename diary. Please try again.');
+      showToast('Failed to rename diary. Please try again.');
     } finally {
       setRenamingDiary((prev) => ({ ...prev, [entry.id]: false }));
     }
@@ -999,7 +1012,13 @@ const DiaryPage: React.FC = () => {
     if (!user?.id || user.role !== 'admin') return;
 
     const defaultMessage = `Reminder: Please action "${node.node_name}" step.`;
-    const messageInput = prompt('Enter reminder message for this step:', defaultMessage);
+    const messageInput = await showPrompt({
+      title: 'Send Reminder',
+      message: 'Enter reminder message for this step:',
+      defaultValue: defaultMessage,
+      placeholder: 'Enter reminder message',
+      confirmLabel: 'Send'
+    });
     if (messageInput === null) return;
     const message = messageInput.trim() || defaultMessage;
     const reminderKey = `${entry.id}-${nodeOrder}`;
@@ -1019,14 +1038,14 @@ const DiaryPage: React.FC = () => {
       });
 
       if (response.ok) {
-        alert('Reminder sent successfully for this node.');
+        showToast('Reminder sent successfully for this node.');
       } else {
         const error = await response.json();
-        alert(`Failed to send reminder: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to send reminder: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error sending node reminder:', error);
-      alert('Failed to send reminder. Please try again.');
+      showToast('Failed to send reminder. Please try again.');
     } finally {
       setSendingNodeReminder((prev) => ({ ...prev, [reminderKey]: false }));
     }
@@ -1264,7 +1283,7 @@ const DiaryPage: React.FC = () => {
       await exportReportElementToSinglePagePdf(reportContentRef.current, fileName);
     } catch (error) {
       console.error('Failed to download diary report PDF:', error);
-      alert('Unable to generate PDF. Please try again.');
+      showToast('Unable to generate PDF. Please try again.');
     } finally {
       setIsDownloadingReport(false);
     }

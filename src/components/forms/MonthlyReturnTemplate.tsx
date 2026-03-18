@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { RiCalendarLine, RiUserLine, RiFileTextLine, RiDownload2Line, RiAddLine, RiFilePdf2Line, RiCheckLine } from 'react-icons/ri';
 import { generatePrefixedFormNumber } from '../../utils/formUtils';
+import { useFeedback } from '../../contexts/FeedbackContext';
 
 interface MonthlyReturnTemplateProps {
   onClose: () => void;
@@ -261,6 +262,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
   onSave,
   initialData
 }) => {
+  const { showToast } = useFeedback();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages] = useState(10);
   
@@ -392,7 +394,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
     // Create a new window to render the PDF content
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      alert('Please allow pop-ups to download the PDF');
+      showToast('Please allow pop-ups to download the PDF');
       return;
     }
 

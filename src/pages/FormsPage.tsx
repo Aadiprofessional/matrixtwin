@@ -56,6 +56,7 @@ import {
   RiRobotLine,
   RiUploadLine,
   RiFileEditLine,
+  RiFileUserLine,
   RiFilePdfLine,
   RiArrowLeftLine,
   RiArrowRightLine,
@@ -70,6 +71,7 @@ import {
 import { IconType } from 'react-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../contexts/ProjectContext';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { aiService } from '../services/aiService';
 
 import { 
@@ -1211,6 +1213,7 @@ const convertPdfToImages = async (pdfFile: File): Promise<string[]> => {
 
 // AI Form Generator Component with PDF support
 const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onClose }) => {
+  const { showToast } = useFeedback();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
@@ -1225,7 +1228,7 @@ const AIFormGenerator: React.FC<AIFormGeneratorProps> = ({ onFormGenerated, onCl
     if (file && (file.type.startsWith('image/') || file.type === 'application/pdf')) {
       setSelectedFile(file);
     } else {
-      alert('Please select an image or PDF file');
+      showToast('Please select an image or PDF file');
     }
   };
 
@@ -2591,6 +2594,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
   // Zoom functionality
   const [zoomLevel, setZoomLevel] = useState(1);
   const [rightPanelTab, setRightPanelTab] = useState<'settings' | 'pdf'>('settings');
+  const { showToast } = useFeedback();
   const { user } = useAuth();
   
   const [isScanning, setIsScanning] = useState(false);
@@ -4108,7 +4112,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({
     
     // If no available cell found, show alert and return
     if (!targetCell) {
-      alert('No available grid cells. Please remove some widgets to add new ones.');
+      showToast('No available grid cells. Please remove some widgets to add new ones.');
       return;
     }
     
@@ -8104,6 +8108,7 @@ INSERT PAGE 2`}
 
 const FormsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { showToast, showConfirm } = useFeedback();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
 
@@ -8336,7 +8341,7 @@ const FormsPage: React.FC = () => {
   }, [fetchForms]);
 
   const handleDeleteForm = async (formId: string) => {
-    if (!window.confirm(t('common.confirmDelete', 'Are you sure you want to delete this form?'))) {
+    if (!(await showConfirm(t('common.confirmDelete', 'Are you sure you want to delete this form?')))) {
       return;
     }
 
@@ -8352,11 +8357,11 @@ const FormsPage: React.FC = () => {
         setFormsList(prev => prev.filter(f => f.id !== formId));
       } else {
         console.error('Failed to delete form');
-        alert('Failed to delete form');
+        showToast('Failed to delete form');
       }
     } catch (error) {
       console.error('Error deleting form:', error);
-      alert('Error deleting form');
+      showToast('Error deleting form');
     }
   };
   
@@ -9221,8 +9226,8 @@ const FormsPage: React.FC = () => {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
               <h1 className="flex items-center text-2xl sm:text-3xl font-display font-bold text-white md:text-4xl">
-                <RiFileEditLine className="mr-3 text-[#d7e3f7]" />
-                {t('forms.title', 'Forms')}
+                <RiFileUserLine className="mr-3 text-[#d7e3f7]" />
+                {t('nav.customForms', 'Custom Forms')}
               </h1>
               <p className="max-w-3xl text-sm text-white/75 md:text-base">
                 Manage custom form templates with the same focused workflow and visual clarity as diary records.

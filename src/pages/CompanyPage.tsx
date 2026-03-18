@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { api } from '../utils/api';
 import { adminService } from '../services/adminService';
 import { companyService } from '../services/companyService';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Dialog } from '../components/ui/Dialog';
@@ -22,6 +23,7 @@ import {
 } from 'react-icons/ri';
 
 const CompanyPage: React.FC = () => {
+  const { showToast } = useFeedback();
   const { user, updateUser, logout } = useAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -184,10 +186,10 @@ const CompanyPage: React.FC = () => {
     try {
       if (adminRequest && (adminRequest.status === 'pending' || adminRequest.status === 'rejected')) {
         await adminService.updateAdminRequest(adminRequest.id, payload as any);
-        alert('Admin request updated successfully!');
+        showToast('Admin request updated successfully!');
       } else {
         await adminService.submitAdminRequest(payload as any);
-        alert('Admin request submitted successfully!');
+        showToast('Admin request submitted successfully!');
       }
       // Refresh request status
       await fetchAdminRequest();
@@ -206,7 +208,7 @@ const CompanyPage: React.FC = () => {
 
     try {
       await api.joinCompany(joinCompanyId);
-      alert('Joined company successfully!');
+      showToast('Joined company successfully!');
       
       if (user) {
         // Fetch updated user info to get the correct company_id (UUID)

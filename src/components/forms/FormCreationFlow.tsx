@@ -22,6 +22,7 @@ import {
 import ProcessFlowBuilder from './ProcessFlowBuilder';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProjects } from '../../contexts/ProjectContext';
+import { useFeedback } from '../../contexts/FeedbackContext';
 import { projectService } from '../../services/projectService';
 
 // Context for sharing form state between steps
@@ -213,6 +214,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
   initialStep = 1,
   isEditMode = false
 }) => {
+  const { showToast } = useFeedback();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
   
@@ -475,7 +477,7 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
   // Final save function that creates the custom form template
   const handleFinalSave = async () => {
     if (!user?.id || !selectedProject?.id) {
-      alert('User or project not found');
+      showToast('User or project not found');
       return;
     }
 
@@ -532,16 +534,16 @@ const FormCreationFlow: React.FC<FormCreationFlowProps> = ({
         };
         onSave(formData);
         
-        alert(`Custom form template ${initialValues?.id ? 'updated' : 'created'} successfully!`);
+        showToast(`Custom form template ${initialValues?.id ? 'updated' : 'created'} successfully!`);
         onClose();
       } else {
         const error = await response.json();
         console.error(`Failed to ${initialValues?.id ? 'update' : 'create'} custom form template:`, error);
-        alert(`Failed to ${initialValues?.id ? 'update' : 'create'} custom form template: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to ${initialValues?.id ? 'update' : 'create'} custom form template: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error creating custom form template:', error);
-      alert('Failed to create custom form template. Please try again.');
+      showToast('Failed to create custom form template. Please try again.');
     } finally {
       setSaving(false);
     }

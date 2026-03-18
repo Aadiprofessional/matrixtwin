@@ -13,6 +13,7 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { supabase } from '../../lib/supabase';
 import { setUserInfo } from '../../utils/userInfo';
+import { useFeedback } from '../../contexts/FeedbackContext';
 
 // Import the video
 import BackgroundVideo from '../../assets/back.mp4';
@@ -20,6 +21,7 @@ import BackgroundVideo from '../../assets/back.mp4';
 import MatrixAILogo from '../../assets/MatrixAILogo.png';
 
 const Login: React.FC = () => {
+  const { showToast } = useFeedback();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -289,7 +291,7 @@ const Login: React.FC = () => {
       
       if (error) throw new Error(error.message);
       
-      alert('Password reset email sent! Check your inbox.');
+      showToast('Password reset email sent! Check your inbox.');
       
     } catch (err) {
       const error = err as Error;

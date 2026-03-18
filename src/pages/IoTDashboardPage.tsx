@@ -67,6 +67,7 @@ import {
   BarElement,
 } from 'chart.js';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { 
   ResponsiveContainer, 
   LineChart, 
@@ -398,6 +399,7 @@ const getSensorTypeColor = (type: SensorType) => {
 
 // Main IoT Dashboard component
 const IoTDashboardPage: React.FC = () => {
+  const { showToast } = useFeedback();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -1026,7 +1028,7 @@ const IoTDashboardPage: React.FC = () => {
         `/digital-twins/viewer?fileId=${models[0].file_id}&activeOverlay=${activeTab}${sensorData ? `&sensorData=${sensorParam}` : ''}`
       );
     } else {
-      alert('No valid model available for viewing');
+      showToast('No valid model available for viewing');
     }
   };
 
@@ -1035,7 +1037,7 @@ const IoTDashboardPage: React.FC = () => {
     if (models.length > 0 && models[0].file_id) {
       navigateToModelViewer(activeTab === 'iot' ? 'iot' : activeTab === 'analytics' ? 'analytics' : 'controls', selectedSensor || undefined);
     } else {
-      alert('No valid model available for full-screen view');
+      showToast('No valid model available for full-screen view');
     }
   };
 

@@ -17,6 +17,7 @@ import { API_BASE_URL } from '../utils/api';
 import ProcessFlowBuilder from '../components/forms/ProcessFlowBuilder';
 import { ReportModal } from '../components/common/ReportModal';
 import { FullReportContent } from '../components/common/FullReportContent';
+import { useFeedback } from '../contexts/FeedbackContext';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -213,6 +214,7 @@ const PeopleSelectorModal: React.FC<{
 
 // RFI Page component
 const RfiPage: React.FC = () => {
+  const { showToast, showConfirm, showPrompt } = useFeedback();
   // State
   const { user } = useAuth();
   const { selectedProject } = useProjects();
@@ -282,7 +284,7 @@ const RfiPage: React.FC = () => {
   const handleRestore = async (history: HistoryEntry) => {
     if (!selectedRfi) return;
     
-    if (!window.confirm('Are you sure you want to restore this version? This will create a new history entry with the current state.')) {
+    if (!(await showConfirm('Are you sure you want to restore this version? This will create a new history entry with the current state.'))) {
       return;
     }
 
@@ -298,18 +300,18 @@ const RfiPage: React.FC = () => {
       });
 
       if (response.ok) {
-        alert(`${endpointType === 'survey' ? 'Survey' : 'Inspection'} entry restored successfully!`);
+        showToast(`${endpointType === 'survey' ? 'Survey' : 'Inspection'} entry restored successfully!`);
         setShowHistory(false);
         loadRfis(); // Refresh the list
         setSelectedRfi(null);
         setShowRfiDetails(false);
       } else {
         const error = await response.json();
-        alert(`Failed to restore entry: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to restore entry: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error restoring entry:', error);
-      alert('Failed to restore entry. Please try again.');
+      showToast('Failed to restore entry. Please try again.');
     }
   };
 
@@ -1132,14 +1134,14 @@ const RfiPage: React.FC = () => {
       if (response.ok) {
         setInspectionTemplateVisible(false);
         loadRfis();
-        alert('Inspection updated successfully!');
+        showToast('Inspection updated successfully!');
       } else {
         const error = await response.json();
-        alert(`Failed to update inspection: ${error.error}`);
+        showToast(`Failed to update inspection: ${error.error}`);
       }
     } catch (error) {
       console.error('Error updating inspection:', error);
-      alert('Failed to update inspection. Please try again.');
+      showToast('Failed to update inspection. Please try again.');
     }
   };
 
@@ -1164,25 +1166,25 @@ const RfiPage: React.FC = () => {
       if (response.ok) {
         setSurveyTemplateVisible(false);
         loadRfis();
-        alert('Survey updated successfully!');
+        showToast('Survey updated successfully!');
       } else {
         const error = await response.json();
-        alert(`Failed to update survey: ${error.error}`);
+        showToast(`Failed to update survey: ${error.error}`);
       }
     } catch (error) {
       console.error('Error updating survey:', error);
-      alert('Failed to update survey. Please try again.');
+      showToast('Failed to update survey. Please try again.');
     }
   };
 
   // Delete RFI (admin only)
   const handleDeleteRfi = async (rfi: RfiItem) => {
     if (!user?.id || user.role !== 'admin') {
-      alert('Only admins can delete RFIs.');
+      showToast('Only admins can delete RFIs.');
       return;
     }
 
-    const confirmDelete = window.confirm(`Are you sure you want to delete this RFI: ${rfi.title}? This action cannot be undone.`);
+    const confirmDelete = await showConfirm(`Are you sure you want to delete this RFI: ${rfi.title}? This action cannot be undone.`);
     if (!confirmDelete) return;
 
     try {
@@ -1199,14 +1201,14 @@ const RfiPage: React.FC = () => {
 
       if (response.ok) {
         loadRfis();
-        alert('RFI deleted successfully!');
+        showToast('RFI deleted successfully!');
       } else {
         const error = await response.json();
-        alert(`Failed to delete RFI: ${error.error}`);
+        showToast(`Failed to delete RFI: ${error.error}`);
       }
     } catch (error) {
       console.error('Error deleting RFI:', error);
-      alert('Failed to delete RFI. Please try again.');
+      showToast('Failed to delete RFI. Please try again.');
     }
   };
 
@@ -1214,12 +1216,12 @@ const RfiPage: React.FC = () => {
     if (!user?.id || user.role !== 'admin') return;
     const draftValue = expiryDrafts[rfi.id];
     if (!draftValue) {
-      alert('Please select an expiry date and time.');
+      showToast('Please select an expiry date and time.');
       return;
     }
     const parsedExpiry = new Date(draftValue);
     if (Number.isNaN(parsedExpiry.getTime())) {
-      alert('Invalid expiry date.');
+      showToast('Invalid expiry date.');
       return;
     }
     const endpointType = rfi.form_type === 'survey' ? 'survey' : 'inspection';
@@ -1237,15 +1239,15 @@ const RfiPage: React.FC = () => {
         })
       });
       if (response.ok) {
-        alert('Expiry date updated successfully.');
+        showToast('Expiry date updated successfully.');
         await loadRfis();
       } else {
         const error = await response.json();
-        alert(`Failed to set expiry date: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to set expiry date: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error setting expiry date:', error);
-      alert('Failed to set expiry date. Please try again.');
+      showToast('Failed to set expiry date. Please try again.');
     } finally {
       setSavingExpiry((prev) => ({ ...prev, [rfi.id]: false }));
     }
@@ -1268,15 +1270,15 @@ const RfiPage: React.FC = () => {
         })
       });
       if (response.ok) {
-        alert(nextActive ? 'Entry reactivated.' : 'Entry marked as expired.');
+        showToast(nextActive ? 'Entry reactivated.' : 'Entry marked as expired.');
         await loadRfis();
       } else {
         const error = await response.json();
-        alert(`Failed to update expiry status: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to update expiry status: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error updating expiry status:', error);
-      alert('Failed to update expiry status. Please try again.');
+      showToast('Failed to update expiry status. Please try again.');
     } finally {
       setUpdatingExpiryStatus((prev) => ({ ...prev, [rfi.id]: false }));
     }
@@ -1286,7 +1288,13 @@ const RfiPage: React.FC = () => {
     if (!user?.id || user.role !== 'admin') return;
     const endpointType = rfi.form_type === 'survey' ? 'survey' : 'inspection';
     const defaultMessage = `Reminder: Please action "${node.node_name}" step.`;
-    const messageInput = prompt('Enter reminder message for this step:', defaultMessage);
+    const messageInput = await showPrompt({
+      title: 'Send Reminder',
+      message: 'Enter reminder message for this step:',
+      defaultValue: defaultMessage,
+      placeholder: 'Enter reminder message',
+      confirmLabel: 'Send'
+    });
     if (messageInput === null) return;
     const message = messageInput.trim() || defaultMessage;
     const reminderKey = `${rfi.id}-${node.node_order}`;
@@ -1304,14 +1312,14 @@ const RfiPage: React.FC = () => {
         })
       });
       if (response.ok) {
-        alert('Reminder sent successfully.');
+        showToast('Reminder sent successfully.');
       } else {
         const error = await response.json();
-        alert(`Failed to send reminder: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to send reminder: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error sending reminder:', error);
-      alert('Failed to send reminder. Please try again.');
+      showToast('Failed to send reminder. Please try again.');
     } finally {
       setSendingNodeReminder((prev) => ({ ...prev, [reminderKey]: false }));
     }
@@ -1320,11 +1328,17 @@ const RfiPage: React.FC = () => {
   const handleRenameRfi = async (rfi: RfiItem) => {
     if (!user?.id || user.role !== 'admin') return;
     const currentName = getRfiDisplayName(rfi);
-    const nextNamePrompt = prompt('Enter new form name:', currentName);
+    const nextNamePrompt = await showPrompt({
+      title: 'Rename Form',
+      message: 'Enter new form name:',
+      defaultValue: currentName,
+      placeholder: 'Enter form name',
+      confirmLabel: 'Rename'
+    });
     if (nextNamePrompt === null) return;
     const nextName = nextNamePrompt.trim();
     if (!nextName) {
-      alert('Name cannot be empty.');
+      showToast('Name cannot be empty.');
       return;
     }
     if (nextName === currentName) return;
@@ -1343,15 +1357,15 @@ const RfiPage: React.FC = () => {
         })
       });
       if (response.ok) {
-        alert('Form renamed successfully.');
+        showToast('Form renamed successfully.');
         await loadRfis();
       } else {
         const error = await response.json();
-        alert(`Failed to rename form: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to rename form: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error renaming form:', error);
-      alert('Failed to rename form. Please try again.');
+      showToast('Failed to rename form. Please try again.');
     } finally {
       setRenamingRfi((prev) => ({ ...prev, [rfi.id]: false }));
     }
@@ -1409,18 +1423,18 @@ const RfiPage: React.FC = () => {
 
     const entryName = pendingEntryName.trim();
     if (!entryName) {
-      alert('Please provide an entry name.');
+      showToast('Please provide an entry name.');
       return;
     }
 
     if (!pendingEntryExpiry) {
-      alert('Please select an expiry date and time.');
+      showToast('Please select an expiry date and time.');
       return;
     }
 
     const parsedExpiry = new Date(pendingEntryExpiry);
     if (Number.isNaN(parsedExpiry.getTime())) {
-      alert('Please select a valid expiry date and time.');
+      showToast('Please select a valid expiry date and time.');
       return;
     }
     
@@ -1553,7 +1567,7 @@ const RfiPage: React.FC = () => {
         ]);
         
         // Show success message
-        alert(`${formType === 'survey' ? 'Survey' : 'Inspection'} check created successfully! Notifications have been sent to assigned users.`);
+        showToast(`${formType === 'survey' ? 'Survey' : 'Inspection'} check created successfully! Notifications have been sent to assigned users.`);
       } else {
         const errorText = await response.text();
         console.error('Failed to create RFI:', {
@@ -1570,11 +1584,11 @@ const RfiPage: React.FC = () => {
           errorMessage = errorText || 'Server error';
         }
         
-        alert(`Failed to create ${formType === 'survey' ? 'survey' : 'inspection'} check: ${errorMessage}`);
+        showToast(`Failed to create ${formType === 'survey' ? 'survey' : 'inspection'} check: ${errorMessage}`);
       }
     } catch (error) {
       console.error('Error creating RFI:', error);
-      alert('Failed to create RFI. Please try again.');
+      showToast('Failed to create RFI. Please try again.');
     }
   };
   
@@ -1584,9 +1598,14 @@ const RfiPage: React.FC = () => {
 
     let comment = '';
     if (action === 'reject' || action === 'back') {
-      const promptResult = prompt(`Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`);
+      const promptResult = await showPrompt({
+        title: action === 'reject' ? 'Reason Required' : 'Comment Required',
+        message: `Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`,
+        placeholder: action === 'reject' ? 'Enter rejection reason' : 'Enter send-back comment',
+        confirmLabel: 'Submit'
+      });
       if (promptResult === null || promptResult.trim() === '') {
-        alert(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
+        showToast(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
         return;
       }
       comment = promptResult.trim();
@@ -1614,9 +1633,9 @@ const RfiPage: React.FC = () => {
         const result = await response.json();
         
         if (result.permanently_rejected) {
-          alert('Entry has been permanently rejected - no more edits are allowed as all nodes have reached their completion limit.');
+          showToast('Entry has been permanently rejected - no more edits are allowed as all nodes have reached their completion limit.');
         } else {
-          alert(`Entry ${action}d successfully! Notifications have been sent.`);
+          showToast(`Entry ${action}d successfully! Notifications have been sent.`);
         }
         
         await loadRfis();
@@ -1624,16 +1643,16 @@ const RfiPage: React.FC = () => {
       } else {
         const error = await response.json();
         if (error.error?.includes('completion limit')) {
-          alert(`Cannot ${action}: ${error.error}\n${error.details || ''}`);
+          showToast(`Cannot ${action}: ${error.error}\n${error.details || ''}`);
         } else if (error.error?.includes('No previous node available')) {
-          alert(`Cannot send back: ${error.error}\n${error.details || ''}`);
+          showToast(`Cannot send back: ${error.error}\n${error.details || ''}`);
         } else {
-          alert(`Failed to ${action} entry: ${error.error}`);
+          showToast(`Failed to ${action} entry: ${error.error}`);
         }
       }
     } catch (error) {
       console.error(`Error ${action}ing entry:`, error);
-      alert(`Failed to ${action} entry. Please try again.`);
+      showToast(`Failed to ${action} entry. Please try again.`);
     }
   };
 
@@ -1735,7 +1754,7 @@ const RfiPage: React.FC = () => {
                 Manage information requests with faster scanning, stronger status visibility, and cleaner workflow context.
               </p>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3 lg:mt-0">
+            <div className="mt-2 flex flex-wrap items-center gap-3 lg:mt-0 lg:flex-nowrap lg:justify-end">
               <Button
                 variant="primary"
                 leftIcon={<RiIcons.RiAddLine />}
@@ -1743,14 +1762,14 @@ const RfiPage: React.FC = () => {
                   setSelectedRfi(null);
                   setShowFormSelector(true);
                 }}
-                className="whitespace-nowrap bg-gradient-to-r from-indigo-700 to-blue-700 hover:from-indigo-800 hover:to-blue-800"
+                className="whitespace-nowrap shrink-0 bg-gradient-to-r from-indigo-700 to-blue-700 hover:from-indigo-800 hover:to-blue-800"
               >
                 New Request
               </Button>
               <Button
                 variant="outline"
                 leftIcon={<RiIcons.RiFileTextLine />}
-                className="whitespace-nowrap border-white/30 bg-white/10 text-white hover:bg-white/20"
+                className="whitespace-nowrap shrink-0 border-white/30 bg-white/10 text-white hover:bg-white/20"
                 onClick={() => setShowReport(true)}
               >
                 Generate Report

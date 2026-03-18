@@ -17,6 +17,7 @@ import {
   RiCheckLine
 } from 'react-icons/ri';
 import { generatePrefixedFormNumber } from '../../utils/formUtils';
+import { useFeedback } from '../../contexts/FeedbackContext';
 
 interface SiteDiaryFormTemplateProps {
   onClose: () => void;
@@ -35,6 +36,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
   readOnly,
   title
 }) => {
+  const { showToast } = useFeedback();
   const [currentPage, setCurrentPage] = useState<1 | 2>(1);
   const [formData, setFormData] = useState({
     formNumber: generatePrefixedFormNumber('DY'),
@@ -280,7 +282,7 @@ export const SiteDiaryFormTemplate: React.FC<SiteDiaryFormTemplateProps> = ({
     // Create a link to trigger the download
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      alert('Please allow pop-ups to download the PDF');
+      showToast('Please allow pop-ups to download the PDF');
       return;
     }
 

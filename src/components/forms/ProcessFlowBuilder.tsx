@@ -14,14 +14,29 @@ interface ProcessFlowBuilderProps {
   nodes: ProcessNode[];
   selectedNodeId: string | null;
   onSelectNode: (node: ProcessNode) => void;
+  theme?: 'default' | 'light';
 }
 
 const ProcessFlowBuilder: React.FC<ProcessFlowBuilderProps> = ({
   nodes,
   selectedNodeId,
-  onSelectNode
+  onSelectNode,
+  theme = 'default'
 }) => {
+  const isLightTheme = theme === 'light';
+
   const getNodeColor = (type: string) => {
+    if (isLightTheme) {
+      switch (type) {
+        case 'start':
+          return 'bg-[#fff7df] border-[#f2cd6f] text-[#6a3a0f]';
+        case 'end':
+          return 'bg-[#fff1c8] border-[#d7a235] text-[#5a2f0f]';
+        default:
+          return 'bg-[#fff4d4] border-[#e6b451] text-[#5f3812]';
+      }
+    }
+
     switch (type) {
       case 'start':
         return 'bg-ai-teal/20 border-ai-teal text-ai-teal';
@@ -40,13 +55,17 @@ const ProcessFlowBuilder: React.FC<ProcessFlowBuilderProps> = ({
             <motion.div
               whileHover={{ scale: 1.03 }}
               className={`w-full max-w-sm rounded-lg p-3 border-2 cursor-pointer transition-colors ${
-                selectedNodeId === node.id ? 'ring-2 ring-offset-2 ring-offset-dark-900 ring-ai-blue' : ''
+                selectedNodeId === node.id
+                  ? isLightTheme
+                    ? 'ring-2 ring-offset-2 ring-offset-[#fff7df] ring-[#d7a235]'
+                    : 'ring-2 ring-offset-2 ring-offset-dark-900 ring-ai-blue'
+                  : ''
               } ${getNodeColor(node.type)}`}
               onClick={() => onSelectNode(node)}
             >
               <div className="flex items-center justify-between">
                 <div className="font-medium">{node.name}</div>
-                <div className="text-xs px-2 py-1 rounded-full bg-dark-800/50">
+                <div className={`text-xs px-2 py-1 rounded-full ${isLightTheme ? 'bg-[#f2cd6f]/35 text-[#6a3a0f]' : 'bg-dark-800/50'}`}>
                   {node.type === 'start' ? 'Start' : node.type === 'end' ? 'End' : 'Process'}
                 </div>
               </div>
@@ -60,9 +79,9 @@ const ProcessFlowBuilder: React.FC<ProcessFlowBuilderProps> = ({
             
             {/* Connector line between nodes */}
             {index < nodes.length - 1 && (
-              <div className="w-px h-10 bg-gray-600 flex justify-center items-center my-1">
-                <div className="bg-dark-800 rounded-full p-1">
-                  <RiArrowDownLine className="text-gray-400" />
+              <div className={`w-px h-10 flex justify-center items-center my-1 ${isLightTheme ? 'bg-[#d7a235]' : 'bg-gray-600'}`}>
+                <div className={`rounded-full p-1 ${isLightTheme ? 'bg-[#fff4d4]' : 'bg-dark-800'}`}>
+                  <RiArrowDownLine className={isLightTheme ? 'text-[#8a4b14]' : 'text-gray-400'} />
                 </div>
               </div>
             )}

@@ -16,6 +16,7 @@ import { PeopleSelectorModal } from '../components/ui/PeopleSelectorModal';
 import { ReportModal } from '../components/common/ReportModal';
 import { FullReportContent } from '../components/common/FullReportContent';
 import { exportReportElementToSinglePagePdf } from '../utils/pdfUtils';
+import { useFeedback } from '../contexts/FeedbackContext';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -95,6 +96,7 @@ interface CleansingEntry {
 
 const CleansingPage: React.FC = () => {
   const { t } = useTranslation();
+  const { showToast, showConfirm, showPrompt } = useFeedback();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
   const location = useLocation();
@@ -170,7 +172,7 @@ const CleansingPage: React.FC = () => {
   const handleRestore = async (history: HistoryEntry) => {
     if (!selectedCleansingEntry) return;
     
-    if (!window.confirm('Are you sure you want to restore this version? This will create a new history entry with the current state.')) {
+    if (!(await showConfirm('Are you sure you want to restore this version? This will create a new history entry with the current state.'))) {
       return;
     }
 
@@ -185,18 +187,18 @@ const CleansingPage: React.FC = () => {
       });
 
       if (response.ok) {
-        alert('Cleansing entry restored successfully!');
+        showToast('Cleansing entry restored successfully!');
         setShowHistory(false);
         fetchCleansingEntries();
         setSelectedCleansingEntry(null);
         setShowDetails(false);
       } else {
         const error = await response.json();
-        alert(`Failed to restore cleansing entry: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to restore cleansing entry: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error restoring cleansing entry:', error);
-      alert('Failed to restore cleansing entry. Please try again.');
+      showToast('Failed to restore cleansing entry. Please try again.');
     }
   };
 
@@ -442,18 +444,18 @@ const CleansingPage: React.FC = () => {
 
     const entryName = pendingCleansingName.trim();
     if (!entryName) {
-      alert('Please provide a cleansing entry name.');
+      showToast('Please provide a cleansing entry name.');
       return;
     }
 
     if (!pendingCleansingExpiry) {
-      alert('Please select an expiry date and time.');
+      showToast('Please select an expiry date and time.');
       return;
     }
 
     const parsedExpiry = new Date(pendingCleansingExpiry);
     if (Number.isNaN(parsedExpiry.getTime())) {
-      alert('Please select a valid expiry date and time.');
+      showToast('Please select a valid expiry date and time.');
       return;
     }
     
@@ -516,15 +518,15 @@ const CleansingPage: React.FC = () => {
         ]);
         
         // Show success message
-        alert('Cleansing entry created successfully! Notifications have been sent to assigned users.');
+        showToast('Cleansing entry created successfully! Notifications have been sent to assigned users.');
       } else {
         const error = await response.json();
         console.error('Failed to create cleansing entry:', error);
-        alert(`Failed to create cleansing entry: ${error.error}`);
+        showToast(`Failed to create cleansing entry: ${error.error}`);
       }
     } catch (error) {
       console.error('Error creating cleansing entry:', error);
-      alert('Failed to create cleansing entry. Please try again.');
+      showToast('Failed to create cleansing entry. Please try again.');
     }
   };
   
@@ -593,9 +595,14 @@ const CleansingPage: React.FC = () => {
 
     let comment = '';
     if (action === 'reject' || action === 'back') {
-      const promptResult = prompt(`Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`);
+      const promptResult = await showPrompt({
+        title: action === 'reject' ? 'Reason Required' : 'Comment Required',
+        message: `Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`,
+        placeholder: action === 'reject' ? 'Enter rejection reason' : 'Enter send-back comment',
+        confirmLabel: 'Submit'
+      });
       if (promptResult === null || promptResult.trim() === '') {
-        alert(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
+        showToast(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
         return;
       }
       comment = promptResult.trim();
@@ -620,9 +627,9 @@ const CleansingPage: React.FC = () => {
         
         // Handle permanent rejection
         if (result.permanently_rejected) {
-          alert('Entry has been permanently rejected - no more edits are allowed as all nodes have reached their completion limit.');
+          showToast('Entry has been permanently rejected - no more edits are allowed as all nodes have reached their completion limit.');
         } else {
-          alert(`Entry ${action}d successfully! Notifications have been sent.`);
+          showToast(`Entry ${action}d successfully! Notifications have been sent.`);
         }
         
         // Refresh cleansing entries and entry details
@@ -633,16 +640,16 @@ const CleansingPage: React.FC = () => {
         
         // Handle specific error cases
         if (error.error?.includes('completion limit')) {
-          alert(`Cannot ${action}: ${error.error}\n${error.details || ''}`);
+          showToast(`Cannot ${action}: ${error.error}\n${error.details || ''}`);
         } else if (error.error?.includes('No previous node available')) {
-          alert(`Cannot send back: ${error.error}\n${error.details || ''}`);
+          showToast(`Cannot send back: ${error.error}\n${error.details || ''}`);
         } else {
-          alert(`Failed to ${action} entry: ${error.error}`);
+          showToast(`Failed to ${action} entry: ${error.error}`);
         }
       }
     } catch (error) {
       console.error(`Error ${action}ing entry:`, error);
-      alert(`Failed to ${action} entry. Please try again.`);
+      showToast(`Failed to ${action} entry. Please try again.`);
     }
   };
 
@@ -668,20 +675,20 @@ const CleansingPage: React.FC = () => {
         // Refresh cleansing entries
         await fetchCleansingEntries();
         setShowFormView(false);
-        alert('Form updated successfully!');
+        showToast('Form updated successfully!');
       } else {
         const error = await response.json();
         
         // Handle completion limit errors
         if (error.error?.includes('completion limit')) {
-          alert(`Cannot update form: ${error.error}\n${error.details || ''}`);
+          showToast(`Cannot update form: ${error.error}\n${error.details || ''}`);
         } else {
-          alert(`Failed to update form: ${error.error}`);
+          showToast(`Failed to update form: ${error.error}`);
         }
       }
     } catch (error) {
       console.error('Error updating form:', error);
-      alert('Failed to update form. Please try again.');
+      showToast('Failed to update form. Please try again.');
     }
   };
   
@@ -818,11 +825,11 @@ const CleansingPage: React.FC = () => {
   // Delete cleansing entry (admin only)
   const handleDeleteEntry = async (entry: CleansingEntry) => {
     if (!user?.id || user.role !== 'admin') {
-      alert('Only admins can delete cleansing entries.');
+      showToast('Only admins can delete cleansing entries.');
       return;
     }
 
-    const confirmDelete = window.confirm(`Are you sure you want to delete this cleansing entry from ${entry.date}? This action cannot be undone.`);
+    const confirmDelete = await showConfirm(`Are you sure you want to delete this cleansing entry from ${entry.date}? This action cannot be undone.`);
     if (!confirmDelete) return;
 
     try {
@@ -836,14 +843,14 @@ const CleansingPage: React.FC = () => {
       if (response.ok) {
         // Refresh cleansing entries
         await fetchCleansingEntries();
-        alert('Cleansing entry deleted successfully!');
+        showToast('Cleansing entry deleted successfully!');
       } else {
         const error = await response.json();
-        alert(`Failed to delete cleansing entry: ${error.error}`);
+        showToast(`Failed to delete cleansing entry: ${error.error}`);
       }
     } catch (error) {
       console.error('Error deleting cleansing entry:', error);
-      alert('Failed to delete cleansing entry. Please try again.');
+      showToast('Failed to delete cleansing entry. Please try again.');
     }
   };
 
@@ -851,12 +858,12 @@ const CleansingPage: React.FC = () => {
     if (!user?.id || user.role !== 'admin') return;
     const draftValue = expiryDrafts[entry.id];
     if (!draftValue) {
-      alert('Please select an expiry date and time.');
+      showToast('Please select an expiry date and time.');
       return;
     }
     const parsedExpiry = new Date(draftValue);
     if (Number.isNaN(parsedExpiry.getTime())) {
-      alert('Invalid expiry date.');
+      showToast('Invalid expiry date.');
       return;
     }
     try {
@@ -873,15 +880,15 @@ const CleansingPage: React.FC = () => {
         })
       });
       if (response.ok) {
-        alert('Expiry date updated successfully.');
+        showToast('Expiry date updated successfully.');
         await fetchCleansingEntries();
       } else {
         const error = await response.json();
-        alert(`Failed to set expiry date: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to set expiry date: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error setting expiry date:', error);
-      alert('Failed to set expiry date. Please try again.');
+      showToast('Failed to set expiry date. Please try again.');
     } finally {
       setSavingExpiry((prev) => ({ ...prev, [entry.id]: false }));
     }
@@ -903,15 +910,15 @@ const CleansingPage: React.FC = () => {
         })
       });
       if (response.ok) {
-        alert(nextActive ? 'Cleansing entry reactivated.' : 'Cleansing entry marked as expired.');
+        showToast(nextActive ? 'Cleansing entry reactivated.' : 'Cleansing entry marked as expired.');
         await fetchCleansingEntries();
       } else {
         const error = await response.json();
-        alert(`Failed to update expiry status: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to update expiry status: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error updating expiry status:', error);
-      alert('Failed to update expiry status. Please try again.');
+      showToast('Failed to update expiry status. Please try again.');
     } finally {
       setUpdatingExpiryStatus((prev) => ({ ...prev, [entry.id]: false }));
     }
@@ -920,7 +927,13 @@ const CleansingPage: React.FC = () => {
   const handleNodeReminder = async (entry: CleansingEntry, node: any) => {
     if (!user?.id || user.role !== 'admin') return;
     const defaultMessage = `Reminder: Please action "${node.node_name}" step.`;
-    const messageInput = prompt('Enter reminder message for this step:', defaultMessage);
+    const messageInput = await showPrompt({
+      title: 'Send Reminder',
+      message: 'Enter reminder message for this step:',
+      defaultValue: defaultMessage,
+      placeholder: 'Enter reminder message',
+      confirmLabel: 'Send'
+    });
     if (messageInput === null) return;
     const message = messageInput.trim() || defaultMessage;
     const reminderKey = `${entry.id}-${node.node_order}`;
@@ -938,14 +951,14 @@ const CleansingPage: React.FC = () => {
         })
       });
       if (response.ok) {
-        alert('Reminder sent successfully.');
+        showToast('Reminder sent successfully.');
       } else {
         const error = await response.json();
-        alert(`Failed to send reminder: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to send reminder: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error sending reminder:', error);
-      alert('Failed to send reminder. Please try again.');
+      showToast('Failed to send reminder. Please try again.');
     } finally {
       setSendingNodeReminder((prev) => ({ ...prev, [reminderKey]: false }));
     }
@@ -954,11 +967,17 @@ const CleansingPage: React.FC = () => {
   const handleRenameCleansing = async (entry: CleansingEntry) => {
     if (!user?.id || user.role !== 'admin') return;
     const currentName = getCleansingDisplayName(entry);
-    const nextNamePrompt = prompt('Enter new cleansing form name:', currentName);
+    const nextNamePrompt = await showPrompt({
+      title: 'Rename Cleansing Form',
+      message: 'Enter new cleansing form name:',
+      defaultValue: currentName,
+      placeholder: 'Enter form name',
+      confirmLabel: 'Rename'
+    });
     if (nextNamePrompt === null) return;
     const nextName = nextNamePrompt.trim();
     if (!nextName) {
-      alert('Name cannot be empty.');
+      showToast('Name cannot be empty.');
       return;
     }
     if (nextName === currentName) return;
@@ -976,15 +995,15 @@ const CleansingPage: React.FC = () => {
         })
       });
       if (response.ok) {
-        alert('Cleansing form renamed successfully.');
+        showToast('Cleansing form renamed successfully.');
         await fetchCleansingEntries();
       } else {
         const error = await response.json();
-        alert(`Failed to rename cleansing form: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to rename cleansing form: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error renaming cleansing form:', error);
-      alert('Failed to rename cleansing form. Please try again.');
+      showToast('Failed to rename cleansing form. Please try again.');
     } finally {
       setRenamingCleansing((prev) => ({ ...prev, [entry.id]: false }));
     }

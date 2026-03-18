@@ -20,6 +20,7 @@ import { getTranslationStatus, updateModelStatus, getThumbnailUrl, updateModelIn
 import { getUserModels, getAllModels, deleteModelRecord, updateModelRecord, ModelRecord } from '../utils/supabaseModelsApi';
 import { getFreshViewToken } from '../utils/bimfaceTokenApi';
 import { useAuth } from '../contexts/AuthContext';
+import { useFeedback } from '../contexts/FeedbackContext';
 
 // Types for model data with BIMFACE integration
 interface ModelData {
@@ -34,6 +35,7 @@ interface ModelData {
 
 const DigitalTwinsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { showConfirm } = useFeedback();
   const [recentModels, setRecentModels] = useState<ModelData[]>([]);
   const [supabaseModels, setSupabaseModels] = useState<ModelRecord[]>([]);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
@@ -313,7 +315,7 @@ const DigitalTwinsPage: React.FC = () => {
     
     try {
       // Add confirmation dialog
-      if (!window.confirm('Are you sure you want to delete this model?')) {
+      if (!(await showConfirm('Are you sure you want to delete this model?'))) {
         return;
       }
       

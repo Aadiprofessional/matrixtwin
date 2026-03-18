@@ -31,6 +31,7 @@ import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 import { ChartBlock } from '../components/ai/ChartBlock';
 import { AIFormLink } from '../components/ai/AIFormLink';
+import { useFeedback } from '../contexts/FeedbackContext';
 
 const extractLinkUrls = (content: string): string[] => {
   const blockRegex = /```linkurl\s*([\s\S]*?)```/gi;
@@ -400,6 +401,7 @@ const MessageContentRenderer: React.FC<{ message: ChatMessage }> = React.memo(({
 
 const AskAIPage: React.FC = () => {
   const { t } = useTranslation();
+  const { showConfirm } = useFeedback();
   const { selectedProject } = useProjects();
   const { 
     currentChat, 
@@ -546,7 +548,7 @@ const AskAIPage: React.FC = () => {
 
   const handleDeleteChat = async (e: React.MouseEvent, chatId: string) => {
     e.stopPropagation();
-    if (window.confirm(t('askAI.confirmDelete', 'Are you sure you want to delete this chat?'))) {
+    if (await showConfirm(t('askAI.confirmDelete', 'Are you sure you want to delete this chat?'))) {
       await deleteChat(chatId);
     }
   };

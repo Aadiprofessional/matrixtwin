@@ -16,6 +16,7 @@ import { PeopleSelectorModal } from '../components/ui/PeopleSelectorModal';
 import { ReportModal } from '../components/common/ReportModal';
 import { FullReportContent } from '../components/common/FullReportContent';
 import { exportReportElementToSinglePagePdf } from '../utils/pdfUtils';
+import { useFeedback } from '../contexts/FeedbackContext';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -117,6 +118,7 @@ interface HistoryEntry {
 
 const SafetyPage: React.FC = () => {
   const { t } = useTranslation();
+  const { showToast, showConfirm, showPrompt } = useFeedback();
   const location = useLocation();
   const { user } = useAuth();
   const { selectedProject } = useProjects();
@@ -190,7 +192,7 @@ const SafetyPage: React.FC = () => {
   const handleRestore = async (history: HistoryEntry) => {
     if (!selectedSafetyEntry) return;
     
-    if (!window.confirm('Are you sure you want to restore this version? This will create a new history entry with the current state.')) {
+    if (!(await showConfirm('Are you sure you want to restore this version? This will create a new history entry with the current state.'))) {
       return;
     }
 
@@ -205,18 +207,18 @@ const SafetyPage: React.FC = () => {
       });
 
       if (response.ok) {
-        alert('Safety entry restored successfully!');
+        showToast('Safety entry restored successfully!');
         setShowHistory(false);
         fetchSafetyEntries();
         setSelectedSafetyEntry(null);
         setShowDetails(false);
       } else {
         const error = await response.json();
-        alert(`Failed to restore safety entry: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to restore safety entry: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error restoring safety entry:', error);
-      alert('Failed to restore safety entry. Please try again.');
+      showToast('Failed to restore safety entry. Please try again.');
     }
   };
 
@@ -399,18 +401,18 @@ const SafetyPage: React.FC = () => {
 
     const entryName = pendingSafetyName.trim();
     if (!entryName) {
-      alert('Please provide a safety entry name.');
+      showToast('Please provide a safety entry name.');
       return;
     }
 
     if (!pendingSafetyExpiry) {
-      alert('Please select an expiry date and time.');
+      showToast('Please select an expiry date and time.');
       return;
     }
 
     const parsedExpiry = new Date(pendingSafetyExpiry);
     if (Number.isNaN(parsedExpiry.getTime())) {
-      alert('Please select a valid expiry date and time.');
+      showToast('Please select a valid expiry date and time.');
       return;
     }
     
@@ -473,7 +475,7 @@ const SafetyPage: React.FC = () => {
         ]);
         
         // Show success message
-        alert('Safety entry created successfully! Notifications have been sent to assigned users.');
+        showToast('Safety entry created successfully! Notifications have been sent to assigned users.');
       } else {
         let errorData;
         try {
@@ -486,11 +488,11 @@ const SafetyPage: React.FC = () => {
         console.error('Response status:', response.status);
         console.error('Response headers:', Object.fromEntries(response.headers.entries()));
         
-        alert(`Failed to create safety entry: ${errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`}`);
+        showToast(`Failed to create safety entry: ${errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`}`);
       }
     } catch (error) {
       console.error('Error creating safety entry:', error);
-      alert('Failed to create safety entry. Please try again.');
+      showToast('Failed to create safety entry. Please try again.');
     }
   };
 
@@ -572,14 +574,14 @@ const SafetyPage: React.FC = () => {
         await fetchSafetyEntries();
         setShowFormView(false);
         setSelectedSafetyEntry(null);
-        alert('Safety entry updated successfully!');
+        showToast('Safety entry updated successfully!');
       } else {
         const error = await response.json();
-        alert(`Failed to update safety entry: ${error.error}`);
+        showToast(`Failed to update safety entry: ${error.error}`);
       }
     } catch (error) {
       console.error('Error updating safety entry:', error);
-      alert('Failed to update safety entry. Please try again.');
+      showToast('Failed to update safety entry. Please try again.');
     }
   };
 
@@ -589,9 +591,14 @@ const SafetyPage: React.FC = () => {
 
     let comment = '';
     if (action === 'reject' || action === 'back') {
-      const promptResult = prompt(`Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`);
+      const promptResult = await showPrompt({
+        title: action === 'reject' ? 'Reason Required' : 'Comment Required',
+        message: `Please provide a ${action === 'reject' ? 'reason for rejection' : 'comment for sending back'}:`,
+        placeholder: action === 'reject' ? 'Enter rejection reason' : 'Enter send-back comment',
+        confirmLabel: 'Submit'
+      });
       if (promptResult === null || promptResult.trim() === '') {
-        alert(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
+        showToast(`A comment is required when ${action === 'reject' ? 'rejecting' : 'sending back'} an entry.`);
         return;
       }
       comment = promptResult.trim();
@@ -616,9 +623,9 @@ const SafetyPage: React.FC = () => {
         
         // Handle permanent rejection
         if (result.permanently_rejected) {
-          alert('Entry has been permanently rejected - no more edits are allowed as all nodes have reached their completion limit.');
+          showToast('Entry has been permanently rejected - no more edits are allowed as all nodes have reached their completion limit.');
         } else {
-          alert(`Entry ${action}d successfully! Notifications have been sent.`);
+          showToast(`Entry ${action}d successfully! Notifications have been sent.`);
         }
         
         // Refresh safety entries and entry details
@@ -629,16 +636,16 @@ const SafetyPage: React.FC = () => {
         
         // Handle specific error cases
         if (error.error?.includes('completion limit')) {
-          alert(`Cannot ${action}: ${error.error}\n${error.details || ''}`);
+          showToast(`Cannot ${action}: ${error.error}\n${error.details || ''}`);
         } else if (error.error?.includes('No previous node available')) {
-          alert(`Cannot send back: ${error.error}\n${error.details || ''}`);
+          showToast(`Cannot send back: ${error.error}\n${error.details || ''}`);
         } else {
-          alert(`Failed to ${action} entry: ${error.error}`);
+          showToast(`Failed to ${action} entry: ${error.error}`);
         }
       }
     } catch (error) {
       console.error(`Error ${action}ing entry:`, error);
-      alert(`Failed to ${action} entry. Please try again.`);
+      showToast(`Failed to ${action} entry. Please try again.`);
     }
   };
 
@@ -1063,11 +1070,11 @@ const SafetyPage: React.FC = () => {
   // Delete safety entry (admin only)
   const handleDeleteEntry = async (entry: SafetyEntry) => {
     if (!user?.id || user.role !== 'admin') {
-      alert('Only admins can delete safety entries.');
+      showToast('Only admins can delete safety entries.');
       return;
     }
 
-    const confirmDelete = window.confirm(`Are you sure you want to delete this safety entry from ${entry.date}? This action cannot be undone.`);
+    const confirmDelete = await showConfirm(`Are you sure you want to delete this safety entry from ${entry.date}? This action cannot be undone.`);
     if (!confirmDelete) return;
 
     try {
@@ -1081,14 +1088,14 @@ const SafetyPage: React.FC = () => {
       if (response.ok) {
         // Refresh safety entries
         await fetchSafetyEntries();
-        alert('Safety entry deleted successfully!');
+        showToast('Safety entry deleted successfully!');
       } else {
         const error = await response.json();
-        alert(`Failed to delete safety entry: ${error.error}`);
+        showToast(`Failed to delete safety entry: ${error.error}`);
       }
     } catch (error) {
       console.error('Error deleting safety entry:', error);
-      alert('Failed to delete safety entry. Please try again.');
+      showToast('Failed to delete safety entry. Please try again.');
     }
   };
 
@@ -1096,12 +1103,12 @@ const SafetyPage: React.FC = () => {
     if (!user?.id || user.role !== 'admin') return;
     const draftValue = expiryDrafts[entry.id];
     if (!draftValue) {
-      alert('Please select an expiry date and time.');
+      showToast('Please select an expiry date and time.');
       return;
     }
     const parsedExpiry = new Date(draftValue);
     if (Number.isNaN(parsedExpiry.getTime())) {
-      alert('Invalid expiry date.');
+      showToast('Invalid expiry date.');
       return;
     }
     try {
@@ -1118,18 +1125,18 @@ const SafetyPage: React.FC = () => {
         })
       });
       if (response.ok) {
-        alert('Expiry date updated successfully.');
+        showToast('Expiry date updated successfully.');
         await fetchSafetyEntries();
         if (selectedSafetyEntry?.id === entry.id) {
           await handleViewDetails(entry);
         }
       } else {
         const error = await response.json();
-        alert(`Failed to set expiry date: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to set expiry date: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error setting expiry date:', error);
-      alert('Failed to set expiry date. Please try again.');
+      showToast('Failed to set expiry date. Please try again.');
     } finally {
       setSavingExpiry((prev) => ({ ...prev, [entry.id]: false }));
     }
@@ -1151,18 +1158,18 @@ const SafetyPage: React.FC = () => {
         })
       });
       if (response.ok) {
-        alert(nextActive ? 'Safety entry reactivated.' : 'Safety entry marked as expired.');
+        showToast(nextActive ? 'Safety entry reactivated.' : 'Safety entry marked as expired.');
         await fetchSafetyEntries();
         if (selectedSafetyEntry?.id === entry.id) {
           await handleViewDetails(entry);
         }
       } else {
         const error = await response.json();
-        alert(`Failed to update expiry status: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to update expiry status: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error updating expiry status:', error);
-      alert('Failed to update expiry status. Please try again.');
+      showToast('Failed to update expiry status. Please try again.');
     } finally {
       setUpdatingExpiryStatus((prev) => ({ ...prev, [entry.id]: false }));
     }
@@ -1171,7 +1178,13 @@ const SafetyPage: React.FC = () => {
   const handleNodeReminder = async (entry: SafetyEntry, node: any) => {
     if (!user?.id || user.role !== 'admin') return;
     const defaultMessage = `Reminder: Please action "${node.node_name}" step.`;
-    const messageInput = prompt('Enter reminder message for this step:', defaultMessage);
+    const messageInput = await showPrompt({
+      title: 'Send Reminder',
+      message: 'Enter reminder message for this step:',
+      defaultValue: defaultMessage,
+      placeholder: 'Enter reminder message',
+      confirmLabel: 'Send'
+    });
     if (messageInput === null) return;
     const message = messageInput.trim() || defaultMessage;
     const reminderKey = `${entry.id}-${node.node_order}`;
@@ -1189,14 +1202,14 @@ const SafetyPage: React.FC = () => {
         })
       });
       if (response.ok) {
-        alert('Reminder sent successfully.');
+        showToast('Reminder sent successfully.');
       } else {
         const error = await response.json();
-        alert(`Failed to send reminder: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to send reminder: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error sending reminder:', error);
-      alert('Failed to send reminder. Please try again.');
+      showToast('Failed to send reminder. Please try again.');
     } finally {
       setSendingNodeReminder((prev) => ({ ...prev, [reminderKey]: false }));
     }
@@ -1205,11 +1218,17 @@ const SafetyPage: React.FC = () => {
   const handleRenameSafety = async (entry: SafetyEntry) => {
     if (!user?.id || user.role !== 'admin') return;
     const currentName = getSafetyDisplayName(entry);
-    const nextNamePrompt = prompt('Enter new safety form name:', currentName);
+    const nextNamePrompt = await showPrompt({
+      title: 'Rename Safety Form',
+      message: 'Enter new safety form name:',
+      defaultValue: currentName,
+      placeholder: 'Enter form name',
+      confirmLabel: 'Rename'
+    });
     if (nextNamePrompt === null) return;
     const nextName = nextNamePrompt.trim();
     if (!nextName) {
-      alert('Name cannot be empty.');
+      showToast('Name cannot be empty.');
       return;
     }
     if (nextName === currentName) return;
@@ -1227,18 +1246,18 @@ const SafetyPage: React.FC = () => {
         })
       });
       if (response.ok) {
-        alert('Safety form renamed successfully.');
+        showToast('Safety form renamed successfully.');
         await fetchSafetyEntries();
         if (selectedSafetyEntry?.id === entry.id) {
           await handleViewDetails(entry);
         }
       } else {
         const error = await response.json();
-        alert(`Failed to rename safety form: ${error.error || 'Unknown error'}`);
+        showToast(`Failed to rename safety form: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error renaming safety form:', error);
-      alert('Failed to rename safety form. Please try again.');
+      showToast('Failed to rename safety form. Please try again.');
     } finally {
       setRenamingSafety((prev) => ({ ...prev, [entry.id]: false }));
     }
@@ -1271,19 +1290,19 @@ const SafetyPage: React.FC = () => {
                 {selectedProject ? `Project: ${selectedProject.name}` : 'No project selected'}
               </div>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3 lg:mt-0">
+            <div className="mt-2 flex flex-wrap items-center gap-3 lg:mt-0 lg:flex-nowrap lg:justify-end">
               {user?.role === 'admin' && selectedProject && (
                 <Button
                   variant="primary"
                   leftIcon={<RiAddLine />}
                   onClick={() => setShowNewInspection(true)}
-                  className="whitespace-nowrap"
+                  className="whitespace-nowrap shrink-0"
                   animated
                 >
                   New Inspection
                 </Button>
               )}
-              <Button variant="outline" leftIcon={<RiFileWarningLine />} onClick={() => setShowReport(true)} className="whitespace-nowrap">
+              <Button variant="outline" leftIcon={<RiFileWarningLine />} onClick={() => setShowReport(true)} className="whitespace-nowrap shrink-0">
                 Generate Report
               </Button>
             </div>
@@ -1659,7 +1678,7 @@ const SafetyPage: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <motion.div
-              className="h-[95dvh] w-full max-w-7xl overflow-auto rounded-t-2xl border border-[#ffd978]/40 bg-gradient-to-b from-white to-[#fff7df] shadow-xl dark:bg-secondary-800 sm:h-auto sm:max-h-[92vh] sm:rounded-2xl"
+              className="h-[95dvh] w-full max-w-7xl overflow-auto rounded-t-2xl border border-[#ffd978]/30 bg-gradient-to-b from-[#101319] via-[#121722] to-[#0c1018] shadow-xl sm:h-auto sm:max-h-[92vh] sm:rounded-2xl"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1669,8 +1688,8 @@ const SafetyPage: React.FC = () => {
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
                   <div>
-                    <h2 className="text-2xl font-semibold text-secondary-900 dark:text-white">Configure Process Flow</h2>
-                    <p className="text-secondary-600 dark:text-secondary-400 mt-1">
+                    <h2 className="text-2xl font-semibold text-white">Configure Process Flow</h2>
+                    <p className="mt-1 text-[#f2cd6f]">
                       Set up the approval workflow for this safety inspection
                     </p>
                   </div>
@@ -1686,8 +1705,8 @@ const SafetyPage: React.FC = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   {/* Left panel - Process flow */}
                   <div className="lg:col-span-5">
-                    <Card className="p-4 h-full">
-                      <h3 className="font-semibold text-secondary-900 dark:text-white mb-4">Process Flow</h3>
+                    <Card className="h-full border border-[#ffd978]/40 bg-[#0f141e]/95 p-4 shadow-md">
+                      <h3 className="mb-4 font-semibold text-[#ffd978]">Process Flow</h3>
                       <ProcessFlowBuilder
                         nodes={processNodes}
                         onSelectNode={setSelectedNode}
@@ -1698,10 +1717,10 @@ const SafetyPage: React.FC = () => {
                   
                   {/* Right panel - Node settings */}
                   <div className="lg:col-span-7">
-                    <Card className="p-4 h-full">
-                      <h3 className="font-semibold text-secondary-900 dark:text-white mb-4">Process Settings</h3>
-                      <div className="mb-4 rounded-lg border border-secondary-200 p-3 dark:border-secondary-700">
-                        <h4 className="mb-3 text-sm font-semibold text-secondary-800 dark:text-secondary-200">
+                    <Card className="h-full border border-[#ffd978]/40 bg-[#0f141e]/95 p-4 shadow-md">
+                      <h3 className="mb-4 font-semibold text-[#ffd978]">Process Settings</h3>
+                      <div className="mb-4 rounded-lg border border-[#ffd978]/30 bg-[#151b28] p-3">
+                        <h4 className="mb-3 text-sm font-semibold text-[#ffd978]">
                           Safety Setup
                         </h4>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1710,10 +1729,10 @@ const SafetyPage: React.FC = () => {
                             value={pendingSafetyName}
                             onChange={(e) => setPendingSafetyName(e.target.value)}
                             placeholder={selectedProject?.name || 'Enter safety entry name'}
-                            className="bg-white border border-secondary-200 dark:border-secondary-600 dark:bg-secondary-800"
+                            className="border border-[#ffd978]/40 bg-[#0f141e] text-white"
                           />
                           <div>
-                            <label className="mb-1 block text-sm font-medium text-secondary-700 dark:text-secondary-300">
+                            <label className="mb-1 block text-sm font-medium text-[#f2cd6f]">
                               Expiry Date & Time
                             </label>
                             <input
@@ -1721,7 +1740,7 @@ const SafetyPage: React.FC = () => {
                               value={pendingSafetyExpiry}
                               onChange={(e) => setPendingSafetyExpiry(e.target.value)}
                               min={formatDateTimeLocal(new Date())}
-                              className="input w-full border border-secondary-200 bg-white text-secondary-900 dark:border-secondary-600 dark:bg-secondary-700 dark:text-white"
+                              className="input w-full border border-[#ffd978]/40 bg-[#0f141e] text-white"
                             />
                           </div>
                         </div>
@@ -1740,17 +1759,17 @@ const SafetyPage: React.FC = () => {
                               setProcessNodes(updatedNodes);
                               setSelectedNode(updatedNode);
                             }}
-                            className="bg-white dark:bg-secondary-800"
+                            className="border border-[#ffd978]/40 bg-[#0f141e] text-white"
                           />
                           
                           {selectedNode.type === 'node' && (
                             <>
                               <div>
-                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                <label className="mb-2 block text-sm font-medium text-[#f2cd6f]">
                                   Executor
                                 </label>
                                 <div className="flex items-center space-x-2">
-                                  <div className="flex-grow bg-secondary-50 dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-3 text-secondary-600 dark:text-secondary-400">
+                                  <div className="flex-grow rounded border border-[#ffd978]/40 bg-[#0f141e] p-3 text-white">
                                     {selectedNode.executor || 'Select executor'}
                                   </div>
                                   <Button variant="outline" size="sm" onClick={() => openPeopleSelector('executor')}>
@@ -1760,23 +1779,23 @@ const SafetyPage: React.FC = () => {
                               </div>
                               
                               <div>
-                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                <label className="mb-2 block text-sm font-medium text-[#f2cd6f]">
                                   CC Recipients
                                 </label>
                                 <div className="flex flex-col space-y-2">
                                   <div className="flex items-center space-x-2">
-                                    <div className="flex-grow bg-secondary-50 dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-3 min-h-[50px]">
+                                    <div className="min-h-[50px] flex-grow rounded border border-[#ffd978]/40 bg-[#0f141e] p-3">
                                       {(selectedNode.ccRecipients || []).length > 0 ? (
                                         <div className="flex flex-wrap gap-2">
                                           {(selectedNode.ccRecipients || []).map(cc => (
                                             <div 
                                               key={cc.id} 
-                                              className="flex items-center rounded-full bg-[#fff4cc] px-3 py-1 text-sm text-[#8a4b14] dark:bg-[#8a4b14]/30 dark:text-[#ffd978]"
+                                              className="flex items-center rounded-full bg-[#2e2412] px-3 py-1 text-sm text-[#ffd978]"
                                             >
                                               <span className="mr-2">{cc.name}</span>
                                               <button
                                                 type="button"
-                                                className="text-[#a56a1f] hover:text-[#8a4b14] dark:text-[#f2cd6f] dark:hover:text-[#ffe9b8]"
+                                                className="text-[#a56a1f] hover:text-[#8a4b14]"
                                                 onClick={() => removeUserFromCc(cc.id)}
                                               >
                                                 <RiCloseLine />
@@ -1785,7 +1804,7 @@ const SafetyPage: React.FC = () => {
                                           ))}
                                         </div>
                                       ) : (
-                                        <span className="text-secondary-500 dark:text-secondary-400">No CCs selected</span>
+                                        <span className="text-white/70">No CCs selected</span>
                                       )}
                                     </div>
                                     <Button 
@@ -1798,7 +1817,7 @@ const SafetyPage: React.FC = () => {
                                   </div>
                                   
                                   {(selectedNode.ccRecipients || []).length > 0 && (
-                                    <div className="text-xs text-secondary-500 dark:text-secondary-400 flex items-center">
+                                    <div className="flex items-center text-xs text-[#f2cd6f]/85">
                                       <RiTeamLine className="mr-1" />
                                       {(selectedNode.ccRecipients || []).length} {(selectedNode.ccRecipients || []).length === 1 ? 'person' : 'people'} will be notified
                                     </div>
@@ -1820,22 +1839,22 @@ const SafetyPage: React.FC = () => {
                                       setProcessNodes(updatedNodes);
                                       setSelectedNode(updatedNode);
                                     }}
-                                    className="rounded border-secondary-300 text-[#8a4b14] focus:ring-[#8a4b14] dark:border-secondary-600"
+                                    className="rounded border-[#d7a235] text-[#d7a235] focus:ring-[#d7a235]"
                                   />
-                                  <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300">
+                                  <span className="text-sm font-medium text-[#f2cd6f]">
                                     Allow CC recipients to edit when this node is active
                                   </span>
                                 </label>
-                                <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-1">
+                                <p className="mt-1 text-xs text-white/65">
                                   When enabled, CC recipients can edit the form data when this workflow node is active. Executors can always edit.
                                 </p>
                               </div>
 
                               <div>
-                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                <label className="mb-2 block text-sm font-medium text-[#f2cd6f]">
                                   Execution Type
                                 </label>
-                                <select className="w-full bg-white dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-2 text-secondary-900 dark:text-white">
+                                <select className="w-full rounded border border-[#ffd978]/40 bg-[#0f141e] p-2 text-white">
                                   <option value="standard">Standard</option>
                                   <option value="parallel">Parallel</option>
                                   <option value="sequential">Sequential</option>
@@ -1843,10 +1862,10 @@ const SafetyPage: React.FC = () => {
                               </div>
                               
                               <div>
-                                <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
+                                <label className="mb-2 block text-sm font-medium text-[#f2cd6f]">
                                   Approval Condition
                                 </label>
-                                <select className="w-full bg-white dark:bg-secondary-700 border border-secondary-200 dark:border-secondary-600 rounded p-2 text-secondary-900 dark:text-white">
+                                <select className="w-full rounded border border-[#ffd978]/40 bg-[#0f141e] p-2 text-white">
                                   <option value="none">None</option>
                                   <option value="approval">Approval required</option>
                                   <option value="review">Review required</option>
@@ -1856,7 +1875,7 @@ const SafetyPage: React.FC = () => {
                           )}
                         </div>
                       ) : (
-                        <div className="text-center py-8 text-secondary-500 dark:text-secondary-400">
+                        <div className="py-8 text-center text-white/70">
                           <RiFlowChart className="text-4xl mx-auto mb-2 opacity-50" />
                           <p>Select a node to configure its settings</p>
                         </div>
@@ -1866,7 +1885,7 @@ const SafetyPage: React.FC = () => {
                 </div>
                 
                 {/* Footer Actions */}
-                <div className="flex justify-between items-center mt-6 pt-6 border-t border-secondary-200 dark:border-secondary-700">
+                <div className="mt-6 flex items-center justify-between border-t border-[#ffd978]/30 pt-6">
                   <Button 
                     variant="outline"
                     leftIcon={<RiArrowLeftLine />}

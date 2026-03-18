@@ -22,6 +22,7 @@ import {
 } from 'react-icons/ri';
 import { generatePrefixedFormNumber } from '../../utils/formUtils';
 import { TemplateUploadPickerModal } from './TemplateUploadPickerModal';
+import { useFeedback } from '../../contexts/FeedbackContext';
 
 interface SurveyCheckFormTemplateProps {
   onClose: () => void;
@@ -34,6 +35,7 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
   onSave,
   initialData
 }) => {
+  const { showToast } = useFeedback();
   // State for form data
   const [formData, setFormData] = useState({
     contractNo: '',
@@ -167,7 +169,7 @@ export const SurveyCheckFormTemplate: React.FC<SurveyCheckFormTemplateProps> = (
     // Create a new window to render the PDF content
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      alert('Please allow pop-ups to download the PDF');
+      showToast('Please allow pop-ups to download the PDF');
       return;
     }
 

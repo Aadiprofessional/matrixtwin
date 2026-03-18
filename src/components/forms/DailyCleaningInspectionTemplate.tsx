@@ -19,6 +19,7 @@ import {
 } from 'react-icons/ri';
 import { generatePrefixedFormNumber } from '../../utils/formUtils';
 import { TemplateUploadPickerModal } from './TemplateUploadPickerModal';
+import { useFeedback } from '../../contexts/FeedbackContext';
 
 interface DailyCleaningInspectionTemplateProps {
   onClose: () => void;
@@ -57,6 +58,7 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
   readOnly,
   title
 }) => {
+  const { showToast } = useFeedback();
   const [currentPage, setCurrentPage] = useState<1 | 2>(1);
   
   // Form data
@@ -178,7 +180,7 @@ export const DailyCleaningInspectionTemplate: React.FC<DailyCleaningInspectionTe
     // Create a link to trigger the download
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      alert('Please allow pop-ups to download the PDF');
+      showToast('Please allow pop-ups to download the PDF');
       return;
     }
 
