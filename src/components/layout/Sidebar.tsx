@@ -357,21 +357,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose, onCol
       )}
 
       {!mobile && (
-        <motion.button
-          onClick={toggleCollapsed}
-          className="absolute left-full top-1/2 -translate-x-[85%] -translate-y-1/2 -ml-[15px] -mt-[30px] z-50 h-14 w-8 flex items-center justify-center rounded-xl border border-white/20 bg-white/10 backdrop-blur-md text-white shadow-[0_10px_24px_rgba(0,0,0,0.35)] hover:bg-white/20 transition-colors duration-200"
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.94 }}
-        >
-          <motion.div
-            animate={{
-              rotate: collapsed ? 0 : 180
-            }}
-            transition={{ duration: 0.3 }}
+        <div className="absolute left-full top-1/2 -translate-y-1/2 -ml-4 z-50">
+          <motion.button
+            onClick={toggleCollapsed}
+            className="h-14 w-8 flex items-center justify-center rounded-xl border border-white/20 bg-white/10 backdrop-blur-md text-white shadow-[0_10px_24px_rgba(0,0,0,0.35)] hover:bg-white/20 transition-colors duration-200"
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.94 }}
           >
-            <div><IconWrapper icon="RiArrowRightSLine" className="text-xl" /></div>
-          </motion.div>
-        </motion.button>
+            <motion.div
+              animate={{
+                rotate: collapsed ? 0 : 180
+              }}
+              transition={{ duration: 0.3 }}
+            >
+              <div><IconWrapper icon="RiArrowRightSLine" className="text-xl" /></div>
+            </motion.div>
+          </motion.button>
+        </div>
       )}
 
       <div className="relative overflow-hidden h-full flex flex-col">

@@ -226,34 +226,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       console.log('Attempting signup with:', email);
       
-      const response = await api.signup(name, email, password, turnstileToken);
-      
-      if (!response.token) {
-        // If the API requires login after signup, we might not get a token here.
-        // But assuming standard JWT flow where signup returns token.
-        // If not, we should probably just return and let the user login.
-        // However, based on existing code, it expects auto-login.
-        if (response.success && !response.token) {
-            // Maybe just success message
-            return;
+      const response = await api.signup(name, email, password, turnstileToken) as {
+        token?: string;
+        user?: User;
+        message?: string;
+        success?: boolean;
+      };
+
+      if (response.token) {
+        if (!response.user) {
+          throw new Error('No user data returned from signup');
         }
-        throw new Error('No token returned from signup');
-      }
-      
-      const userData = response.user;
-      if (!userData) {
-        throw new Error('No user data returned from signup');
+        console.log('Signup successful, user:', response.user);
+        return;
       }
 
-      console.log('Signup successful, user:', userData);
-      
-      // Don't auto-login after signup
-      // setUser(userData);
-      // setIsAuthenticated(true);
-      // localStorage.setItem('token', response.token);
-      // localStorage.setItem('user', JSON.stringify(userData));
-      // localStorage.setItem('isAuthenticated', 'true');
-      // localStorage.setItem('auth.user', JSON.stringify(userData));
+      if (response.message || response.user || response.success) {
+        console.log('Signup successful:', response.message || 'Account created');
+        return;
+      }
+
+      throw new Error('Signup failed. Unexpected server response.');
       
     } catch (err) {
       setError((err as Error).message);

@@ -24,6 +24,7 @@ import Login from './pages/auth/Login';
 import Signup from './pages/auth/Signup';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
+import ConfirmEmail from './pages/auth/ConfirmEmail';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
 import DiaryPage from './pages/DiaryPage';
@@ -142,6 +143,10 @@ const AppRoutes: React.FC = () => {
         <Route 
           path="/reset-password" 
           element={isAuthenticated ? <Navigate to="/projects" /> : <ResetPassword />} 
+        />
+        <Route
+          path="/api/auth/confirm-email"
+          element={<ConfirmEmail />}
         />
 
         {/* Protected routes */}

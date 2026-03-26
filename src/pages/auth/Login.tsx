@@ -236,8 +236,36 @@ const Login: React.FC = () => {
     } catch (err) {
       const error = err as Error;
       console.error('Login failed with error:', error);
-      setError(error.message);
+      const message = error.message || 'Login failed. Please try again.';
+      setError(message);
       setLoginSuccess(false);
+
+      const normalizedMessage = message.toLowerCase();
+      if (
+        normalizedMessage.includes('confirm your email') ||
+        normalizedMessage.includes('verify your email')
+      ) {
+        showToast({
+          type: 'warning',
+          title: 'Email verification required',
+          message: 'Please confirm your email before logging in.'
+        });
+      } else if (
+        normalizedMessage.includes('approve') ||
+        normalizedMessage.includes('administrator')
+      ) {
+        showToast({
+          type: 'warning',
+          title: 'Approval required',
+          message
+        });
+      } else {
+        showToast({
+          type: 'error',
+          title: 'Login failed',
+          message
+        });
+      }
       
       // Reset Turnstile on error (only if not localhost)
       if (!isLocalhost && turnstileRef.current) {
