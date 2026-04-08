@@ -424,7 +424,7 @@ const AskAIPage: React.FC = () => {
   const [generationType, setGenerationType] = useState<'docx' | 'xlsx' | null>(null);
   const [previewFile, setPreviewFile] = useState<GeneratedFileAttachment | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
+  const [mobileKeyboardInset, setMobileKeyboardInset] = useState(0);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const pdfVisionInputRef = useRef<HTMLInputElement>(null);
@@ -457,11 +457,18 @@ const AskAIPage: React.FC = () => {
   useEffect(() => {
     const updateViewportHeight = () => {
       if (!window.matchMedia('(max-width: 767px)').matches) {
-        setMobileViewportHeight(null);
+        setMobileKeyboardInset(0);
         return;
       }
-      const nextHeight = window.visualViewport?.height ?? window.innerHeight;
-      setMobileViewportHeight(nextHeight);
+      if (!window.visualViewport) {
+        setMobileKeyboardInset(0);
+        return;
+      }
+      const keyboardOverlap = Math.max(
+        0,
+        window.innerHeight - (window.visualViewport.height + window.visualViewport.offsetTop)
+      );
+      setMobileKeyboardInset(keyboardOverlap);
     };
 
     updateViewportHeight();
@@ -477,15 +484,6 @@ const AskAIPage: React.FC = () => {
       window.visualViewport?.removeEventListener('scroll', updateViewportHeight);
     };
   }, []);
-
-  useEffect(() => {
-    if (!isInputFocused || !window.matchMedia('(max-width: 767px)').matches) return;
-    const timeoutId = window.setTimeout(() => {
-      const activeElement = document.activeElement as HTMLElement | null;
-      activeElement?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    }, 80);
-    return () => window.clearTimeout(timeoutId);
-  }, [isInputFocused, mobileViewportHeight]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -633,7 +631,6 @@ const AskAIPage: React.FC = () => {
   return (
     <div
       className="ask-ai-page flex flex-col h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] relative"
-      style={mobileViewportHeight ? { height: `calc(${mobileViewportHeight}px - 4rem)` } : undefined}
     >
       {/* Background decorations - Subtle Orange Theme */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-portfolio-orange/5 via-transparent to-transparent opacity-20 pointer-events-none"></div>
@@ -994,7 +991,10 @@ const AskAIPage: React.FC = () => {
           </div>
           
           {/* Fixed Input area at bottom */}
-          <div className="border-t border-white/10 py-3 sm:py-4 px-3 sm:px-6 bg-black/20 backdrop-blur-md flex-shrink-0">
+          <div
+            className="border-t border-white/10 py-3 sm:py-4 px-3 sm:px-6 bg-black/20 backdrop-blur-md flex-shrink-0 transition-[padding] duration-200"
+            style={mobileKeyboardInset > 0 ? { paddingBottom: `${mobileKeyboardInset + 12}px` } : undefined}
+          >
             <div className="w-full max-w-none">
               {selectedFile && (
                 <div className="mb-2 inline-flex items-center rounded-lg border border-white/15 bg-black/40 px-3 py-1.5 text-xs text-gray-200 max-w-full">
