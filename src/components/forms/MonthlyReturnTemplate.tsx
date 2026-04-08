@@ -11,6 +11,8 @@ interface MonthlyReturnTemplateProps {
 
 // Worker entry interface
 interface WorkerEntry {
+  uid?: string;
+  page?: number;
   id: number;
   trade: string;
   tradeDivision: string;
@@ -257,6 +259,46 @@ const initialWorkerData: WorkerEntry[] = [
   { id: 45, trade: 'Others', tradeDivision: '< trade name >', org: '—', code: 'code', days: {}, mandays: '', duration: '8', dailyWageRate: { average: '', high: '', low: '' } },
 ];
 
+const createWorkerUid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const createEmptySectionRow = (page: number): WorkerEntry => ({
+  uid: createWorkerUid(),
+  page,
+  id: page,
+  trade: '',
+  tradeDivision: '',
+  org: '',
+  code: '',
+  days: {},
+  mandays: '',
+  duration: '8',
+  dailyWageRate: { average: '', high: '', low: '' }
+});
+
+const getPageFromLegacyId = (id: number) => {
+  if (id <= 17) return 1;
+  if (id <= 45) return 2;
+  return Math.floor((id - 1) / 17) + 1;
+};
+
+const normalizeWorkers = (workers: WorkerEntry[]): WorkerEntry[] => {
+  const normalized: WorkerEntry[] = workers.map((worker) => ({
+    ...worker,
+    uid: worker.uid || createWorkerUid(),
+    page: worker.page ?? (worker.id > 45 ? getPageFromLegacyId(worker.id) : undefined)
+  }));
+
+  for (let page = 4; page <= 10; page += 1) {
+    const pageRows = normalized.filter((worker) => worker.page === page);
+    const rowsToAdd = Math.max(0, 5 - pageRows.length);
+    for (let i = 0; i < rowsToAdd; i += 1) {
+      normalized.push(createEmptySectionRow(page));
+    }
+  }
+
+  return normalized;
+};
+
 export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
   onClose,
   onSave,
@@ -278,31 +320,28 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
     contractor: initialData?.contractor || '',
     isNominatedSubcontractor: initialData?.isNominatedSubcontractor || false,
     worksCode: initialData?.worksCode || '',
-    workers: initialData?.workers || JSON.parse(JSON.stringify(initialWorkerData))
+    workers: normalizeWorkers(initialData?.workers || JSON.parse(JSON.stringify(initialWorkerData)))
   });
   
   // Get current page workers
   const getCurrentPageWorkers = () => {
-    // For page 1, get workers with ID 1-17
+    const workers = formData.workers;
+
     if (currentPage === 1) {
-      const page1Workers = formData.workers.filter(worker => worker.id <= 17);
+      const page1Workers = workers.filter(worker => !worker.page && worker.id <= 17);
       console.log('Page 1 Workers:', page1Workers.length, page1Workers.map(w => w.id));
       return page1Workers;
     }
     
-    // For page 2, get workers with ID 18-45
     if (currentPage === 2) {
-      const page2Workers = formData.workers.filter(worker => worker.id >= 18 && worker.id <= 45);
+      const page2Workers = workers.filter(worker => !worker.page && worker.id >= 18 && worker.id <= 45);
       console.log('Page 2 Workers:', page2Workers.length, page2Workers.map(w => w.id));
       return page2Workers;
     }
-    
-    // For any other pages that might be added in the future
-    const startId = (currentPage - 1) * 17 + 1;
-    const endId = Math.min(startId + 16, Math.max(...formData.workers.map(w => w.id)));
-    const otherPageWorkers = formData.workers.filter(worker => worker.id >= startId && worker.id <= endId);
-    console.log(`Page ${currentPage} Workers:`, otherPageWorkers.length, otherPageWorkers.map(w => w.id));
-    return otherPageWorkers;
+
+    const sectionWorkers = workers.filter(worker => worker.page === currentPage);
+    console.log(`Page ${currentPage} Workers:`, sectionWorkers.length, sectionWorkers.map(w => w.id));
+    return sectionWorkers;
   };
   
   // Get the current month days (31 days for display)
@@ -323,20 +362,20 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
     });
   };
   
-  const handleWorkerDataChange = (id: number, field: string, value: string) => {
+  const handleWorkerDataChange = (workerUid: string, field: string, value: string) => {
     setFormData({
       ...formData,
       workers: formData.workers.map(worker => 
-        worker.id === id ? { ...worker, [field]: value } : worker
+        worker.uid === workerUid ? { ...worker, [field]: value } : worker
       )
     });
   };
   
-  const handleWageRateChange = (id: number, type: 'average' | 'high' | 'low', value: string) => {
+  const handleWageRateChange = (workerUid: string, type: 'average' | 'high' | 'low', value: string) => {
     setFormData({
       ...formData,
       workers: formData.workers.map(worker => 
-        worker.id === id ? { 
+        worker.uid === workerUid ? { 
           ...worker, 
           dailyWageRate: { 
             ...worker.dailyWageRate, 
@@ -347,11 +386,11 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
     });
   };
   
-  const handleDayDataChange = (workerId: number, day: number, value: string) => {
+  const handleDayDataChange = (workerUid: string, day: number, value: string) => {
     setFormData({
       ...formData,
       workers: formData.workers.map(worker => 
-        worker.id === workerId ? { 
+        worker.uid === workerUid ? { 
           ...worker, 
           days: { 
             ...worker.days, 
@@ -363,7 +402,17 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
   };
   
   const handleAddRow = () => {
-    // Find highest ID to ensure it's sequential
+    if (currentPage >= 4) {
+      setFormData({
+        ...formData,
+        workers: [
+          ...formData.workers,
+          createEmptySectionRow(currentPage)
+        ]
+      });
+      return;
+    }
+
     const maxId = Math.max(...formData.workers.map(w => w.id));
     const newId = maxId + 1;
     
@@ -372,6 +421,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
       workers: [
         ...formData.workers,
         { 
+          uid: createWorkerUid(),
           id: newId, 
           trade: '', 
           tradeDivision: '',
@@ -588,16 +638,13 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
     
     // Helper function to generate page HTML
     function generatePageHTML(pageNum: number) {
-      // Filter workers by ID range for each page
       let pageWorkers: WorkerEntry[];
       if (pageNum === 1) {
-        pageWorkers = formData.workers.filter(worker => worker.id <= 17);
+        pageWorkers = formData.workers.filter(worker => !worker.page && worker.id <= 17);
       } else if (pageNum === 2) {
-        pageWorkers = formData.workers.filter(worker => worker.id >= 18 && worker.id <= 45);
+        pageWorkers = formData.workers.filter(worker => !worker.page && worker.id >= 18 && worker.id <= 45);
       } else {
-        const startId = (pageNum - 1) * 17 + 1;
-        const endId = startId + 16;
-        pageWorkers = formData.workers.filter(worker => worker.id >= startId && worker.id <= endId);
+        pageWorkers = formData.workers.filter(worker => worker.page === pageNum);
       }
       
       return `
@@ -679,6 +726,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
               ${pageWorkers.map((worker, idx) => {
                 // Determine if this is the first row of a trade group
                 const isFirstInTradeGroup = idx === 0 || 
+                  !worker.trade ||
                   (idx > 0 && pageWorkers[idx - 1]?.trade !== worker.trade);
                 
                 // Calculate the actual item number based on the page
@@ -954,6 +1002,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
                 {getCurrentPageWorkers().map((worker, idx) => {
                   // Determine if this is the first row of a trade group
                   const isFirstInTradeGroup = idx === 0 || 
+                    !worker.trade ||
                     (idx > 0 && getCurrentPageWorkers()[idx - 1]?.trade !== worker.trade);
                   
                   // Calculate if this should be a dark or light row based on trade ID (not index)
@@ -961,7 +1010,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
                   
                   return (
                     <tr 
-                      key={`worker-${idx}`} 
+                      key={worker.uid || `worker-${idx}`} 
                       className={`h-7 ${isDarkRow ? 'bg-gray-100' : 'bg-white'} ${isFirstInTradeGroup ? 'border-t-2 border-gray-400' : ''}`}
                     >
                       <td className="border border-gray-800 p-0 text-center">
@@ -985,7 +1034,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
                             type="text" 
                             className="w-5 h-full border-none outline-none bg-transparent text-center"
                             value={worker.days[day] || ''}
-                            onChange={(e) => handleDayDataChange(worker.id, day, e.target.value)}
+                            onChange={(e) => handleDayDataChange(worker.uid || '', day, e.target.value)}
                           />
                         </td>
                       ))}
@@ -994,7 +1043,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
                           type="text" 
                           className="w-full h-full border-none outline-none bg-transparent text-center"
                           value={worker.mandays}
-                          onChange={(e) => handleWorkerDataChange(worker.id, 'mandays', e.target.value)}
+                          onChange={(e) => handleWorkerDataChange(worker.uid || '', 'mandays', e.target.value)}
                         />
                       </td>
                       <td className="border border-gray-800 p-0 text-center">
@@ -1002,7 +1051,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
                           type="text" 
                           className="w-full h-full border-none outline-none bg-transparent text-center"
                           value={worker.duration}
-                          onChange={(e) => handleWorkerDataChange(worker.id, 'duration', e.target.value)}
+                          onChange={(e) => handleWorkerDataChange(worker.uid || '', 'duration', e.target.value)}
                         />
                       </td>
                       <td className="border border-gray-800 p-0 text-center">
@@ -1010,7 +1059,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
                           type="text" 
                           className="w-full h-full border-none outline-none bg-transparent text-center"
                           value={worker.dailyWageRate.average}
-                          onChange={(e) => handleWageRateChange(worker.id, 'average', e.target.value)}
+                          onChange={(e) => handleWageRateChange(worker.uid || '', 'average', e.target.value)}
                         />
                       </td>
                       <td className="border border-gray-800 p-0 text-center">
@@ -1018,7 +1067,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
                           type="text" 
                           className="w-full h-full border-none outline-none bg-transparent text-center"
                           value={worker.dailyWageRate.high}
-                          onChange={(e) => handleWageRateChange(worker.id, 'high', e.target.value)}
+                          onChange={(e) => handleWageRateChange(worker.uid || '', 'high', e.target.value)}
                         />
                       </td>
                       <td className="border border-gray-800 p-0 text-center">
@@ -1026,7 +1075,7 @@ export const MonthlyReturnTemplate: React.FC<MonthlyReturnTemplateProps> = ({
                           type="text" 
                           className="w-full h-full border-none outline-none bg-transparent text-center"
                           value={worker.dailyWageRate.low}
-                          onChange={(e) => handleWageRateChange(worker.id, 'low', e.target.value)}
+                          onChange={(e) => handleWageRateChange(worker.uid || '', 'low', e.target.value)}
                         />
                       </td>
                       <td className="border border-gray-800 p-0 text-center">

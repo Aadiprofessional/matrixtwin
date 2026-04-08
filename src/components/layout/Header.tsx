@@ -30,7 +30,8 @@ import {
   RiCheckLine,
   RiInformationLine,
   RiShieldUserLine,
-  RiAddLine
+  RiAddLine,
+  RiHistoryLine
 } from 'react-icons/ri';
 import { IconWrapper } from '../ui/IconWrapper';
 import { useProjects } from '../../contexts/ProjectContext';
@@ -79,8 +80,10 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
   const { darkMode, toggleDarkMode } = useTheme();
   const { language, changeLanguage, languages } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   const { selectedProject } = useProjects();
+  const isAskAIPage = location.pathname === '/ask-ai' || location.pathname.endsWith('/ask-ai');
   
   // Fetch notifications on component mount and when user changes
   useEffect(() => {
@@ -218,6 +221,14 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
     setShowLanguageMenu(false);
     setShowProfileMenu(false);
     setShowHelpMenu(false);
+  };
+
+  const triggerAskAINewChat = () => {
+    window.dispatchEvent(new CustomEvent('askai:new-chat'));
+  };
+
+  const triggerAskAIHistory = () => {
+    window.dispatchEvent(new CustomEvent('askai:toggle-history'));
   };
   
   const toggleSearch = () => {
@@ -512,6 +523,29 @@ export const Header: React.FC<HeaderProps> = ({ onQuickActionsToggle, onMenuTogg
       
       {/* Right Actions */}
       <div className="flex items-center gap-0.5 sm:gap-2 px-1.5 sm:px-4 md:px-6">
+        {isMobile && isAskAIPage && (
+          <div className="md:hidden flex items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm shadow-[0_8px_20px_rgba(0,0,0,0.25)]">
+            <motion.button
+              onClick={triggerAskAINewChat}
+              className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg bg-gradient-to-r from-portfolio-orange to-orange-500 text-white flex items-center justify-center border border-portfolio-orange/40 shadow-[0_6px_16px_rgba(255,87,34,0.35)] hover:brightness-110 transition-all"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              title="New Chat"
+            >
+              <RiAddLine className="text-lg" />
+            </motion.button>
+            <motion.button
+              onClick={triggerAskAIHistory}
+              className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg border border-white/15 bg-white/[0.04] text-gray-200 hover:text-white hover:bg-white/10 flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              title="History"
+            >
+              <RiHistoryLine className="text-lg" />
+            </motion.button>
+          </div>
+        )}
+
         {/* Quick Actions Button - Hide on small screens */}
         <motion.button
           onClick={onQuickActionsToggle}

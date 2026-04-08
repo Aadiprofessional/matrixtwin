@@ -67,6 +67,10 @@ interface HistoryEntry {
 
 interface CleansingEntry {
   id: string;
+  form_number?: string;
+  formNumber?: string;
+  form_no?: string;
+  formNo?: string;
   date: string;
   project: string;
   name?: string;
@@ -320,6 +324,20 @@ const CleansingPage: React.FC = () => {
       return 'New Cleansing';
     }
     return preferredName;
+  };
+
+  const getCleansingFormNo = (entry: CleansingEntry) => {
+    const rawValue =
+      entry.form_number ||
+      entry.formNumber ||
+      entry.form_no ||
+      entry.formNo ||
+      entry.form_data?.form_number ||
+      entry.form_data?.formNumber ||
+      entry.form_data?.form_no ||
+      entry.form_data?.formNo ||
+      entry.id;
+    return rawValue ? String(rawValue).trim() : '-';
   };
 
   const getExpirySummary = (entry: CleansingEntry) => {
@@ -1349,6 +1367,7 @@ const CleansingPage: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-secondary-600 dark:text-secondary-400">
                     <RiMapPinLine className="mr-1" />
                     <span className="ml-1">{entry.project}</span>
+                    <span className="ml-1 text-xs sm:text-sm">Form No: {getCleansingFormNo(entry)}</span>
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${getExpirySummary(entry).className}`}>
                       <RiCalendarCheckLine className="mr-1" />
                       {getExpirySummary(entry).text}

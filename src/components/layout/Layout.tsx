@@ -26,6 +26,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, hideHeader = false }) 
                    location.pathname === '/voice-call' ||
                    location.pathname.endsWith('/ask-ai') ||
                    location.pathname.endsWith('/voice-call');
+  const isAskAIPage = location.pathname === '/ask-ai' || location.pathname.endsWith('/ask-ai');
   
   const toggleSidebar = () => {
     if (isMobile) {
@@ -125,8 +126,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, hideHeader = false }) 
           )}
         </AnimatePresence>
         
-        <main ref={mainRef} className={`flex-1 overflow-auto ${!hideHeader ? 'pt-16 sm:pt-20' : 'pt-0'}`}>
-          <div className="min-h-full px-3 pb-4 sm:px-4 sm:pb-6 lg:px-6">
+        <main ref={mainRef} className={`flex-1 ${isAskAIPage ? 'overflow-hidden' : 'overflow-auto'} ${!hideHeader ? 'pt-16 sm:pt-20' : 'pt-0'}`}>
+          <div className={`min-h-full ${isAskAIPage ? 'px-0 pb-0' : 'px-3 pb-4 sm:px-4 sm:pb-6 lg:px-6'}`}>
             {children}
           </div>
         </main>

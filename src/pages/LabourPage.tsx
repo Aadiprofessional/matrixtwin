@@ -67,6 +67,10 @@ interface HistoryEntry {
 
 interface LabourEntry {
   id: string;
+  form_number?: string;
+  formNumber?: string;
+  form_no?: string;
+  formNo?: string;
   date: string;
   project: string;
   name?: string;
@@ -949,6 +953,20 @@ const LabourPage: React.FC = () => {
     return preferredName;
   };
 
+  const getLabourFormNo = (entry: LabourEntry) => {
+    const rawValue =
+      entry.form_number ||
+      entry.formNumber ||
+      entry.form_no ||
+      entry.formNo ||
+      entry.form_data?.form_number ||
+      entry.form_data?.formNumber ||
+      entry.form_data?.form_no ||
+      entry.form_data?.formNo ||
+      entry.id;
+    return rawValue ? String(rawValue).trim() : '-';
+  };
+
   const getExpirySummary = (entry: LabourEntry) => {
     const expiryDate = getEntryExpiryDate(entry);
     const now = new Date();
@@ -1340,6 +1358,9 @@ const LabourPage: React.FC = () => {
                       <span className="inline-flex items-center">
                         <RiUserLine className="mr-1" />
                         {entry.submitter}
+                      </span>
+                      <span className="inline-flex items-center">
+                        Form No: {getLabourFormNo(entry)}
                       </span>
                       <span className="inline-flex items-center">
                         <RiTimeLine className="mr-1" />

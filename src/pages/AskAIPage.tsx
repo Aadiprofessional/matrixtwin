@@ -424,6 +424,7 @@ const AskAIPage: React.FC = () => {
   const [generationType, setGenerationType] = useState<'docx' | 'xlsx' | null>(null);
   const [previewFile, setPreviewFile] = useState<GeneratedFileAttachment | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const pdfVisionInputRef = useRef<HTMLInputElement>(null);
@@ -452,6 +453,39 @@ const AskAIPage: React.FC = () => {
       }
     }
   }, [selectedProject?.id, currentChat.projectId, getProjectChats, switchToChat, startNewChat]);
+
+  useEffect(() => {
+    const updateViewportHeight = () => {
+      if (!window.matchMedia('(max-width: 767px)').matches) {
+        setMobileViewportHeight(null);
+        return;
+      }
+      const nextHeight = window.visualViewport?.height ?? window.innerHeight;
+      setMobileViewportHeight(nextHeight);
+    };
+
+    updateViewportHeight();
+    window.addEventListener('resize', updateViewportHeight);
+    window.addEventListener('orientationchange', updateViewportHeight);
+    window.visualViewport?.addEventListener('resize', updateViewportHeight);
+    window.visualViewport?.addEventListener('scroll', updateViewportHeight);
+
+    return () => {
+      window.removeEventListener('resize', updateViewportHeight);
+      window.removeEventListener('orientationchange', updateViewportHeight);
+      window.visualViewport?.removeEventListener('resize', updateViewportHeight);
+      window.visualViewport?.removeEventListener('scroll', updateViewportHeight);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isInputFocused || !window.matchMedia('(max-width: 767px)').matches) return;
+    const timeoutId = window.setTimeout(() => {
+      const activeElement = document.activeElement as HTMLElement | null;
+      activeElement?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }, 80);
+    return () => window.clearTimeout(timeoutId);
+  }, [isInputFocused, mobileViewportHeight]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -538,7 +572,7 @@ const AskAIPage: React.FC = () => {
   };
   
   const toggleChatHistory = () => {
-    setShowChatHistory(!showChatHistory);
+    setShowChatHistory((prev) => !prev);
   };
   
   const handleChatSelect = (chatId: string) => {
@@ -576,19 +610,38 @@ const AskAIPage: React.FC = () => {
     setActiveReasoningId(activeReasoningId === messageId ? null : messageId);
   };
 
+  useEffect(() => {
+    const handleHeaderNewChat = () => {
+      handleNewChat();
+    };
+    const handleHeaderToggleHistory = () => {
+      toggleChatHistory();
+    };
+
+    window.addEventListener('askai:new-chat', handleHeaderNewChat);
+    window.addEventListener('askai:toggle-history', handleHeaderToggleHistory);
+    return () => {
+      window.removeEventListener('askai:new-chat', handleHeaderNewChat);
+      window.removeEventListener('askai:toggle-history', handleHeaderToggleHistory);
+    };
+  }, [selectedProject?.id]);
+
   const filteredHistory = selectedProject?.id 
     ? getProjectChats(String(selectedProject.id))
     : chatHistory;
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] relative">
+    <div
+      className="ask-ai-page flex flex-col h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] relative"
+      style={mobileViewportHeight ? { height: `calc(${mobileViewportHeight}px - 4rem)` } : undefined}
+    >
       {/* Background decorations - Subtle Orange Theme */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-portfolio-orange/5 via-transparent to-transparent opacity-20 pointer-events-none"></div>
       
       {/* Fixed Layout with 3 sections: Header, Scrollable Chat, Footer */}
       <div className="flex flex-col h-full z-10">
         {/* Fixed Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 py-3 sm:py-4 px-3 sm:px-6 border-b border-white/10 bg-black/20 backdrop-blur-md flex-shrink-0">
+        <div className="hidden md:flex items-center justify-between gap-3 py-3 sm:py-4 px-3 sm:px-6 border-b border-white/10 bg-black/20 backdrop-blur-md flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-portfolio-orange/10 flex items-center justify-center border border-portfolio-orange/20">
               <IconContext.Provider value={{ className: "text-portfolio-orange text-xl" }}>
@@ -604,28 +657,26 @@ const AskAIPage: React.FC = () => {
               </div>
             </div>
           </div>
-          
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 self-end sm:self-auto">
+
+          <div className="flex items-center gap-2 ml-auto">
             <Button
               onClick={handleNewChat}
               size="sm"
-              className="rounded-lg bg-portfolio-orange hover:bg-portfolio-orange/80 text-white border-none"
+              className="rounded-xl h-10 px-4 bg-gradient-to-r from-portfolio-orange to-orange-500 hover:brightness-110 text-white border border-portfolio-orange/40 shadow-[0_8px_18px_rgba(255,87,34,0.35)]"
             >
               <RiAddLine className="mr-1" />
               New Chat
             </Button>
-            
+
             <Button
               onClick={toggleChatHistory}
               variant="outline"
               size="sm"
-              className="rounded-lg border-white/10 text-gray-300 hover:bg-white/5"
+              className="rounded-xl h-10 px-4 border-white/15 bg-white/[0.03] text-gray-200 hover:text-white hover:bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
             >
               <RiHistoryLine className="mr-1" />
               History
             </Button>
-            
           </div>
         </div>
         
@@ -821,7 +872,7 @@ const AskAIPage: React.FC = () => {
                               <button
                                 key={`${message.id}-generated-file-${fileIndex}`}
                                 onClick={() => setPreviewFile(file)}
-                                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 hover:bg-white/5 transition-colors text-left"
+                                className="w-1/2 rounded-lg border border-white/15 bg-black/40 px-3 py-2 hover:bg-white/5 transition-colors text-left"
                               >
                                 <span className="flex items-center justify-between gap-2">
                                   <span className="inline-flex items-center gap-2 min-w-0">
@@ -846,10 +897,7 @@ const AskAIPage: React.FC = () => {
                           </div>
                         )}
                         {message.sender === 'ai' && (
-                          <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2">
-                            <span className="text-[10px] text-gray-500">
-                              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                          <div className="mt-3 flex items-center justify-start gap-2 border-t border-white/10 pt-2">
                             <div className="flex items-center gap-1.5">
                               {links.length > 0 && (
                                 <button
@@ -875,6 +923,9 @@ const AskAIPage: React.FC = () => {
                                 <RiShareLine className="text-xs" />
                               </button>
                             </div>
+                            <span className="text-[10px] text-gray-500">
+                              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
                           </div>
                         )}
                         {message.sender === 'ai' && links.length > 0 && isLinksPanelOpen && (
@@ -1026,7 +1077,7 @@ const AskAIPage: React.FC = () => {
                   onFocus={() => setIsInputFocused(true)}
                   onBlur={() => setIsInputFocused(false)}
                   placeholder={t('askAI.inputPlaceholder', 'Ask me anything about your project...')}
-                  className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none focus-visible:outline-none resize-none text-sm text-white placeholder-gray-500 min-h-[44px] max-h-[120px] py-2.5 px-2 scrollbar-hide"
+                  className="ask-ai-input flex-1 bg-transparent border-none focus:ring-0 focus:outline-none focus-visible:outline-none resize-none text-sm text-white placeholder-gray-500 min-h-[44px] max-h-[120px] py-2.5 px-2 scrollbar-hide"
                   rows={1}
                   style={{ height: 'auto', minHeight: '44px' }}
                 />

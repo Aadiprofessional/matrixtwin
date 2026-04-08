@@ -55,6 +55,10 @@ interface User {
 
 interface DiaryEntry {
   id: string;
+  form_number?: string;
+  formNumber?: string;
+  form_no?: string;
+  formNo?: string;
   date: string;
   project: string;
   name?: string;
@@ -183,6 +187,20 @@ const DiaryPage: React.FC = () => {
       return 'New Diary';
     }
     return preferredName;
+  };
+
+  const getDiaryFormNo = (entry: DiaryEntry) => {
+    const rawValue =
+      entry.form_number ||
+      entry.formNumber ||
+      entry.form_no ||
+      entry.formNo ||
+      entry.form_data?.form_number ||
+      entry.form_data?.formNumber ||
+      entry.form_data?.form_no ||
+      entry.form_data?.formNo ||
+      entry.id;
+    return rawValue ? String(rawValue).trim() : '-';
   };
 
   const getExpirySummary = (entry: DiaryEntry) => {
@@ -1541,6 +1559,9 @@ const DiaryPage: React.FC = () => {
                       <span className="inline-flex items-center">
                         <RiIcons.RiUserLine className="mr-1" />
                         {entry.author}
+                      </span>
+                      <span className="inline-flex items-center">
+                        Form No: {getDiaryFormNo(entry)}
                       </span>
                       <span className="inline-flex items-center">
                         <span className="mr-1">{getWeatherIcon(entry.weather)}</span>

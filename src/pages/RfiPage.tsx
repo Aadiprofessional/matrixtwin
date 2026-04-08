@@ -102,6 +102,8 @@ interface RfiItem {
   active?: boolean;
   expires_at?: string;
   expiresAt?: string;
+  risc_no?: string;
+  riscNo?: string;
 }
 
 // People selector modal component (similar to diary page)
@@ -433,6 +435,8 @@ const RfiPage: React.FC = () => {
           updated_at: survey.updated_at,
           project_id: survey.project_id,
           name: survey.project,
+          risc_no: survey.risc_no ?? survey.riscNo ?? survey.form_data?.risc_no ?? survey.form_data?.riscNo,
+          riscNo: survey.riscNo ?? survey.risc_no ?? survey.form_data?.riscNo ?? survey.form_data?.risc_no,
           active: survey.active ?? survey.is_active,
           expires_at: survey.expires_at ?? survey.expiresAt ?? survey.expiry_at ?? survey.expiryAt,
           expiresAt: survey.expiresAt ?? survey.expires_at ?? survey.expiryAt ?? survey.expiry_at
@@ -490,6 +494,8 @@ const RfiPage: React.FC = () => {
           updated_at: inspection.updated_at,
           project_id: inspection.project_id,
           name: inspection.project,
+          risc_no: inspection.risc_no ?? inspection.riscNo ?? inspection.form_data?.risc_no ?? inspection.form_data?.riscNo,
+          riscNo: inspection.riscNo ?? inspection.risc_no ?? inspection.form_data?.riscNo ?? inspection.form_data?.risc_no,
           active: inspection.active ?? inspection.is_active,
           expires_at: inspection.expires_at ?? inspection.expiresAt ?? inspection.expiry_at ?? inspection.expiryAt,
           expiresAt: inspection.expiresAt ?? inspection.expires_at ?? inspection.expiryAt ?? inspection.expiry_at
@@ -600,6 +606,15 @@ const RfiPage: React.FC = () => {
     return preferredName;
   };
 
+  const getRfiRiscNo = (rfi: RfiItem) => {
+    const rawValue =
+      rfi.risc_no ||
+      rfi.riscNo ||
+      rfi.form_data?.risc_no ||
+      rfi.form_data?.riscNo;
+    return rawValue ? String(rawValue).trim() : '';
+  };
+
   const getExpirySummary = (rfi: RfiItem) => {
     const expiryDate = getEntryExpiryDate(rfi);
     const now = new Date();
@@ -635,6 +650,7 @@ const RfiPage: React.FC = () => {
       const query = searchQuery.toLowerCase();
       return (
         getRfiDisplayName(rfi).toLowerCase().includes(query) ||
+        getRfiRiscNo(rfi).toLowerCase().includes(query) ||
         rfi.description.toLowerCase().includes(query) ||
         rfi.submittedBy.toLowerCase().includes(query)
       );
@@ -650,6 +666,7 @@ const RfiPage: React.FC = () => {
         const query = searchQuery.toLowerCase();
         return (
           getRfiDisplayName(rfi).toLowerCase().includes(query) ||
+          getRfiRiscNo(rfi).toLowerCase().includes(query) ||
           rfi.description.toLowerCase().includes(query) ||
           rfi.submittedBy.toLowerCase().includes(query)
         );
@@ -1917,7 +1934,7 @@ const RfiPage: React.FC = () => {
                     </p>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     <div className="rounded-lg border border-indigo-200/60 bg-indigo-50/70 p-3 dark:border-dark-700 dark:bg-dark-800/70">
                       <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
                         Type:
@@ -1932,6 +1949,14 @@ const RfiPage: React.FC = () => {
                       </h4>
                       <p className="text-secondary-600 dark:text-secondary-400 text-sm line-clamp-1">
                         {rfi.assignedTo || 'Unassigned'}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-indigo-200/60 bg-indigo-50/70 p-3 dark:border-dark-700 dark:bg-dark-800/70">
+                      <h4 className="font-medium text-secondary-900 dark:text-white text-sm uppercase tracking-wide mb-1">
+                        RISC No:
+                      </h4>
+                      <p className="text-secondary-600 dark:text-secondary-400 text-sm line-clamp-1">
+                        {getRfiRiscNo(rfi) || 'Not available'}
                       </p>
                     </div>
                   </div>
@@ -2040,26 +2065,59 @@ const RfiPage: React.FC = () => {
             </motion.div>
           ))
         ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
-            className="text-center py-12"
-          >
-            <div><RiIcons.RiQuestionLine className="mx-auto text-4xl text-gray-400 mb-4" /></div>
-            <h3 className="text-xl font-medium mb-2">No RFIs found</h3>
-            <p className="text-gray-500 mb-6">Try adjusting your search criteria or create a new RFI</p>
-            <Button 
-              variant="primary" 
-              onClick={() => {
-                setSelectedRfi(null);
-                setShowFormSelector(true);
-              }}
-              leftIcon={<div><RiIcons.RiAddLine /></div>}
-            >
-              Create RFI
-            </Button>
-          </motion.div>
+          <Card className="lg:col-span-2 border border-[#cbdcab]/60 bg-gradient-to-b from-white to-[#f2f6e9]/80 p-10 text-center dark:border-dark-700 dark:from-dark-900 dark:to-dark-800/80">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#e2ebcf] text-[#647f31] dark:bg-[#2f3a17]/40 dark:text-[#b0c985]">
+              <RiIcons.RiFileList3Line className="text-3xl" />
+            </div>
+            {!selectedProject ? (
+              <>
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Project Selected</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
+                  Select a project to view and manage requests for information in one place.
+                </p>
+              </>
+            ) : rfiItems.length === 0 ? (
+              <>
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Requests Yet</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
+                  {selectedProject.name} has no information requests yet. Start with your first request.
+                </p>
+                <div className="mt-5">
+                  <Button
+                    variant="primary"
+                    leftIcon={<RiIcons.RiAddLine />}
+                    onClick={() => {
+                      setSelectedRfi(null);
+                      setShowFormSelector(true);
+                    }}
+                  >
+                    Create First Request
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-display font-semibold text-secondary-900 dark:text-white">No Results Found</h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm text-secondary-600 dark:text-secondary-400">
+                  No requests match the current search or filter criteria.
+                </p>
+                <div className="mt-5 flex justify-center gap-2">
+                  <Button variant="outline" onClick={() => setSearchQuery('')}>
+                    Clear Search
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setStatusFilter('all');
+                      setFormTypeFilter('all');
+                    }}
+                  >
+                    Reset Filters
+                  </Button>
+                </div>
+              </>
+            )}
+          </Card>
         )}
       </div>
       
