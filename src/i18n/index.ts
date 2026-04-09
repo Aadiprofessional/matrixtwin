@@ -39,11 +39,11 @@ i18n
       escapeValue: false, // not needed for react as it escapes by default
     },
     detection: {
-      order: ['querystring', 'cookie', 'localStorage', 'navigator', 'htmlTag'],
+      order: ['localStorage', 'querystring', 'cookie', 'navigator', 'htmlTag'],
       lookupQuerystring: 'lng',
       lookupCookie: 'i18next',
-      lookupLocalStorage: 'i18nextLng',
-      caches: ['localStorage', 'cookie'],
+      lookupLocalStorage: 'language',
+      caches: ['localStorage'],
     }
   });
 
