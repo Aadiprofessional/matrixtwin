@@ -52,6 +52,8 @@ import AskAIPage from './pages/AskAIPage';
 import HomePage from './pages/HomePage';
 import CompanyPage from './pages/CompanyPage';
 import SearchPage from './pages/SearchPage';
+import PrivacyPage from './pages/PrivacyPage';
+import SupportPage from './pages/SupportPage';
 
 
 // Protected route wrapper
@@ -126,6 +128,8 @@ const AppRoutes: React.FC = () => {
       <Routes>
         {/* Landing page */}
         <Route path="/" element={<HomePage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/support" element={<SupportPage />} />
         
         {/* Auth routes */}
         <Route 

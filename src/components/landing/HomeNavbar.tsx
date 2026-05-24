@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FiArrowRight, FiChevronDown, FiImage, FiVideo, FiMaximize, FiCrop, FiLayers, FiZoomIn, FiCode, FiFileText, FiUsers, FiHelpCircle, FiMessageSquare, FiEdit3, FiMic, FiDownload } from 'react-icons/fi';
+import { FiArrowRight, FiChevronDown, FiMaximize, FiLayers, FiFileText, FiUsers, FiHelpCircle, FiMessageSquare, FiEdit3, FiMic, FiShield } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../contexts/ThemeContext';
 import SimpleLanguageSelector from './SimpleLanguageSelector';
@@ -259,6 +259,44 @@ const HomeNavbar: React.FC<HomeNavbarProps> = () => {
                           <div className={`text-sm ${
                             darkMode ? 'text-gray-400' : 'text-gray-500'
                           }`}>{t('navbar.askAIDesc', 'Get help from our AI assistant')}</div>
+                        </div>
+                      </Link>
+                      <Link to="/support" className={`flex items-center px-6 py-3 text-sm transition-colors duration-150 rounded-md group/item ${
+                        darkMode 
+                          ? 'text-gray-200 hover:bg-black/50 hover:text-white' 
+                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                      }`}>
+                        <div className={`p-3 rounded-lg mr-4 transition-colors duration-150 ${
+                          darkMode 
+                            ? 'bg-gray-800/50 group-hover/item:bg-gray-700/50' 
+                            : 'bg-gray-200/50 group-hover/item:bg-gray-300/50'
+                        }`}>
+                          <FiHelpCircle className="h-6 w-6 text-gray-300 group-hover/item:text-purple-400 transition-colors duration-150" />
+                        </div>
+                        <div className="flex-1 whitespace-nowrap">
+                          <div className="font-medium text-lg">{t('navbar.support', 'Support')}</div>
+                          <div className={`text-sm ${
+                            darkMode ? 'text-gray-400' : 'text-gray-500'
+                          }`}>{t('navbar.supportDesc', 'Get account and product help')}</div>
+                        </div>
+                      </Link>
+                      <Link to="/privacy" className={`flex items-center px-6 py-3 text-sm transition-colors duration-150 rounded-md group/item ${
+                        darkMode 
+                          ? 'text-gray-200 hover:bg-black/50 hover:text-white' 
+                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                      }`}>
+                        <div className={`p-3 rounded-lg mr-4 transition-colors duration-150 ${
+                          darkMode 
+                            ? 'bg-gray-800/50 group-hover/item:bg-gray-700/50' 
+                            : 'bg-gray-200/50 group-hover/item:bg-gray-300/50'
+                        }`}>
+                          <FiShield className="h-6 w-6 text-gray-300 group-hover/item:text-purple-400 transition-colors duration-150" />
+                        </div>
+                        <div className="flex-1 whitespace-nowrap">
+                          <div className="font-medium text-lg">{t('navbar.privacy', 'Privacy')}</div>
+                          <div className={`text-sm ${
+                            darkMode ? 'text-gray-400' : 'text-gray-500'
+                          }`}>{t('navbar.privacyDesc', 'How MatrixTwin protects data')}</div>
                         </div>
                       </Link>
                     </div>
